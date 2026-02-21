@@ -51,6 +51,27 @@ class _HomeScreenState extends State<HomeScreen> {
     return valor.toStringAsFixed(2).replaceAll('.', ',');
   }
 
+  String _formatarData(DateTime data) {
+    return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
+  }
+
+  IconData _iconeCategoria(String categoria) {
+    switch (categoria) {
+      case 'Alimentação':
+        return Icons.restaurant;
+      case 'Transporte':
+        return Icons.directions_car;
+      case 'Saúde':
+        return Icons.health_and_safety;
+      case 'Lazer':
+        return Icons.movie;
+      case 'Moradia':
+        return Icons.home;
+      default:
+        return Icons.category;
+    }
+  }
+
   void _abrirAdicionarGasto() async {
     final novoGasto = await Navigator.push<Gasto>(
       context,
@@ -138,16 +159,17 @@ class _HomeScreenState extends State<HomeScreen> {
                             backgroundColor: Theme.of(
                               context,
                             ).colorScheme.primaryContainer,
-                            child: const Icon(Icons.attach_money),
+                            child: Icon(
+                              _iconeCategoria(gasto.categoria),
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                           title: Text(
                             gasto.categoria,
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            gasto.descricao.isNotEmpty
-                                ? gasto.descricao
-                                : 'Sem descrição',
+                            '${_formatarData(gasto.data)}${gasto.descricao.isNotEmpty ? ' • ${gasto.descricao}' : ''}',
                           ),
                           trailing: Text(
                             'R\$ ${_formatarValor(gasto.valor)}',
@@ -182,6 +204,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   final _valorController = TextEditingController();
   final _descricaoController = TextEditingController();
   String _categoriaSelecionada = 'Alimentação';
+  DateTime _dataSelecionada = DateTime.now();
 
   final List<Map<String, dynamic>> _categorias = [
     {'nome': 'Alimentação', 'icone': Icons.restaurant},
@@ -191,6 +214,24 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     {'nome': 'Moradia', 'icone': Icons.home},
     {'nome': 'Outros', 'icone': Icons.category},
   ];
+
+  String _formatarData(DateTime data) {
+    return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
+  }
+
+  Future<void> _selecionarData() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _dataSelecionada,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _dataSelecionada = picked;
+      });
+    }
+  }
 
   void _salvarGasto() {
     String textoValor = _valorController.text.replaceAll('.', ',');
@@ -213,7 +254,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       descricao: _descricaoController.text,
       valor: valor,
       categoria: _categoriaSelecionada,
-      data: DateTime.now(),
+      data: _dataSelecionada,
     );
 
     Navigator.pop(context, novoGasto);
@@ -314,6 +355,39 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ),
                   );
                 }).toList(),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Data',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _selecionarData,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _formatarData(_dataSelecionada),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
