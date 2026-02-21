@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'gasto.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  Hive.registerAdapter(GastoAdapter());
+  await Hive.openBox<Gasto>('gastos');
   runApp(const MyApp());
 }
 
@@ -30,10 +35,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<Gasto> _gastos = [];
+  late Box<Gasto> _gastosBox;
+
+  @override
+  void initState() {
+    super.initState();
+    _gastosBox = Hive.box<Gasto>('gastos');
+  }
 
   double get _totalMes {
-    return _gastos.fold(0, (soma, gasto) => soma + gasto.valor);
+    return _gastosBox.values.fold(0, (soma, gasto) => soma + gasto.valor);
   }
 
   String _formatarValor(double valor) {
@@ -47,14 +58,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (novoGasto != null) {
-      setState(() {
-        _gastos.insert(0, novoGasto);
-      });
+      await _gastosBox.add(novoGasto);
+      setState(() {});
     }
+  }
+
+  void _deletarGasto(int index) async {
+    await _gastosBox.deleteAt(index);
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
+    final gastos = _gastosBox.values.toList().reversed.toList();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Meus Gastos'),
@@ -86,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           Expanded(
-            child: _gastos.isEmpty
+            child: gastos.isEmpty
                 ? const Center(
                     child: Text(
                       'Nenhum gasto ainda.\nToque em + para adicionar.',
@@ -95,9 +112,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   )
                 : ListView.builder(
-                    itemCount: _gastos.length,
+                    itemCount: gastos.length,
                     itemBuilder: (context, index) {
-                      final gasto = _gastos[index];
+                      final gasto = gastos[index];
+                      final boxIndex = _gastosBox.values.toList().indexOf(
+                        gasto,
+                      );
                       return Dismissible(
                         key: Key(gasto.id),
                         direction: DismissDirection.endToStart,
@@ -108,9 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
                         onDismissed: (direction) {
-                          setState(() {
-                            _gastos.removeAt(index);
-                          });
+                          _deletarGasto(boxIndex);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Gasto removido')),
                           );
