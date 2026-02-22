@@ -97,8 +97,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.computer;
       case 'Investimento':
         return Icons.trending_up;
-      case 'Aluguel':
-        return Icons.home;
       case 'Presente':
         return Icons.card_giftcard;
       case 'Benefício':
@@ -139,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Cadastre ao menos uma pessoa nas Configurações Iniciais',
+            'Cadastre ao menos uma forma de pagamento e uma pessoa nas Configurações Iniciais',
           ),
           duration: Duration(seconds: 3),
         ),
@@ -304,6 +302,33 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.red,
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
+                        confirmDismiss: (direction) async {
+                          return await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(
+                                'Excluir ${isGasto ? 'Gasto' : 'Receita'}',
+                              ),
+                              content: Text(
+                                'Tem certeza que deseja excluir este ${isGasto ? 'gasto' : 'receita'}?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                  ),
+                                  child: const Text('Excluir'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                         onDismissed: (direction) async {
                           if (isGasto) {
                             await _gastosBox.deleteAt(boxIndex);

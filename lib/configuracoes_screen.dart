@@ -24,8 +24,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     _pessoasBox = Hive.box<Pessoa>('pessoas');
   }
 
-  // ── FORMAS DE PAGAMENTO ──
-
   void _adicionarFormaPagamento() {
     final _descricaoController = TextEditingController();
     final _bancoController = TextEditingController();
@@ -152,8 +150,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
-  // ── PESSOAS ──
-
   void _adicionarPessoa() {
     final _nomeController = TextEditingController();
     final _parentescoController = TextEditingController();
@@ -239,6 +235,31 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
+  Future<bool?> _confirmarExclusao(
+    BuildContext context,
+    String titulo,
+    String mensagem,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(titulo),
+        content: Text(mensagem),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final formas = _formasPagamentoBox.values.toList();
@@ -285,6 +306,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         color: Colors.red,
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
+                      confirmDismiss: (direction) => _confirmarExclusao(
+                        context,
+                        'Excluir Forma de Pagamento',
+                        'Tem certeza que deseja excluir esta forma de pagamento?',
+                      ),
                       onDismissed: (_) async {
                         await _formasPagamentoBox.deleteAt(index);
                         setState(() {});
@@ -330,6 +356,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         padding: const EdgeInsets.only(right: 20),
                         color: Colors.red,
                         child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      confirmDismiss: (direction) => _confirmarExclusao(
+                        context,
+                        'Excluir Pessoa',
+                        'Tem certeza que deseja excluir esta pessoa?',
                       ),
                       onDismissed: (_) async {
                         await _pessoasBox.deleteAt(index);
