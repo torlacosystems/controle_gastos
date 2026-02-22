@@ -67,6 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.movie;
       case 'Moradia':
         return Icons.home;
+      case 'Educação':
+        return Icons.school;
       default:
         return Icons.category;
     }
@@ -185,9 +187,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirAdicionarGasto,
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('Inserir Novo Gasto'),
       ),
     );
   }
@@ -212,6 +215,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     {'nome': 'Saúde', 'icone': Icons.health_and_safety},
     {'nome': 'Lazer', 'icone': Icons.movie},
     {'nome': 'Moradia', 'icone': Icons.home},
+    {'nome': 'Educação', 'icone': Icons.school},
     {'nome': 'Outros', 'icone': Icons.category},
   ];
 
