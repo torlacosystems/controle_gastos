@@ -25,6 +25,21 @@ class Gasto extends HiveObject {
   @HiveField(6)
   final String pessoa;
 
+  @HiveField(7)
+  final String tipoGasto; // 'Fixo' ou 'Variável'
+
+  @HiveField(8)
+  final bool parcelado;
+
+  @HiveField(9)
+  final int numeroParcelas;
+
+  @HiveField(10)
+  final String estabelecimento;
+
+  @HiveField(11)
+  final bool recorrente;
+
   Gasto({
     required this.id,
     required this.descricao,
@@ -33,5 +48,10 @@ class Gasto extends HiveObject {
     required this.data,
     required this.formaPagamento,
     required this.pessoa,
+    required this.tipoGasto,
+    required this.parcelado,
+    required this.numeroParcelas,
+    required this.estabelecimento,
+    required this.recorrente,
   });
 }

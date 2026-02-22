@@ -206,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            '${_formatarData(gasto.data)}${gasto.descricao.isNotEmpty ? ' • ${gasto.descricao}' : ''}',
+                            '${_formatarData(gasto.data)}${gasto.estabelecimento.isNotEmpty ? ' • ${gasto.estabelecimento}' : ''}${gasto.descricao.isNotEmpty ? ' • ${gasto.descricao}' : ''}',
                           ),
                           trailing: Text(
                             'R\$ ${_formatarValor(gasto.valor)}',
@@ -261,10 +261,15 @@ class AdicionarGastoScreen extends StatefulWidget {
 class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   final _valorController = TextEditingController();
   final _descricaoController = TextEditingController();
+  final _estabelecimentoController = TextEditingController();
   String _categoriaSelecionada = 'Alimentação';
   DateTime _dataSelecionada = DateTime.now();
   FormaPagamento? _formaPagamentoSelecionada;
   Pessoa? _pessoaSelecionada;
+  String _tipoGasto = 'Variável';
+  bool _parcelado = false;
+  int _numeroParcelas = 1;
+  bool _recorrente = false;
 
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
@@ -330,6 +335,11 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       data: _dataSelecionada,
       formaPagamento: _formaPagamentoSelecionada!.descricao,
       pessoa: _pessoaSelecionada!.nome,
+      tipoGasto: _tipoGasto,
+      parcelado: _parcelado,
+      numeroParcelas: _parcelado ? _numeroParcelas : 1,
+      estabelecimento: _estabelecimentoController.text,
+      recorrente: _recorrente,
     );
 
     Navigator.pop(context, novoGasto);
@@ -436,6 +446,44 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
+                'Tipo de Gasto',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: ['Fixo', 'Variável'].map((tipo) {
+                  final selecionado = tipo == _tipoGasto;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _tipoGasto = tipo),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selecionado
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          tipo,
+                          style: TextStyle(
+                            color: selecionado
+                                ? Colors.white
+                                : Colors.grey[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              const Text(
                 'Forma de Pagamento',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
@@ -458,6 +506,50 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 },
               ),
               const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Parcelado',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Switch(
+                    value: _parcelado,
+                    onChanged: (value) => setState(() => _parcelado = value),
+                  ),
+                ],
+              ),
+              if (_parcelado) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text(
+                      'Número de parcelas: ',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: _numeroParcelas > 2
+                          ? () => setState(() => _numeroParcelas--)
+                          : null,
+                    ),
+                    Text(
+                      '$_numeroParcelas',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: _numeroParcelas < 48
+                          ? () => setState(() => _numeroParcelas++)
+                          : null,
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 24),
               const Text(
                 'Pessoa',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -477,6 +569,19 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     _pessoaSelecionada = value;
                   });
                 },
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Estabelecimento (opcional)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _estabelecimentoController,
+                decoration: const InputDecoration(
+                  hintText: 'Ex: Supermercado Extra',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -510,6 +615,25 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Recorrente',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Switch(
+                    value: _recorrente,
+                    onChanged: (value) => setState(() => _recorrente = value),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Gasto que se repete todo mês',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 24),
               const Text(
