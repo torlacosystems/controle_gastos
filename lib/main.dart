@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'gasto.dart';
+import 'receita.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'configuracoes_screen.dart';
@@ -9,9 +10,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   Hive.registerAdapter(GastoAdapter());
+  Hive.registerAdapter(ReceitaAdapter());
   Hive.registerAdapter(FormaPagamentoAdapter());
   Hive.registerAdapter(PessoaAdapter());
   await Hive.openBox<Gasto>('gastos');
+  await Hive.openBox<Receita>('receitas');
   await Hive.openBox<FormaPagamento>('formas_pagamento');
   await Hive.openBox<Pessoa>('pessoas');
   runApp(const MyApp());
@@ -26,7 +29,7 @@ class MyApp extends StatelessWidget {
       title: 'Controle de Gastos',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
       home: const HomeScreen(),
@@ -43,6 +46,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Box<Gasto> _gastosBox;
+  late Box<Receita> _receitasBox;
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
 
@@ -50,13 +54,20 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
+    _receitasBox = Hive.box<Receita>('receitas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
   }
 
-  double get _totalMes {
+  double get _totalGastosMes {
     return _gastosBox.values.fold(0, (soma, gasto) => soma + gasto.valor);
   }
+
+  double get _totalReceitasMes {
+    return _receitasBox.values.fold(0, (soma, receita) => soma + receita.valor);
+  }
+
+  double get _saldo => _totalReceitasMes - _totalGastosMes;
 
   String _formatarValor(double valor) {
     return valor.toStringAsFixed(2).replaceAll('.', ',');
@@ -80,6 +91,18 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.home;
       case 'Educação':
         return Icons.school;
+      case 'Salário':
+        return Icons.work;
+      case 'Freelance':
+        return Icons.computer;
+      case 'Investimento':
+        return Icons.trending_up;
+      case 'Aluguel':
+        return Icons.home;
+      case 'Presente':
+        return Icons.card_giftcard;
+      case 'Benefício':
+        return Icons.volunteer_activism;
       default:
         return Icons.category;
     }
@@ -101,14 +124,34 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
-
     final novoGasto = await Navigator.push<Gasto>(
       context,
       MaterialPageRoute(builder: (context) => const AdicionarGastoScreen()),
     );
-
     if (novoGasto != null) {
       await _gastosBox.add(novoGasto);
+      setState(() {});
+    }
+  }
+
+  void _abrirAdicionarReceita() async {
+    if (!_cadastroCompleto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cadastre ao menos uma forma de pagamento e uma pessoa nas Configurações Iniciais',
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+    final novaReceita = await Navigator.push<Receita>(
+      context,
+      MaterialPageRoute(builder: (context) => const AdicionarReceitaScreen()),
+    );
+    if (novaReceita != null) {
+      await _receitasBox.add(novaReceita);
       setState(() {});
     }
   }
@@ -121,14 +164,35 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
-  void _deletarGasto(int index) async {
-    await _gastosBox.deleteAt(index);
-    setState(() {});
+  List<Map<String, dynamic>> get _itensMisturados {
+    final List<Map<String, dynamic>> itens = [];
+
+    for (int i = 0; i < _gastosBox.length; i++) {
+      final gasto = _gastosBox.getAt(i)!;
+      itens.add({'tipo': 'gasto', 'item': gasto, 'index': i});
+    }
+
+    for (int i = 0; i < _receitasBox.length; i++) {
+      final receita = _receitasBox.getAt(i)!;
+      itens.add({'tipo': 'receita', 'item': receita, 'index': i});
+    }
+
+    itens.sort((a, b) {
+      final DateTime dataA = a['tipo'] == 'gasto'
+          ? (a['item'] as Gasto).data
+          : (a['item'] as Receita).data;
+      final DateTime dataB = b['tipo'] == 'gasto'
+          ? (b['item'] as Gasto).data
+          : (b['item'] as Receita).data;
+      return dataB.compareTo(dataA);
+    });
+
+    return itens;
   }
 
   @override
   Widget build(BuildContext context) {
-    final gastos = _gastosBox.values.toList().reversed.toList();
+    final itens = _itensMisturados;
 
     return Scaffold(
       appBar: AppBar(
@@ -145,39 +209,94 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 const Text(
-                  'Total do mês',
+                  'Total de Gastos do Mês',
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'R\$ ${_formatarValor(_totalMes)}',
+                  'R\$ ${_formatarValor(_totalGastosMes)}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Column(
+                      children: [
+                        const Text(
+                          'Receitas',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        Text(
+                          'R\$ ${_formatarValor(_totalReceitasMes)}',
+                          style: const TextStyle(
+                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text(
+                          'Saldo',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        Text(
+                          'R\$ ${_formatarValor(_saldo)}',
+                          style: TextStyle(
+                            color: _saldo >= 0
+                                ? Colors.greenAccent
+                                : Colors.redAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
           Expanded(
-            child: gastos.isEmpty
+            child: itens.isEmpty
                 ? const Center(
                     child: Text(
-                      'Nenhum gasto ainda.\nToque em + para adicionar.',
+                      'Nenhum lançamento ainda.\nToque em + para adicionar.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   )
                 : ListView.builder(
-                    itemCount: gastos.length,
+                    itemCount: itens.length,
                     itemBuilder: (context, index) {
-                      final gasto = gastos[index];
-                      final boxIndex = _gastosBox.values.toList().indexOf(
-                        gasto,
-                      );
+                      final item = itens[index];
+                      final isGasto = item['tipo'] == 'gasto';
+                      final boxIndex = item['index'] as int;
+
+                      final String categoria = isGasto
+                          ? (item['item'] as Gasto).categoria
+                          : (item['item'] as Receita).categoria;
+                      final double valor = isGasto
+                          ? (item['item'] as Gasto).valor
+                          : (item['item'] as Receita).valor;
+                      final DateTime data = isGasto
+                          ? (item['item'] as Gasto).data
+                          : (item['item'] as Receita).data;
+                      final String descricao = isGasto
+                          ? (item['item'] as Gasto).descricao
+                          : (item['item'] as Receita).descricao;
+
                       return Dismissible(
-                        key: Key(gasto.id),
+                        key: Key(
+                          isGasto
+                              ? (item['item'] as Gasto).id
+                              : (item['item'] as Receita).id,
+                        ),
                         direction: DismissDirection.endToStart,
                         background: Container(
                           alignment: Alignment.centerRight,
@@ -185,34 +304,56 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.red,
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
-                        onDismissed: (direction) {
-                          _deletarGasto(boxIndex);
+                        onDismissed: (direction) async {
+                          if (isGasto) {
+                            await _gastosBox.deleteAt(boxIndex);
+                          } else {
+                            await _receitasBox.deleteAt(boxIndex);
+                          }
+                          setState(() {});
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Gasto removido')),
+                            SnackBar(
+                              content: Text(
+                                '${isGasto ? 'Gasto' : 'Receita'} removido',
+                              ),
+                            ),
                           );
                         },
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
-                            child: Icon(
-                              _iconeCategoria(gasto.categoria),
-                              color: Theme.of(context).colorScheme.primary,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: isGasto ? Colors.red : Colors.green,
+                                width: 4,
+                              ),
                             ),
                           ),
-                          title: Text(
-                            gasto.categoria,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            '${_formatarData(gasto.data)}${gasto.estabelecimento.isNotEmpty ? ' • ${gasto.estabelecimento}' : ''}${gasto.descricao.isNotEmpty ? ' • ${gasto.descricao}' : ''}',
-                          ),
-                          trailing: Text(
-                            'R\$ ${_formatarValor(gasto.valor)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: isGasto
+                                  ? Colors.red[50]
+                                  : Colors.green[50],
+                              child: Icon(
+                                _iconeCategoria(categoria),
+                                color: isGasto ? Colors.red : Colors.green,
+                              ),
+                            ),
+                            title: Text(
+                              categoria,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${isGasto ? 'Gasto' : 'Receita'} • ${_formatarData(data)}${descricao.isNotEmpty ? ' • $descricao' : ''}',
+                            ),
+                            trailing: Text(
+                              '${isGasto ? '-' : '+'} R\$ ${_formatarValor(valor)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: isGasto ? Colors.red : Colors.green,
+                              ),
                             ),
                           ),
                         ),
@@ -245,6 +386,16 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Inserir Novo Gasto'),
             ),
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 230,
+            child: FloatingActionButton.extended(
+              heroTag: 'receita',
+              onPressed: _abrirAdicionarReceita,
+              icon: const Icon(Icons.attach_money),
+              label: const Text('Inserir Nova Receita'),
+            ),
+          ),
         ],
       ),
     );
@@ -268,7 +419,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   Pessoa? _pessoaSelecionada;
   String _tipoGasto = 'Variável';
   bool _parcelado = false;
-  int _numeroParcelas = 1;
+  int _numeroParcelas = 2;
   bool _recorrente = false;
 
   late Box<FormaPagamento> _formasPagamentoBox;
@@ -304,20 +455,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
-    if (picked != null) {
-      setState(() {
-        _dataSelecionada = picked;
-      });
-    }
+    if (picked != null) setState(() => _dataSelecionada = picked);
   }
 
   void _salvarGasto() {
     String textoValor = _valorController.text.replaceAll('.', ',');
-
-    if (!textoValor.contains(',')) {
-      textoValor = '$textoValor,00';
-    }
-
+    if (!textoValor.contains(',')) textoValor = '$textoValor,00';
     final valor = double.tryParse(textoValor.replaceAll(',', '.'));
 
     if (valor == null || valor <= 0) {
@@ -402,11 +545,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 children: _categorias.map((cat) {
                   final selecionada = cat['nome'] == _categoriaSelecionada;
                   return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _categoriaSelecionada = cat['nome'];
-                      });
-                    },
+                    onTap: () =>
+                        setState(() => _categoriaSelecionada = cat['nome']),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -499,11 +639,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ),
                   );
                 }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _formaPagamentoSelecionada = value;
-                  });
-                },
+                onChanged: (value) =>
+                    setState(() => _formaPagamentoSelecionada = value),
               ),
               const SizedBox(height: 24),
               Row(
@@ -564,11 +701,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     child: Text('${pessoa.nome} • ${pessoa.parentesco}'),
                   );
                 }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _pessoaSelecionada = value;
-                  });
-                },
+                onChanged: (value) =>
+                    setState(() => _pessoaSelecionada = value),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -630,7 +764,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
               const Text(
                 'Gasto que se repete todo mês',
                 style: TextStyle(color: Colors.grey, fontSize: 13),
@@ -663,6 +796,283 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   ),
                   child: const Text(
                     'Salvar Gasto',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AdicionarReceitaScreen extends StatefulWidget {
+  const AdicionarReceitaScreen({super.key});
+
+  @override
+  State<AdicionarReceitaScreen> createState() => _AdicionarReceitaScreenState();
+}
+
+class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
+  final _valorController = TextEditingController();
+  final _descricaoController = TextEditingController();
+  String _categoriaSelecionada = 'Salário';
+  DateTime _dataSelecionada = DateTime.now();
+  Pessoa? _pessoaSelecionada;
+  bool _recorrente = false;
+
+  late Box<Pessoa> _pessoasBox;
+
+  final List<Map<String, dynamic>> _categorias = [
+    {'nome': 'Salário', 'icone': Icons.work},
+    {'nome': 'Freelance', 'icone': Icons.computer},
+    {'nome': 'Investimento', 'icone': Icons.trending_up},
+    {'nome': 'Aluguel', 'icone': Icons.home},
+    {'nome': 'Presente', 'icone': Icons.card_giftcard},
+    {'nome': 'Benefício', 'icone': Icons.volunteer_activism},
+    {'nome': 'Outros', 'icone': Icons.category},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _pessoaSelecionada = _pessoasBox.values.first;
+  }
+
+  String _formatarData(DateTime data) {
+    return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
+  }
+
+  Future<void> _selecionarData() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _dataSelecionada,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _dataSelecionada = picked);
+  }
+
+  void _salvarReceita() {
+    String textoValor = _valorController.text.replaceAll('.', ',');
+    if (!textoValor.contains(',')) textoValor = '$textoValor,00';
+    final valor = double.tryParse(textoValor.replaceAll(',', '.'));
+
+    if (valor == null || valor <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Informe um valor válido')));
+      return;
+    }
+
+    final novaReceita = Receita(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      descricao: _descricaoController.text,
+      valor: valor,
+      categoria: _categoriaSelecionada,
+      data: _dataSelecionada,
+      pessoa: _pessoaSelecionada!.nome,
+      recorrente: _recorrente,
+    );
+
+    Navigator.pop(context, novaReceita);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pessoas = _pessoasBox.values.toList();
+
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(
+        title: const Text('Nova Receita'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Valor (R\$)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _valorController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+                decoration: const InputDecoration(
+                  hintText: '0,00',
+                  border: OutlineInputBorder(),
+                  prefixText: 'R\$ ',
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Categoria',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _categorias.map((cat) {
+                  final selecionada = cat['nome'] == _categoriaSelecionada;
+                  return GestureDetector(
+                    onTap: () =>
+                        setState(() => _categoriaSelecionada = cat['nome']),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selecionada
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            cat['icone'],
+                            size: 18,
+                            color: selecionada
+                                ? Colors.white
+                                : Colors.grey[700],
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            cat['nome'],
+                            style: TextStyle(
+                              color: selecionada
+                                  ? Colors.white
+                                  : Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Pessoa',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<Pessoa>(
+                value: _pessoaSelecionada,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                items: pessoas.map((pessoa) {
+                  return DropdownMenuItem(
+                    value: pessoa,
+                    child: Text('${pessoa.nome} • ${pessoa.parentesco}'),
+                  );
+                }).toList(),
+                onChanged: (value) =>
+                    setState(() => _pessoaSelecionada = value),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Data',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _selecionarData,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _formatarData(_dataSelecionada),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Recorrente',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Switch(
+                    value: _recorrente,
+                    onChanged: (value) => setState(() => _recorrente = value),
+                  ),
+                ],
+              ),
+              const Text(
+                'Receita que se repete todo mês',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Descrição (opcional)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _descricaoController,
+                decoration: const InputDecoration(
+                  hintText: 'Ex: salário mensal',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _salvarReceita,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Salvar Receita',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
