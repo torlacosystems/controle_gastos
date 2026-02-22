@@ -139,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Cadastre ao menos uma forma de pagamento e uma pessoa nas Configurações Iniciais',
+            'Cadastre ao menos uma pessoa nas Configurações Iniciais',
           ),
           duration: Duration(seconds: 3),
         ),
