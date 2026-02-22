@@ -1,50 +1,41 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'gasto.dart';
+part of 'forma_pagamento.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class GastoAdapter extends TypeAdapter<Gasto> {
+class FormaPagamentoAdapter extends TypeAdapter<FormaPagamento> {
   @override
-  final int typeId = 0;
+  final int typeId = 1;
 
   @override
-  Gasto read(BinaryReader reader) {
+  FormaPagamento read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return Gasto(
+    return FormaPagamento(
       id: fields[0] as String,
       descricao: fields[1] as String,
-      valor: fields[2] as double,
-      categoria: fields[3] as String,
-      data: fields[4] as DateTime,
-      formaPagamento: fields[5] as String,
-      pessoa: fields[6] as String,
+      tipo: fields[2] as String,
+      banco: fields[3] as String,
     );
   }
 
   @override
-  void write(BinaryWriter writer, Gasto obj) {
+  void write(BinaryWriter writer, FormaPagamento obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.descricao)
       ..writeByte(2)
-      ..write(obj.valor)
+      ..write(obj.tipo)
       ..writeByte(3)
-      ..write(obj.categoria)
-      ..writeByte(4)
-      ..write(obj.data)
-      ..writeByte(5)
-      ..write(obj.formaPagamento)
-      ..writeByte(6)
-      ..write(obj.pessoa);
+      ..write(obj.banco);
   }
 
   @override
@@ -53,7 +44,7 @@ class GastoAdapter extends TypeAdapter<Gasto> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is GastoAdapter &&
+      other is FormaPagamentoAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

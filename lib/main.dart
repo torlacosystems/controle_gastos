@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'gasto.dart';
+import 'forma_pagamento.dart';
+import 'pessoa.dart';
+import 'configuracoes_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   Hive.registerAdapter(GastoAdapter());
+  Hive.registerAdapter(FormaPagamentoAdapter());
+  Hive.registerAdapter(PessoaAdapter());
   await Hive.openBox<Gasto>('gastos');
+  await Hive.openBox<FormaPagamento>('formas_pagamento');
+  await Hive.openBox<Pessoa>('pessoas');
   runApp(const MyApp());
 }
 
@@ -36,11 +43,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Box<Gasto> _gastosBox;
+  late Box<FormaPagamento> _formasPagamentoBox;
+  late Box<Pessoa> _pessoasBox;
 
   @override
   void initState() {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
+    _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
+    _pessoasBox = Hive.box<Pessoa>('pessoas');
   }
 
   double get _totalMes {
@@ -74,7 +85,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  bool get _cadastroCompleto {
+    return _formasPagamentoBox.isNotEmpty && _pessoasBox.isNotEmpty;
+  }
+
   void _abrirAdicionarGasto() async {
+    if (!_cadastroCompleto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cadastre ao menos uma forma de pagamento e uma pessoa nas Configurações Iniciais',
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     final novoGasto = await Navigator.push<Gasto>(
       context,
       MaterialPageRoute(builder: (context) => const AdicionarGastoScreen()),
@@ -84,6 +111,14 @@ class _HomeScreenState extends State<HomeScreen> {
       await _gastosBox.add(novoGasto);
       setState(() {});
     }
+  }
+
+  void _abrirConfiguracoes() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ConfiguracoesScreen()),
+    );
+    setState(() {});
   }
 
   void _deletarGasto(int index) async {
@@ -187,10 +222,30 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _abrirAdicionarGasto,
-        icon: const Icon(Icons.add),
-        label: const Text('Inserir Novo Gasto'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          SizedBox(
+            width: 230,
+            child: FloatingActionButton.extended(
+              heroTag: 'config',
+              onPressed: _abrirConfiguracoes,
+              icon: const Icon(Icons.settings),
+              label: const Text('Configurações Iniciais'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 230,
+            child: FloatingActionButton.extended(
+              heroTag: 'novo',
+              onPressed: _abrirAdicionarGasto,
+              icon: const Icon(Icons.add),
+              label: const Text('Inserir Novo Gasto'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -208,6 +263,11 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   final _descricaoController = TextEditingController();
   String _categoriaSelecionada = 'Alimentação';
   DateTime _dataSelecionada = DateTime.now();
+  FormaPagamento? _formaPagamentoSelecionada;
+  Pessoa? _pessoaSelecionada;
+
+  late Box<FormaPagamento> _formasPagamentoBox;
+  late Box<Pessoa> _pessoasBox;
 
   final List<Map<String, dynamic>> _categorias = [
     {'nome': 'Alimentação', 'icone': Icons.restaurant},
@@ -218,6 +278,15 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     {'nome': 'Educação', 'icone': Icons.school},
     {'nome': 'Outros', 'icone': Icons.category},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
+    _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _formaPagamentoSelecionada = _formasPagamentoBox.values.first;
+    _pessoaSelecionada = _pessoasBox.values.first;
+  }
 
   String _formatarData(DateTime data) {
     return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
@@ -259,6 +328,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       valor: valor,
       categoria: _categoriaSelecionada,
       data: _dataSelecionada,
+      formaPagamento: _formaPagamentoSelecionada!.descricao,
+      pessoa: _pessoaSelecionada!.nome,
     );
 
     Navigator.pop(context, novoGasto);
@@ -266,6 +337,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final formas = _formasPagamentoBox.values.toList();
+    final pessoas = _pessoasBox.values.toList();
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
@@ -359,6 +433,50 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ),
                   );
                 }).toList(),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Forma de Pagamento',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<FormaPagamento>(
+                value: _formaPagamentoSelecionada,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                items: formas.map((forma) {
+                  return DropdownMenuItem(
+                    value: forma,
+                    child: Text(
+                      '${forma.descricao} • ${forma.tipo} • ${forma.banco}',
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _formaPagamentoSelecionada = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Pessoa',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<Pessoa>(
+                value: _pessoaSelecionada,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                items: pessoas.map((pessoa) {
+                  return DropdownMenuItem(
+                    value: pessoa,
+                    child: Text('${pessoa.nome} • ${pessoa.parentesco}'),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _pessoaSelecionada = value;
+                  });
+                },
               ),
               const SizedBox(height: 24),
               const Text(

@@ -19,11 +19,19 @@ class Gasto extends HiveObject {
   @HiveField(4)
   final DateTime data;
 
+  @HiveField(5)
+  final String formaPagamento;
+
+  @HiveField(6)
+  final String pessoa;
+
   Gasto({
     required this.id,
     required this.descricao,
     required this.valor,
     required this.categoria,
     required this.data,
+    required this.formaPagamento,
+    required this.pessoa,
   });
 }
