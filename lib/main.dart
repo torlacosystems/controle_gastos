@@ -110,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return _formasPagamentoBox.isNotEmpty && _pessoasBox.isNotEmpty;
   }
 
-  void _abrirAdicionarGasto() async {
+  void _abrirAdicionarGasto({Gasto? gasto, int? index}) async {
     if (!_cadastroCompleto) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -122,17 +122,23 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
-    final novoGasto = await Navigator.push<Gasto>(
+    final resultado = await Navigator.push<Gasto>(
       context,
-      MaterialPageRoute(builder: (context) => const AdicionarGastoScreen()),
+      MaterialPageRoute(
+        builder: (context) => AdicionarGastoScreen(gasto: gasto),
+      ),
     );
-    if (novoGasto != null) {
-      await _gastosBox.add(novoGasto);
+    if (resultado != null) {
+      if (index != null) {
+        await _gastosBox.putAt(index, resultado);
+      } else {
+        await _gastosBox.add(resultado);
+      }
       setState(() {});
     }
   }
 
-  void _abrirAdicionarReceita() async {
+  void _abrirAdicionarReceita({Receita? receita, int? index}) async {
     if (!_cadastroCompleto) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -144,12 +150,18 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
-    final novaReceita = await Navigator.push<Receita>(
+    final resultado = await Navigator.push<Receita>(
       context,
-      MaterialPageRoute(builder: (context) => const AdicionarReceitaScreen()),
+      MaterialPageRoute(
+        builder: (context) => AdicionarReceitaScreen(receita: receita),
+      ),
     );
-    if (novaReceita != null) {
-      await _receitasBox.add(novaReceita);
+    if (resultado != null) {
+      if (index != null) {
+        await _receitasBox.putAt(index, resultado);
+      } else {
+        await _receitasBox.add(resultado);
+      }
       setState(() {});
     }
   }
@@ -164,17 +176,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Map<String, dynamic>> get _itensMisturados {
     final List<Map<String, dynamic>> itens = [];
-
     for (int i = 0; i < _gastosBox.length; i++) {
-      final gasto = _gastosBox.getAt(i)!;
-      itens.add({'tipo': 'gasto', 'item': gasto, 'index': i});
+      itens.add({'tipo': 'gasto', 'item': _gastosBox.getAt(i)!, 'index': i});
     }
-
     for (int i = 0; i < _receitasBox.length; i++) {
-      final receita = _receitasBox.getAt(i)!;
-      itens.add({'tipo': 'receita', 'item': receita, 'index': i});
+      itens.add({
+        'tipo': 'receita',
+        'item': _receitasBox.getAt(i)!,
+        'index': i,
+      });
     }
-
     itens.sort((a, b) {
       final DateTime dataA = a['tipo'] == 'gasto'
           ? (a['item'] as Gasto).data
@@ -184,7 +195,6 @@ class _HomeScreenState extends State<HomeScreen> {
           : (b['item'] as Receita).data;
       return dataB.compareTo(dataA);
     });
-
     return itens;
   }
 
@@ -275,7 +285,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       final item = itens[index];
                       final isGasto = item['tipo'] == 'gasto';
                       final boxIndex = item['index'] as int;
-
                       final String categoria = isGasto
                           ? (item['item'] as Gasto).categoria
                           : (item['item'] as Receita).categoria;
@@ -372,13 +381,34 @@ class _HomeScreenState extends State<HomeScreen> {
                             subtitle: Text(
                               '${isGasto ? 'Gasto' : 'Receita'} • ${_formatarData(data)}${descricao.isNotEmpty ? ' • $descricao' : ''}',
                             ),
-                            trailing: Text(
-                              '${isGasto ? '-' : '+'} R\$ ${_formatarValor(valor)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: isGasto ? Colors.red : Colors.green,
-                              ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${isGasto ? '-' : '+'} R\$ ${_formatarValor(valor)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: isGasto ? Colors.red : Colors.green,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  onPressed: () {
+                                    if (isGasto) {
+                                      _abrirAdicionarGasto(
+                                        gasto: item['item'] as Gasto,
+                                        index: boxIndex,
+                                      );
+                                    } else {
+                                      _abrirAdicionarReceita(
+                                        receita: item['item'] as Receita,
+                                        index: boxIndex,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -406,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 230,
             child: FloatingActionButton.extended(
               heroTag: 'novo',
-              onPressed: _abrirAdicionarGasto,
+              onPressed: () => _abrirAdicionarGasto(),
               icon: const Icon(Icons.add),
               label: const Text('Inserir Novo Gasto'),
             ),
@@ -416,7 +446,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 230,
             child: FloatingActionButton.extended(
               heroTag: 'receita',
-              onPressed: _abrirAdicionarReceita,
+              onPressed: () => _abrirAdicionarReceita(),
               icon: const Icon(Icons.attach_money),
               label: const Text('Inserir Nova Receita'),
             ),
@@ -428,24 +458,25 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class AdicionarGastoScreen extends StatefulWidget {
-  const AdicionarGastoScreen({super.key});
+  final Gasto? gasto;
+  const AdicionarGastoScreen({super.key, this.gasto});
 
   @override
   State<AdicionarGastoScreen> createState() => _AdicionarGastoScreenState();
 }
 
 class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
-  final _valorController = TextEditingController();
-  final _descricaoController = TextEditingController();
-  final _estabelecimentoController = TextEditingController();
-  String _categoriaSelecionada = 'Alimentação';
-  DateTime _dataSelecionada = DateTime.now();
+  late TextEditingController _valorController;
+  late TextEditingController _descricaoController;
+  late TextEditingController _estabelecimentoController;
+  late String _categoriaSelecionada;
+  late DateTime _dataSelecionada;
   FormaPagamento? _formaPagamentoSelecionada;
   Pessoa? _pessoaSelecionada;
-  String _tipoGasto = 'Variável';
-  bool _parcelado = false;
-  int _numeroParcelas = 2;
-  bool _recorrente = false;
+  late String _tipoGasto;
+  late bool _parcelado;
+  late int _numeroParcelas;
+  late bool _recorrente;
 
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
@@ -465,8 +496,41 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     super.initState();
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
-    _formaPagamentoSelecionada = _formasPagamentoBox.values.first;
-    _pessoaSelecionada = _pessoasBox.values.first;
+
+    final g = widget.gasto;
+    _valorController = TextEditingController(
+      text: g != null ? g.valor.toStringAsFixed(2).replaceAll('.', ',') : '',
+    );
+    _descricaoController = TextEditingController(text: g?.descricao ?? '');
+    _estabelecimentoController = TextEditingController(
+      text: g?.estabelecimento ?? '',
+    );
+    _categoriaSelecionada = g?.categoria ?? 'Alimentação';
+    _dataSelecionada = g?.data ?? DateTime.now();
+    _tipoGasto = g?.tipoGasto ?? 'Variável';
+    _parcelado = g?.parcelado ?? false;
+    _numeroParcelas = g?.numeroParcelas ?? 2;
+    _recorrente = g?.recorrente ?? false;
+
+    final formas = _formasPagamentoBox.values.toList();
+    if (g != null) {
+      _formaPagamentoSelecionada = formas.firstWhere(
+        (f) => f.descricao == g.formaPagamento,
+        orElse: () => formas.first,
+      );
+    } else {
+      _formaPagamentoSelecionada = formas.first;
+    }
+
+    final pessoas = _pessoasBox.values.toList();
+    if (g != null) {
+      _pessoaSelecionada = pessoas.firstWhere(
+        (p) => p.nome == g.pessoa,
+        orElse: () => pessoas.first,
+      );
+    } else {
+      _pessoaSelecionada = pessoas.first;
+    }
   }
 
   String _formatarData(DateTime data) {
@@ -496,7 +560,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     }
 
     final novoGasto = Gasto(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: widget.gasto?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       descricao: _descricaoController.text,
       valor: valor,
       categoria: _categoriaSelecionada,
@@ -521,7 +585,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Novo Gasto'),
+        title: Text(widget.gasto == null ? 'Novo Gasto' : 'Editar Gasto'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
@@ -819,9 +883,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Salvar Gasto',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: Text(
+                    widget.gasto == null ? 'Salvar Gasto' : 'Atualizar Gasto',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -834,19 +901,20 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 }
 
 class AdicionarReceitaScreen extends StatefulWidget {
-  const AdicionarReceitaScreen({super.key});
+  final Receita? receita;
+  const AdicionarReceitaScreen({super.key, this.receita});
 
   @override
   State<AdicionarReceitaScreen> createState() => _AdicionarReceitaScreenState();
 }
 
 class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
-  final _valorController = TextEditingController();
-  final _descricaoController = TextEditingController();
-  String _categoriaSelecionada = 'Salário';
-  DateTime _dataSelecionada = DateTime.now();
+  late TextEditingController _valorController;
+  late TextEditingController _descricaoController;
+  late String _categoriaSelecionada;
+  late DateTime _dataSelecionada;
   Pessoa? _pessoaSelecionada;
-  bool _recorrente = false;
+  late bool _recorrente;
 
   late Box<Pessoa> _pessoasBox;
 
@@ -864,7 +932,25 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   void initState() {
     super.initState();
     _pessoasBox = Hive.box<Pessoa>('pessoas');
-    _pessoaSelecionada = _pessoasBox.values.first;
+
+    final r = widget.receita;
+    _valorController = TextEditingController(
+      text: r != null ? r.valor.toStringAsFixed(2).replaceAll('.', ',') : '',
+    );
+    _descricaoController = TextEditingController(text: r?.descricao ?? '');
+    _categoriaSelecionada = r?.categoria ?? 'Salário';
+    _dataSelecionada = r?.data ?? DateTime.now();
+    _recorrente = r?.recorrente ?? false;
+
+    final pessoas = _pessoasBox.values.toList();
+    if (r != null) {
+      _pessoaSelecionada = pessoas.firstWhere(
+        (p) => p.nome == r.pessoa,
+        orElse: () => pessoas.first,
+      );
+    } else {
+      _pessoaSelecionada = pessoas.first;
+    }
   }
 
   String _formatarData(DateTime data) {
@@ -894,7 +980,9 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     }
 
     final novaReceita = Receita(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id:
+          widget.receita?.id ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
       descricao: _descricaoController.text,
       valor: valor,
       categoria: _categoriaSelecionada,
@@ -913,7 +1001,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Nova Receita'),
+        title: Text(widget.receita == null ? 'Nova Receita' : 'Editar Receita'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
@@ -1096,9 +1184,14 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Salvar Receita',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: Text(
+                    widget.receita == null
+                        ? 'Salvar Receita'
+                        : 'Atualizar Receita',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),

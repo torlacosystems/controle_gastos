@@ -24,10 +24,12 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     _pessoasBox = Hive.box<Pessoa>('pessoas');
   }
 
-  void _adicionarFormaPagamento() {
-    final _descricaoController = TextEditingController();
-    final _bancoController = TextEditingController();
-    String _tipoSelecionado = 'Crédito';
+  void _adicionarOuEditarFormaPagamento({FormaPagamento? forma, int? index}) {
+    final _descricaoController = TextEditingController(
+      text: forma?.descricao ?? '',
+    );
+    final _bancoController = TextEditingController(text: forma?.banco ?? '');
+    String _tipoSelecionado = forma?.tipo ?? 'Crédito';
 
     showModalBottomSheet(
       context: context,
@@ -47,9 +49,14 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Nova Forma de Pagamento',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Text(
+                forma == null
+                    ? 'Nova Forma de Pagamento'
+                    : 'Editar Forma de Pagamento',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -119,14 +126,19 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
-                    await _formasPagamentoBox.add(
-                      FormaPagamento(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        descricao: _descricaoController.text,
-                        tipo: _tipoSelecionado,
-                        banco: _bancoController.text,
-                      ),
+                    final novaForma = FormaPagamento(
+                      id:
+                          forma?.id ??
+                          DateTime.now().millisecondsSinceEpoch.toString(),
+                      descricao: _descricaoController.text,
+                      tipo: _tipoSelecionado,
+                      banco: _bancoController.text,
                     );
+                    if (forma == null) {
+                      await _formasPagamentoBox.add(novaForma);
+                    } else {
+                      await _formasPagamentoBox.putAt(index!, novaForma);
+                    }
                     setState(() {});
                     Navigator.pop(context);
                   },
@@ -150,9 +162,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
-  void _adicionarPessoa() {
-    final _nomeController = TextEditingController();
-    final _parentescoController = TextEditingController();
+  void _adicionarOuEditarPessoa({Pessoa? pessoa, int? index}) {
+    final _nomeController = TextEditingController(text: pessoa?.nome ?? '');
+    final _parentescoController = TextEditingController(
+      text: pessoa?.parentesco ?? '',
+    );
 
     showModalBottomSheet(
       context: context,
@@ -171,9 +185,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Nova Pessoa',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              pessoa == null ? 'Nova Pessoa' : 'Editar Pessoa',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -206,13 +220,18 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     );
                     return;
                   }
-                  await _pessoasBox.add(
-                    Pessoa(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      nome: _nomeController.text,
-                      parentesco: _parentescoController.text,
-                    ),
+                  final novaPessoa = Pessoa(
+                    id:
+                        pessoa?.id ??
+                        DateTime.now().millisecondsSinceEpoch.toString(),
+                    nome: _nomeController.text,
+                    parentesco: _parentescoController.text,
                   );
+                  if (pessoa == null) {
+                    await _pessoasBox.add(novaPessoa);
+                  } else {
+                    await _pessoasBox.putAt(index!, novaPessoa);
+                  }
                   setState(() {});
                   Navigator.pop(context);
                 },
@@ -330,6 +349,13 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text('${forma.tipo} • ${forma.banco}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _adicionarOuEditarFormaPagamento(
+                            forma: forma,
+                            index: index,
+                          ),
+                        ),
                       ),
                     );
                   },
@@ -381,6 +407,13 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(pessoa.parentesco),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _adicionarOuEditarPessoa(
+                            pessoa: pessoa,
+                            index: index,
+                          ),
+                        ),
                       ),
                     );
                   },
@@ -390,9 +423,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           if (_tabController.index == 0) {
-            _adicionarFormaPagamento();
+            _adicionarOuEditarFormaPagamento();
           } else {
-            _adicionarPessoa();
+            _adicionarOuEditarPessoa();
           }
         },
         child: const Icon(Icons.add),
