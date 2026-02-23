@@ -5,6 +5,7 @@ import 'receita.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'configuracoes_screen.dart';
+import 'todos_registros_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,23 +60,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _pessoasBox = Hive.box<Pessoa>('pessoas');
   }
 
-  double get _totalGastosMes {
-    return _gastosBox.values.fold(0, (soma, gasto) => soma + gasto.valor);
-  }
+  double get _totalGastosMes =>
+      _gastosBox.values.fold(0, (soma, g) => soma + g.valor);
 
-  double get _totalReceitasMes {
-    return _receitasBox.values.fold(0, (soma, receita) => soma + receita.valor);
-  }
+  double get _totalReceitasMes =>
+      _receitasBox.values.fold(0, (soma, r) => soma + r.valor);
 
   double get _saldo => _totalReceitasMes - _totalGastosMes;
 
-  String _formatarValor(double valor) {
-    return valor.toStringAsFixed(2).replaceAll('.', ',');
-  }
+  String _formatarValor(double valor) =>
+      valor.toStringAsFixed(2).replaceAll('.', ',');
 
-  String _formatarData(DateTime data) {
-    return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
-  }
+  String _formatarData(DateTime data) =>
+      '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
   IconData _iconeCategoria(String categoria) {
     switch (categoria) {
@@ -106,9 +103,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  bool get _cadastroCompleto {
-    return _formasPagamentoBox.isNotEmpty && _pessoasBox.isNotEmpty;
-  }
+  bool get _cadastroCompleto =>
+      _formasPagamentoBox.isNotEmpty && _pessoasBox.isNotEmpty;
 
   void _abrirAdicionarGasto({Gasto? gasto, int? index}) async {
     if (!_cadastroCompleto) {
@@ -180,6 +176,14 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
+  void _abrirTodosRegistros() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TodosRegistrosScreen()),
+    );
+    setState(() {});
+  }
+
   List<Map<String, dynamic>> get _itensMisturados {
     final List<Map<String, dynamic>> itens = [];
     for (int i = 0; i < _gastosBox.length; i++) {
@@ -201,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : (b['item'] as Receita).data;
       return dataB.compareTo(dataA);
     });
-    return itens;
+    return itens.take(5).toList();
   }
 
   @override
@@ -213,6 +217,37 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Meus Gastos'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+      ),
+      bottomNavigationBar: BottomAppBar(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.settings),
+              tooltip: 'Configurações',
+              onPressed: _abrirConfiguracoes,
+            ),
+            IconButton(
+              icon: const Icon(Icons.list_alt),
+              tooltip: 'Todos os Registros',
+              onPressed: _abrirTodosRegistros,
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.add_circle,
+                size: 44,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              tooltip: 'Novo Gasto',
+              onPressed: () => _abrirAdicionarGasto(),
+            ),
+            IconButton(
+              icon: const Icon(Icons.attach_money),
+              tooltip: 'Nova Receita',
+              onPressed: () => _abrirAdicionarReceita(),
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -272,6 +307,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Últimos lançamentos',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${_gastosBox.length + _receitasBox.length} total',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
                 ),
               ],
             ),
@@ -424,41 +475,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          SizedBox(
-            width: 230,
-            child: FloatingActionButton.extended(
-              heroTag: 'config',
-              onPressed: _abrirConfiguracoes,
-              icon: const Icon(Icons.settings),
-              label: const Text('Configurações Iniciais'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: 230,
-            child: FloatingActionButton.extended(
-              heroTag: 'novo',
-              onPressed: () => _abrirAdicionarGasto(),
-              icon: const Icon(Icons.add),
-              label: const Text('Inserir Novo Gasto'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: 230,
-            child: FloatingActionButton.extended(
-              heroTag: 'receita',
-              onPressed: () => _abrirAdicionarReceita(),
-              icon: const Icon(Icons.attach_money),
-              label: const Text('Inserir Nova Receita'),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -519,29 +535,24 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _recorrente = g?.recorrente ?? false;
 
     final formas = _formasPagamentoBox.values.toList();
-    if (g != null) {
-      _formaPagamentoSelecionada = formas.firstWhere(
-        (f) => f.descricao == g.formaPagamento,
-        orElse: () => formas.first,
-      );
-    } else {
-      _formaPagamentoSelecionada = formas.first;
-    }
+    _formaPagamentoSelecionada = g != null
+        ? formas.firstWhere(
+            (f) => f.descricao == g.formaPagamento,
+            orElse: () => formas.first,
+          )
+        : formas.first;
 
     final pessoas = _pessoasBox.values.toList();
-    if (g != null) {
-      _pessoaSelecionada = pessoas.firstWhere(
-        (p) => p.nome == g.pessoa,
-        orElse: () => pessoas.first,
-      );
-    } else {
-      _pessoaSelecionada = pessoas.first;
-    }
+    _pessoaSelecionada = g != null
+        ? pessoas.firstWhere(
+            (p) => p.nome == g.pessoa,
+            orElse: () => pessoas.first,
+          )
+        : pessoas.first;
   }
 
-  String _formatarData(DateTime data) {
-    return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
-  }
+  String _formatarData(DateTime data) =>
+      '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
   Future<void> _selecionarData() async {
     final DateTime? picked = await showDatePicker(
@@ -568,14 +579,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     if (_parcelado) {
       final valorParcela = valor / _numeroParcelas;
       final List<Gasto> parcelas = [];
-
       for (int i = 0; i < _numeroParcelas; i++) {
-        final dataParcela = DateTime(
-          _dataSelecionada.year,
-          _dataSelecionada.month + i,
-          _dataSelecionada.day,
-        );
-
         parcelas.add(
           Gasto(
             id: '${DateTime.now().millisecondsSinceEpoch}_$i',
@@ -583,7 +587,11 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 '${_descricaoController.text} (${i + 1}/$_numeroParcelas)',
             valor: double.parse(valorParcela.toStringAsFixed(2)),
             categoria: _categoriaSelecionada,
-            data: dataParcela,
+            data: DateTime(
+              _dataSelecionada.year,
+              _dataSelecionada.month + i,
+              _dataSelecionada.day,
+            ),
             formaPagamento: _formaPagamentoSelecionada!.descricao,
             pessoa: _pessoaSelecionada!.nome,
             tipoGasto: _tipoGasto,
@@ -594,26 +602,27 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
           ),
         );
       }
-
       Navigator.pop(context, parcelas);
     } else {
-      final novoGasto = Gasto(
-        id:
-            widget.gasto?.id ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
-        descricao: _descricaoController.text,
-        valor: valor,
-        categoria: _categoriaSelecionada,
-        data: _dataSelecionada,
-        formaPagamento: _formaPagamentoSelecionada!.descricao,
-        pessoa: _pessoaSelecionada!.nome,
-        tipoGasto: _tipoGasto,
-        parcelado: false,
-        numeroParcelas: 1,
-        estabelecimento: _estabelecimentoController.text,
-        recorrente: _recorrente,
+      Navigator.pop(
+        context,
+        Gasto(
+          id:
+              widget.gasto?.id ??
+              DateTime.now().millisecondsSinceEpoch.toString(),
+          descricao: _descricaoController.text,
+          valor: valor,
+          categoria: _categoriaSelecionada,
+          data: _dataSelecionada,
+          formaPagamento: _formaPagamentoSelecionada!.descricao,
+          pessoa: _pessoaSelecionada!.nome,
+          tipoGasto: _tipoGasto,
+          parcelado: false,
+          numeroParcelas: 1,
+          estabelecimento: _estabelecimentoController.text,
+          recorrente: _recorrente,
+        ),
       );
-      Navigator.pop(context, novoGasto);
     }
   }
 
@@ -661,6 +670,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   prefixText: 'R\$ ',
                 ),
                 autofocus: true,
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -994,19 +1004,16 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     _recorrente = r?.recorrente ?? false;
 
     final pessoas = _pessoasBox.values.toList();
-    if (r != null) {
-      _pessoaSelecionada = pessoas.firstWhere(
-        (p) => p.nome == r.pessoa,
-        orElse: () => pessoas.first,
-      );
-    } else {
-      _pessoaSelecionada = pessoas.first;
-    }
+    _pessoaSelecionada = r != null
+        ? pessoas.firstWhere(
+            (p) => p.nome == r.pessoa,
+            orElse: () => pessoas.first,
+          )
+        : pessoas.first;
   }
 
-  String _formatarData(DateTime data) {
-    return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
-  }
+  String _formatarData(DateTime data) =>
+      '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
   Future<void> _selecionarData() async {
     final DateTime? picked = await showDatePicker(
@@ -1030,19 +1037,20 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       return;
     }
 
-    final novaReceita = Receita(
-      id:
-          widget.receita?.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
-      descricao: _descricaoController.text,
-      valor: valor,
-      categoria: _categoriaSelecionada,
-      data: _dataSelecionada,
-      pessoa: _pessoaSelecionada!.nome,
-      recorrente: _recorrente,
+    Navigator.pop(
+      context,
+      Receita(
+        id:
+            widget.receita?.id ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        descricao: _descricaoController.text,
+        valor: valor,
+        categoria: _categoriaSelecionada,
+        data: _dataSelecionada,
+        pessoa: _pessoaSelecionada!.nome,
+        recorrente: _recorrente,
+      ),
     );
-
-    Navigator.pop(context, novaReceita);
   }
 
   @override
