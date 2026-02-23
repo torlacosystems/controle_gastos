@@ -1,14 +1,9 @@
-Se compra parcelada, criar gastos para os próximos meses. Exemplo: uma compra de 10000 reais em 10x, deve aparecer 10 registros de mil, com a data do gasto no primeiro mês, segundo mês, até o décimo mês
-Tela inicial deve mostrar últimos 5 registros cadastrados pelo usuario
-Um botão com uma tela de visualização de todos os registros, com também opção de apagar ou editar registros de gastos ou receitas
-Uma funcionalidade de selecionar um ou mais registros para excluir
-Uma funcionalidade de exportar os registros para arquivo csv
-Uma funcionalidade de exportar os registros por email em csv
-Os botões devem ser ícones na parte debaixo
-Um botão com uma tela de relatórios
-Um botão com uma tela de insights
+Uma funcionalidade de selecionar um ou mais registros para excluir - corrigir os erros
+Os botões devem ser ícones na parte debaixo - inserir legendas
+Um botão com uma tela de relatórios - iniciar
+Um botão com uma tela de insights - iniciar
 A tela de load deve ter um fundo branco e uma mensagem abaixo do logo.
 "Controle seus gastos, controle sua vida!"
-Abaixo disso uma barra de progresso do carregamento do aplicativo
-A tela inicial não deve se chamar Meus Gastos e sim Home com logo de Casinha
+Abaixo disso uma barra de progresso do carregamento do aplicativo - iniciar
+A tela inicial não deve se chamar Meus Gastos e sim Home com logo de Casinha - iniciar
 

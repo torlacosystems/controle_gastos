@@ -6,6 +6,7 @@ import 'dart:io';
 import 'gasto.dart';
 import 'receita.dart';
 import 'main.dart';
+import 'package:flutter_email_sender/flutter_email_sender.dart';
 
 class TodosRegistrosScreen extends StatefulWidget {
   const TodosRegistrosScreen({super.key});
@@ -184,7 +185,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         buffer.writeln(
           'Gasto,'
           '"${g.categoria}",'
-          '${g.valor.toStringAsFixed(2)},'
+          '-${g.valor.toStringAsFixed(2)},'
           '${_formatarData(g.data)},'
           '"${g.descricao}",'
           '"${g.pessoa}",'
@@ -199,7 +200,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         buffer.writeln(
           'Receita,'
           '"${r.categoria}",'
-          '${r.valor.toStringAsFixed(2)},'
+          '+${r.valor.toStringAsFixed(2)},'
           '${_formatarData(r.data)},'
           '"${r.descricao}",'
           '"${r.pessoa}",'
@@ -235,15 +236,19 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       final arquivo = File('${dir.path}/registros.csv');
       await arquivo.writeAsString(csv);
 
-      await Share.shareXFiles(
-        [XFile(arquivo.path)],
-        text: 'Segue em anexo o arquivo CSV com todos os registros.',
+      final email = Email(
+        body:
+            'Segue em anexo o arquivo CSV com todos os registros financeiros.',
         subject: 'Exportação de registros financeiros',
+        attachmentPaths: [arquivo.path],
+        isHTML: false,
       );
+
+      await FlutterEmailSender.send(email);
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao exportar: $e')));
+      ).showSnackBar(SnackBar(content: Text('Erro ao abrir email: $e')));
     }
   }
 

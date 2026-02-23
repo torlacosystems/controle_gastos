@@ -208,6 +208,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return itens.take(5).toList();
   }
 
+  Widget _botaoNavegacao(IconData icone, String label, VoidCallback onPressed) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icone, size: 24),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 10),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final itens = _itensMisturados;
@@ -222,30 +244,22 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            IconButton(
-              icon: const Icon(Icons.settings),
-              tooltip: 'Configurações',
-              onPressed: _abrirConfiguracoes,
+            _botaoNavegacao(
+              Icons.settings,
+              'Configurações',
+              _abrirConfiguracoes,
             ),
-            IconButton(
-              icon: const Icon(Icons.list_alt),
-              tooltip: 'Todos os Registros',
-              onPressed: _abrirTodosRegistros,
+            _botaoNavegacao(
+              Icons.add_circle,
+              'Novo Gasto',
+              () => _abrirAdicionarGasto(),
             ),
-            IconButton(
-              icon: Icon(
-                Icons.add_circle,
-                size: 44,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              tooltip: 'Novo Gasto',
-              onPressed: () => _abrirAdicionarGasto(),
+            _botaoNavegacao(
+              Icons.attach_money,
+              'Nova Receita',
+              () => _abrirAdicionarReceita(),
             ),
-            IconButton(
-              icon: const Icon(Icons.attach_money),
-              tooltip: 'Nova Receita',
-              onPressed: () => _abrirAdicionarReceita(),
-            ),
+            _botaoNavegacao(Icons.list_alt, 'Registros', _abrirTodosRegistros),
           ],
         ),
       ),
