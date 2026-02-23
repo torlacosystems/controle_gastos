@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_email_sender/flutter_email_sender.dart';
 import 'dart:io';
 import 'gasto.dart';
 import 'receita.dart';
 import 'main.dart';
-import 'package:flutter_email_sender/flutter_email_sender.dart';
 
 class TodosRegistrosScreen extends StatefulWidget {
   const TodosRegistrosScreen({super.key});
@@ -138,8 +138,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     if (confirmar != true) return;
 
     final itens = _todosItens;
-
-    // Coleta índices a deletar (de trás pra frente para não deslocar índices)
     final gastosParaDeletar = <int>[];
     final receitasParaDeletar = <int>[];
 
@@ -236,19 +234,27 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       final arquivo = File('${dir.path}/registros.csv');
       await arquivo.writeAsString(csv);
 
-      final email = Email(
-        body:
-            'Segue em anexo o arquivo CSV com todos os registros financeiros.',
-        subject: 'Exportação de registros financeiros',
-        attachmentPaths: [arquivo.path],
-        isHTML: false,
-      );
-
-      await FlutterEmailSender.send(email);
+      try {
+        final email = Email(
+          body:
+              'Segue em anexo o arquivo CSV com todos os registros financeiros.',
+          subject: 'Exportação de registros financeiros',
+          attachmentPaths: [arquivo.path],
+          isHTML: false,
+        );
+        await FlutterEmailSender.send(email);
+      } catch (_) {
+        await Share.shareXFiles(
+          [XFile(arquivo.path)],
+          subject: 'Exportação de registros financeiros',
+          text:
+              'Segue em anexo o arquivo CSV com todos os registros financeiros.',
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao abrir email: $e')));
+      ).showSnackBar(SnackBar(content: Text('Erro ao exportar: $e')));
     }
   }
 
@@ -376,10 +382,10 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                     : (item['item'] as Receita).descricao;
 
                 return Container(
-                  color: selecionado
-                      ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                      : null,
                   decoration: BoxDecoration(
+                    color: selecionado
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                        : null,
                     border: Border(
                       left: BorderSide(
                         color: isGasto ? Colors.red : Colors.green,
@@ -435,7 +441,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                                   final boxIndex = item['index'] as int;
                                   if (isGasto) {
                                     final resultado =
-                                        await Navigator.push<Gasto>(
+                                        await Navigator.push<dynamic>(
                                           context,
                                           MaterialPageRoute(
                                             builder: (context) =>

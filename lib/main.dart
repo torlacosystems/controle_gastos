@@ -6,6 +6,7 @@ import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'configuracoes_screen.dart';
 import 'todos_registros_screen.dart';
+import 'splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +34,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
