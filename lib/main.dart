@@ -122,17 +122,23 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
-    final resultado = await Navigator.push<Gasto>(
+    final resultado = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AdicionarGastoScreen(gasto: gasto),
       ),
     );
     if (resultado != null) {
-      if (index != null) {
-        await _gastosBox.putAt(index, resultado);
-      } else {
-        await _gastosBox.add(resultado);
+      if (resultado is List<Gasto>) {
+        for (final parcela in resultado) {
+          await _gastosBox.add(parcela);
+        }
+      } else if (resultado is Gasto) {
+        if (index != null) {
+          await _gastosBox.putAt(index, resultado);
+        } else {
+          await _gastosBox.add(resultado);
+        }
       }
       setState(() {});
     }
@@ -542,7 +548,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       context: context,
       initialDate: _dataSelecionada,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: DateTime(2030),
     );
     if (picked != null) setState(() => _dataSelecionada = picked);
   }
@@ -559,22 +565,56 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       return;
     }
 
-    final novoGasto = Gasto(
-      id: widget.gasto?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      descricao: _descricaoController.text,
-      valor: valor,
-      categoria: _categoriaSelecionada,
-      data: _dataSelecionada,
-      formaPagamento: _formaPagamentoSelecionada!.descricao,
-      pessoa: _pessoaSelecionada!.nome,
-      tipoGasto: _tipoGasto,
-      parcelado: _parcelado,
-      numeroParcelas: _parcelado ? _numeroParcelas : 1,
-      estabelecimento: _estabelecimentoController.text,
-      recorrente: _recorrente,
-    );
+    if (_parcelado) {
+      final valorParcela = valor / _numeroParcelas;
+      final List<Gasto> parcelas = [];
 
-    Navigator.pop(context, novoGasto);
+      for (int i = 0; i < _numeroParcelas; i++) {
+        final dataParcela = DateTime(
+          _dataSelecionada.year,
+          _dataSelecionada.month + i,
+          _dataSelecionada.day,
+        );
+
+        parcelas.add(
+          Gasto(
+            id: '${DateTime.now().millisecondsSinceEpoch}_$i',
+            descricao:
+                '${_descricaoController.text} (${i + 1}/$_numeroParcelas)',
+            valor: double.parse(valorParcela.toStringAsFixed(2)),
+            categoria: _categoriaSelecionada,
+            data: dataParcela,
+            formaPagamento: _formaPagamentoSelecionada!.descricao,
+            pessoa: _pessoaSelecionada!.nome,
+            tipoGasto: _tipoGasto,
+            parcelado: true,
+            numeroParcelas: _numeroParcelas,
+            estabelecimento: _estabelecimentoController.text,
+            recorrente: _recorrente,
+          ),
+        );
+      }
+
+      Navigator.pop(context, parcelas);
+    } else {
+      final novoGasto = Gasto(
+        id:
+            widget.gasto?.id ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        descricao: _descricaoController.text,
+        valor: valor,
+        categoria: _categoriaSelecionada,
+        data: _dataSelecionada,
+        formaPagamento: _formaPagamentoSelecionada!.descricao,
+        pessoa: _pessoaSelecionada!.nome,
+        tipoGasto: _tipoGasto,
+        parcelado: false,
+        numeroParcelas: 1,
+        estabelecimento: _estabelecimentoController.text,
+        recorrente: _recorrente,
+      );
+      Navigator.pop(context, novoGasto);
+    }
   }
 
   @override
@@ -774,6 +814,17 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  _valorController.text.isNotEmpty
+                      ? 'Valor por parcela: R\$ ${(() {
+                          final v = double.tryParse(_valorController.text.replaceAll('.', '').replaceAll(',', '.'));
+                          if (v == null) return '0,00';
+                          return (v / _numeroParcelas).toStringAsFixed(2).replaceAll('.', ',');
+                        })()}'
+                      : 'Informe o valor para calcular a parcela',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
               ],
               const SizedBox(height: 24),
               const Text(
@@ -962,7 +1013,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       context: context,
       initialDate: _dataSelecionada,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: DateTime(2030),
     );
     if (picked != null) setState(() => _dataSelecionada = picked);
   }
