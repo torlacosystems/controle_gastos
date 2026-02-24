@@ -597,7 +597,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     if (picked != null) setState(() => _dataSelecionada = picked);
   }
 
-  void _salvarGasto() {
+  Future<void> _salvarGasto() async {
     String textoValor = _valorController.text.replaceAll('.', ',');
     if (!textoValor.contains(',')) textoValor = '$textoValor,00';
     final valor = double.tryParse(textoValor.replaceAll(',', '.'));
@@ -638,26 +638,128 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       }
       Navigator.pop(context, parcelas);
     } else {
-      Navigator.pop(
-        context,
-        Gasto(
-          id:
-              widget.gasto?.id ??
-              DateTime.now().millisecondsSinceEpoch.toString(),
-          descricao: _descricaoController.text,
-          valor: valor,
-          categoria: _categoriaSelecionada,
-          data: _dataSelecionada,
-          formaPagamento: _formaPagamentoSelecionada!.descricao,
-          pessoa: _pessoaSelecionada!.nome,
-          tipoGasto: _tipoGasto,
-          parcelado: false,
-          numeroParcelas: 1,
-          estabelecimento: _estabelecimentoController.text,
-          recorrente: _recorrente,
-          gastoEsperado: _gastoEsperado,
-        ),
+      final novoGasto = Gasto(
+        id:
+            widget.gasto?.id ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        descricao: _descricaoController.text,
+        valor: valor,
+        categoria: _categoriaSelecionada,
+        data: _dataSelecionada,
+        formaPagamento: _formaPagamentoSelecionada!.descricao,
+        pessoa: _pessoaSelecionada!.nome,
+        tipoGasto: _tipoGasto,
+        parcelado: false,
+        numeroParcelas: 1,
+        estabelecimento: _estabelecimentoController.text,
+        recorrente: _recorrente,
+        gastoEsperado: _gastoEsperado,
       );
+
+      // Se fixo E recorrente E novo registro, pergunta quantos meses replicar
+      if (_tipoGasto == 'Fixo' && _recorrente && widget.gasto == null) {
+        int mesesSelecionados = 1;
+        final confirmar = await showDialog<int>(
+          context: context,
+          builder: (context) {
+            return StatefulBuilder(
+              builder: (context, setStateDialog) {
+                return AlertDialog(
+                  title: const Text('Replicar para próximos meses?'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Este gasto é fixo e recorrente. Deseja criá-lo para os próximos meses?',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline),
+                            onPressed: mesesSelecionados > 1
+                                ? () =>
+                                      setStateDialog(() => mesesSelecionados--)
+                                : null,
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                '$mesesSelecionados',
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const Text(
+                                'meses',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline),
+                            onPressed: mesesSelecionados < 24
+                                ? () =>
+                                      setStateDialog(() => mesesSelecionados++)
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, 1),
+                      child: const Text('Só este mês'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () =>
+                          Navigator.pop(context, mesesSelecionados),
+                      child: Text(
+                        'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+
+        if (confirmar != null && confirmar > 1) {
+          final List<Gasto> gastosMeses = [];
+          for (int i = 0; i < confirmar; i++) {
+            gastosMeses.add(
+              Gasto(
+                id: '${DateTime.now().millisecondsSinceEpoch}_$i',
+                descricao: novoGasto.descricao,
+                valor: novoGasto.valor,
+                categoria: novoGasto.categoria,
+                data: DateTime(
+                  _dataSelecionada.year,
+                  _dataSelecionada.month + i,
+                  _dataSelecionada.day,
+                ),
+                formaPagamento: novoGasto.formaPagamento,
+                pessoa: novoGasto.pessoa,
+                tipoGasto: novoGasto.tipoGasto,
+                parcelado: false,
+                numeroParcelas: 1,
+                estabelecimento: novoGasto.estabelecimento,
+                recorrente: true,
+                gastoEsperado: novoGasto.gastoEsperado,
+              ),
+            );
+          }
+          Navigator.pop(context, gastosMeses);
+          return;
+        }
+      }
+
+      Navigator.pop(context, novoGasto);
     }
   }
 
@@ -793,7 +895,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Tipo de Gasto
                       const Text(
                         'Tipo de Gasto',
                         style: TextStyle(
@@ -818,14 +919,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                         ],
                       ),
                       const Divider(height: 24),
-
-                      // Recorrente
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
+                          const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
                                 'Recorrente',
                                 style: TextStyle(
@@ -850,14 +949,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                         ],
                       ),
                       const Divider(height: 8),
-
-                      // Gasto Esperado
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
+                          const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
                                 'Gasto Esperado',
                                 style: TextStyle(
