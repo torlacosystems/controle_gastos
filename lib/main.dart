@@ -7,6 +7,7 @@ import 'pessoa.dart';
 import 'configuracoes_screen.dart';
 import 'todos_registros_screen.dart';
 import 'splash_screen.dart';
+import 'relatorios_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -185,6 +186,13 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
+  void _abrirRelatorios() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const RelatoriosScreen()),
+    );
+  }
+
   List<Map<String, dynamic>> get _itensMisturados {
     final List<Map<String, dynamic>> itens = [];
     for (int i = 0; i < _gastosBox.length; i++) {
@@ -214,15 +222,15 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: onPressed,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icone, size: 24),
+            Icon(icone, size: 22),
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(fontSize: 10),
+              style: const TextStyle(fontSize: 9),
               textAlign: TextAlign.center,
             ),
           ],
@@ -267,6 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
               'Nova Receita',
               () => _abrirAdicionarReceita(),
             ),
+            _botaoNavegacao(Icons.bar_chart, 'Relatórios', _abrirRelatorios),
             _botaoNavegacao(Icons.list_alt, 'Registros', _abrirTodosRegistros),
           ],
         ),
@@ -521,6 +530,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   late bool _parcelado;
   late int _numeroParcelas;
   late bool _recorrente;
+  late bool _gastoEsperado;
 
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
@@ -555,6 +565,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _parcelado = g?.parcelado ?? false;
     _numeroParcelas = g?.numeroParcelas ?? 2;
     _recorrente = g?.recorrente ?? false;
+    _gastoEsperado = g?.gastoEsperado ?? true;
 
     final formas = _formasPagamentoBox.values.toList();
     _formaPagamentoSelecionada = g != null
@@ -621,6 +632,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             numeroParcelas: _numeroParcelas,
             estabelecimento: _estabelecimentoController.text,
             recorrente: _recorrente,
+            gastoEsperado: _gastoEsperado,
           ),
         );
       }
@@ -643,9 +655,33 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
           numeroParcelas: 1,
           estabelecimento: _estabelecimentoController.text,
           recorrente: _recorrente,
+          gastoEsperado: _gastoEsperado,
         ),
       );
     }
+  }
+
+  Widget _chipOpcao(String label, bool selecionado, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: selecionado
+              ? Theme.of(context).colorScheme.primary
+              : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selecionado ? Colors.white : Colors.grey[700],
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -746,44 +782,111 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Tipo de Gasto',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: ['Fixo', 'Variável'].map((tipo) {
-                  final selecionado = tipo == _tipoGasto;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _tipoGasto = tipo),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selecionado
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          tipo,
-                          style: TextStyle(
-                            color: selecionado
-                                ? Colors.white
-                                : Colors.grey[700],
-                            fontWeight: FontWeight.w500,
-                          ),
+
+              // BLOCO AGRUPADO: Tipo, Recorrente, Esperado
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tipo de Gasto
+                      const Text(
+                        'Tipo de Gasto',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _chipOpcao(
+                            'Fixo',
+                            _tipoGasto == 'Fixo',
+                            () => setState(() => _tipoGasto = 'Fixo'),
+                          ),
+                          const SizedBox(width: 8),
+                          _chipOpcao(
+                            'Variável',
+                            _tipoGasto == 'Variável',
+                            () => setState(() => _tipoGasto = 'Variável'),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+
+                      // Recorrente
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Recorrente',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Repete todo mês',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: _recorrente,
+                            onChanged: (value) =>
+                                setState(() => _recorrente = value),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 8),
+
+                      // Gasto Esperado
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Gasto Esperado',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Já estava previsto',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: _gastoEsperado,
+                            onChanged: (value) =>
+                                setState(() => _gastoEsperado = value),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Forma de Pagamento',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -921,24 +1024,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Recorrente',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Switch(
-                    value: _recorrente,
-                    onChanged: (value) => setState(() => _recorrente = value),
-                  ),
-                ],
-              ),
-              const Text(
-                'Gasto que se repete todo mês',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 24),
               const Text(

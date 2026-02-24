@@ -5,40 +5,43 @@ part 'gasto.g.dart';
 @HiveType(typeId: 0)
 class Gasto extends HiveObject {
   @HiveField(0)
-  final String id;
+  late String id;
 
   @HiveField(1)
-  final String descricao;
+  late String descricao;
 
   @HiveField(2)
-  final double valor;
+  late double valor;
 
   @HiveField(3)
-  final String categoria;
+  late String categoria;
 
   @HiveField(4)
-  final DateTime data;
+  late DateTime data;
 
   @HiveField(5)
-  final String formaPagamento;
+  late String formaPagamento;
 
   @HiveField(6)
-  final String pessoa;
+  late String pessoa;
 
   @HiveField(7)
-  final String tipoGasto; // 'Fixo' ou 'Variável'
+  late String tipoGasto;
 
   @HiveField(8)
-  final bool parcelado;
+  late bool parcelado;
 
   @HiveField(9)
-  final int numeroParcelas;
+  late int numeroParcelas;
 
   @HiveField(10)
-  final String estabelecimento;
+  late String estabelecimento;
 
   @HiveField(11)
-  final bool recorrente;
+  late bool recorrente;
+
+  @HiveField(12)
+  late bool gastoEsperado;
 
   Gasto({
     required this.id,
@@ -53,5 +56,6 @@ class Gasto extends HiveObject {
     required this.numeroParcelas,
     required this.estabelecimento,
     required this.recorrente,
+    required this.gastoEsperado,
   });
 }
