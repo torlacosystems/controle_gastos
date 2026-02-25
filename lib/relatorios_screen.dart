@@ -42,10 +42,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
       .toList();
 
   double get _totalGastos => _gastosFiltrados.fold(0, (s, g) => s + g.valor);
-
   double get _totalReceitas =>
       _receitasFiltradas.fold(0, (s, r) => s + r.valor);
-
   double get _saldo => _totalReceitas - _totalGastos;
 
   double get _totalEsperados => _gastosFiltrados
@@ -235,98 +233,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                   isCount: true,
                 ),
               ],
-            ),
-            const SizedBox(height: 24),
-
-            // GRÁFICO GASTOS VS RECEITAS
-            const Text(
-              'Gastos vs Receitas',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: SizedBox(
-                  height: 200,
-                  child: BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY:
-                          [
-                            _totalGastos,
-                            _totalReceitas,
-                          ].reduce((a, b) => a > b ? a : b) *
-                          1.2,
-                      barGroups: [
-                        BarChartGroupData(
-                          x: 0,
-                          barRods: [
-                            BarChartRodData(
-                              toY: _totalGastos,
-                              color: Colors.red,
-                              width: 50,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ],
-                        ),
-                        BarChartGroupData(
-                          x: 1,
-                          barRods: [
-                            BarChartRodData(
-                              toY: _totalReceitas,
-                              color: Colors.green,
-                              width: 50,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ],
-                        ),
-                      ],
-                      titlesData: FlTitlesData(
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              switch (value.toInt()) {
-                                case 0:
-                                  return const Text(
-                                    'Gastos',
-                                    style: TextStyle(fontSize: 12),
-                                  );
-                                case 1:
-                                  return const Text(
-                                    'Receitas',
-                                    style: TextStyle(fontSize: 12),
-                                  );
-                                default:
-                                  return const Text('');
-                              }
-                            },
-                          ),
-                        ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 60,
-                            getTitlesWidget: (value, meta) => Text(
-                              'R\$${value.toInt()}',
-                              style: const TextStyle(fontSize: 10),
-                            ),
-                          ),
-                        ),
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                      ),
-                      gridData: const FlGridData(show: true),
-                      borderData: FlBorderData(show: false),
-                    ),
-                  ),
-                ),
-              ),
             ),
             const SizedBox(height: 24),
 
