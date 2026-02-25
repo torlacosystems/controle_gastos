@@ -8,6 +8,7 @@ import 'configuracoes_screen.dart';
 import 'todos_registros_screen.dart';
 import 'splash_screen.dart';
 import 'relatorios_screen.dart';
+import 'insights_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +54,21 @@ class _HomeScreenState extends State<HomeScreen> {
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
 
+  final List<String> _nomesMeses = [
+    'Janeiro',
+    'Fevereiro',
+    'Março',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -62,11 +78,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _pessoasBox = Hive.box<Pessoa>('pessoas');
   }
 
-  double get _totalGastosMes =>
-      _gastosBox.values.fold(0, (soma, g) => soma + g.valor);
+  double get _totalGastosMes {
+    final agora = DateTime.now();
+    return _gastosBox.values
+        .where((g) => g.data.month == agora.month && g.data.year == agora.year)
+        .fold(0, (soma, g) => soma + g.valor);
+  }
 
-  double get _totalReceitasMes =>
-      _receitasBox.values.fold(0, (soma, r) => soma + r.valor);
+  double get _totalReceitasMes {
+    final agora = DateTime.now();
+    return _receitasBox.values
+        .where((r) => r.data.month == agora.month && r.data.year == agora.year)
+        .fold(0, (soma, r) => soma + r.valor);
+  }
 
   double get _saldo => _totalReceitasMes - _totalGastosMes;
 
@@ -154,17 +178,23 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
-    final resultado = await Navigator.push<Receita>(
+    final resultado = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
         builder: (context) => AdicionarReceitaScreen(receita: receita),
       ),
     );
     if (resultado != null) {
-      if (index != null) {
-        await _receitasBox.putAt(index, resultado);
-      } else {
-        await _receitasBox.add(resultado);
+      if (resultado is List<Receita>) {
+        for (final r in resultado) {
+          await _receitasBox.add(r);
+        }
+      } else if (resultado is Receita) {
+        if (index != null) {
+          await _receitasBox.putAt(index, resultado);
+        } else {
+          await _receitasBox.add(resultado);
+        }
       }
       setState(() {});
     }
@@ -193,17 +223,31 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _abrirInsights() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const InsightsScreen()),
+    );
+  }
+
   List<Map<String, dynamic>> get _itensMisturados {
+    final agora = DateTime.now();
     final List<Map<String, dynamic>> itens = [];
     for (int i = 0; i < _gastosBox.length; i++) {
-      itens.add({'tipo': 'gasto', 'item': _gastosBox.getAt(i)!, 'index': i});
+      final g = _gastosBox.getAt(i);
+      if (g != null &&
+          g.data.month == agora.month &&
+          g.data.year == agora.year) {
+        itens.add({'tipo': 'gasto', 'item': g, 'index': i});
+      }
     }
     for (int i = 0; i < _receitasBox.length; i++) {
-      itens.add({
-        'tipo': 'receita',
-        'item': _receitasBox.getAt(i)!,
-        'index': i,
-      });
+      final r = _receitasBox.getAt(i);
+      if (r != null &&
+          r.data.month == agora.month &&
+          r.data.year == agora.year) {
+        itens.add({'tipo': 'receita', 'item': r, 'index': i});
+      }
     }
     itens.sort((a, b) {
       final DateTime dataA = a['tipo'] == 'gasto'
@@ -276,6 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
               () => _abrirAdicionarReceita(),
             ),
             _botaoNavegacao(Icons.bar_chart, 'Relatórios', _abrirRelatorios),
+            _botaoNavegacao(Icons.lightbulb, 'Insights', _abrirInsights),
             _botaoNavegacao(Icons.list_alt, 'Registros', _abrirTodosRegistros),
           ],
         ),
@@ -347,13 +392,16 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Últimos lançamentos',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
                 Text(
-                  '${_gastosBox.length + _receitasBox.length} total',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  'Lançamentos de ${_nomesMeses[DateTime.now().month - 1]}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _abrirTodosRegistros,
+                  child: const Text('Ver todos'),
                 ),
               ],
             ),
@@ -362,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: itens.isEmpty
                 ? const Center(
                     child: Text(
-                      'Nenhum lançamento ainda.\nToque em + para adicionar.',
+                      'Nenhum lançamento este mês.\nToque em + para adicionar.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
@@ -656,7 +704,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         gastoEsperado: _gastoEsperado,
       );
 
-      // Se fixo E recorrente E novo registro, pergunta quantos meses replicar
       if (_tipoGasto == 'Fixo' && _recorrente && widget.gasto == null) {
         int mesesSelecionados = 1;
         final confirmar = await showDialog<int>(
@@ -1180,6 +1227,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   late DateTime _dataSelecionada;
   Pessoa? _pessoaSelecionada;
   late bool _recorrente;
+  late String _tipoReceita;
 
   late Box<Pessoa> _pessoasBox;
 
@@ -1206,6 +1254,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     _categoriaSelecionada = r?.categoria ?? 'Salário';
     _dataSelecionada = r?.data ?? DateTime.now();
     _recorrente = r?.recorrente ?? false;
+    _tipoReceita = r?.tipoReceita ?? 'Fixo';
 
     final pessoas = _pessoasBox.values.toList();
     _pessoaSelecionada = r != null
@@ -1229,7 +1278,30 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     if (picked != null) setState(() => _dataSelecionada = picked);
   }
 
-  void _salvarReceita() {
+  Widget _chipOpcao(String label, bool selecionado, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: selecionado
+              ? Theme.of(context).colorScheme.primary
+              : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selecionado ? Colors.white : Colors.grey[700],
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _salvarReceita() async {
     String textoValor = _valorController.text.replaceAll('.', ',');
     if (!textoValor.contains(',')) textoValor = '$textoValor,00';
     final valor = double.tryParse(textoValor.replaceAll(',', '.'));
@@ -1241,20 +1313,114 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       return;
     }
 
-    Navigator.pop(
-      context,
-      Receita(
-        id:
-            widget.receita?.id ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
-        descricao: _descricaoController.text,
-        valor: valor,
-        categoria: _categoriaSelecionada,
-        data: _dataSelecionada,
-        pessoa: _pessoaSelecionada!.nome,
-        recorrente: _recorrente,
-      ),
+    final novaReceita = Receita(
+      id:
+          widget.receita?.id ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
+      descricao: _descricaoController.text,
+      valor: valor,
+      categoria: _categoriaSelecionada,
+      data: _dataSelecionada,
+      pessoa: _pessoaSelecionada!.nome,
+      recorrente: _recorrente,
+      tipoReceita: _tipoReceita,
     );
+
+    if (_tipoReceita == 'Fixo' && _recorrente && widget.receita == null) {
+      int mesesSelecionados = 1;
+      final confirmar = await showDialog<int>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setStateDialog) {
+              return AlertDialog(
+                title: const Text('Replicar para próximos meses?'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Esta receita é fixa e recorrente. Deseja criá-la para os próximos meses?',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: mesesSelecionados > 1
+                              ? () => setStateDialog(() => mesesSelecionados--)
+                              : null,
+                        ),
+                        Column(
+                          children: [
+                            Text(
+                              '$mesesSelecionados',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Text(
+                              'meses',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: mesesSelecionados < 24
+                              ? () => setStateDialog(() => mesesSelecionados++)
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 1),
+                    child: const Text('Só este mês'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, mesesSelecionados),
+                    child: Text(
+                      'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (confirmar != null && confirmar > 1) {
+        final List<Receita> receitasMeses = [];
+        for (int i = 0; i < confirmar; i++) {
+          receitasMeses.add(
+            Receita(
+              id: '${DateTime.now().millisecondsSinceEpoch}_$i',
+              descricao: novaReceita.descricao,
+              valor: novaReceita.valor,
+              categoria: novaReceita.categoria,
+              data: DateTime(
+                _dataSelecionada.year,
+                _dataSelecionada.month + i,
+                _dataSelecionada.day,
+              ),
+              pessoa: novaReceita.pessoa,
+              recorrente: true,
+              tipoReceita: novaReceita.tipoReceita,
+            ),
+          );
+        }
+        Navigator.pop(context, receitasMeses);
+        return;
+      }
+    }
+
+    Navigator.pop(context, novaReceita);
   }
 
   @override
@@ -1353,6 +1519,76 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
+
+              // BLOCO AGRUPADO: Tipo e Recorrente
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Tipo de Receita',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _chipOpcao(
+                            'Fixa',
+                            _tipoReceita == 'Fixo',
+                            () => setState(() => _tipoReceita = 'Fixo'),
+                          ),
+                          const SizedBox(width: 8),
+                          _chipOpcao(
+                            'Variável',
+                            _tipoReceita == 'Variável',
+                            () => setState(() => _tipoReceita = 'Variável'),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Recorrente',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Repete todo mês',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: _recorrente,
+                            onChanged: (value) =>
+                                setState(() => _recorrente = value),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
               const Text(
                 'Pessoa',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1402,24 +1638,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Recorrente',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Switch(
-                    value: _recorrente,
-                    onChanged: (value) => setState(() => _recorrente = value),
-                  ),
-                ],
-              ),
-              const Text(
-                'Receita que se repete todo mês',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 24),
               const Text(

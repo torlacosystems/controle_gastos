@@ -1,9 +1,5 @@
-Uma funcionalidade de selecionar um ou mais registros para excluir - corrigir os erros
-Os botões devem ser ícones na parte debaixo - inserir legendas
-Um botão com uma tela de relatórios - iniciar
-Um botão com uma tela de insights - iniciar
-A tela de load deve ter um fundo branco e uma mensagem abaixo do logo.
-"Controle seus gastos, controle sua vida!"
-Abaixo disso uma barra de progresso do carregamento do aplicativo - iniciar
-A tela inicial não deve se chamar Meus Gastos e sim Home com logo de Casinha - iniciar
+Validar se as formas de pagamento não são idênticas
+Valdiar se as pessoas cadastradas não são identicas
+
+
 

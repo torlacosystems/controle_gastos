@@ -5,25 +5,28 @@ part 'receita.g.dart';
 @HiveType(typeId: 3)
 class Receita extends HiveObject {
   @HiveField(0)
-  final String id;
+  late String id;
 
   @HiveField(1)
-  final String descricao;
+  late String descricao;
 
   @HiveField(2)
-  final double valor;
+  late double valor;
 
   @HiveField(3)
-  final String categoria;
+  late String categoria;
 
   @HiveField(4)
-  final DateTime data;
+  late DateTime data;
 
   @HiveField(5)
-  final String pessoa;
+  late String pessoa;
 
   @HiveField(6)
-  final bool recorrente;
+  late bool recorrente;
+
+  @HiveField(7)
+  late String tipoReceita;
 
   Receita({
     required this.id,
@@ -33,5 +36,6 @@ class Receita extends HiveObject {
     required this.data,
     required this.pessoa,
     required this.recorrente,
+    required this.tipoReceita,
   });
 }
