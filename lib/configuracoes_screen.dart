@@ -16,6 +16,22 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
 
+  final List<String> _grausParentesco = [
+    'Eu Mesmo',
+    'Cônjuge',
+    'Filho(a)',
+    'Pai',
+    'Mãe',
+    'Irmão(ã)',
+    'Avô/Avó',
+    'Neto(a)',
+    'Tio(a)',
+    'Sobrinho(a)',
+    'Primo(a)',
+    'Amigo(a)',
+    'Outro',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -25,11 +41,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   }
 
   void _adicionarOuEditarFormaPagamento({FormaPagamento? forma, int? index}) {
-    final _descricaoController = TextEditingController(
+    final descricaoController = TextEditingController(
       text: forma?.descricao ?? '',
     );
-    final _bancoController = TextEditingController(text: forma?.banco ?? '');
-    String _tipoSelecionado = forma?.tipo ?? 'Crédito';
+    final bancoController = TextEditingController(text: forma?.banco ?? '');
+    String tipoSelecionado = forma?.tipo ?? 'Crédito';
 
     showModalBottomSheet(
       context: context,
@@ -60,7 +76,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               ),
               const SizedBox(height: 16),
               TextField(
-                controller: _descricaoController,
+                controller: descricaoController,
                 decoration: const InputDecoration(
                   labelText: 'Descrição',
                   hintText: 'Ex: Nubank Principal',
@@ -72,11 +88,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               const SizedBox(height: 8),
               Row(
                 children: ['Crédito', 'Débito'].map((tipo) {
-                  final selecionado = tipo == _tipoSelecionado;
+                  final selecionado = tipo == tipoSelecionado;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: GestureDetector(
-                      onTap: () => setModalState(() => _tipoSelecionado = tipo),
+                      onTap: () => setModalState(() => tipoSelecionado = tipo),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 20,
@@ -104,7 +120,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               ),
               const SizedBox(height: 16),
               TextField(
-                controller: _bancoController,
+                controller: bancoController,
                 decoration: const InputDecoration(
                   labelText: 'Banco',
                   hintText: 'Ex: Nubank',
@@ -117,8 +133,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                 height: 52,
                 child: ElevatedButton(
                   onPressed: () async {
-                    if (_descricaoController.text.isEmpty ||
-                        _bancoController.text.isEmpty) {
+                    final descricao = descricaoController.text.trim();
+                    final banco = bancoController.text.trim();
+
+                    if (descricao.isEmpty || banco.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Preencha todos os campos'),
@@ -126,13 +144,46 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
+
+                    final duplicada = _formasPagamentoBox.values
+                        .toList()
+                        .asMap()
+                        .entries
+                        .any((e) {
+                          if (index != null && e.key == index) return false;
+                          return e.value.descricao.trim().toLowerCase() ==
+                                  descricao.toLowerCase() &&
+                              e.value.tipo == tipoSelecionado &&
+                              e.value.banco.trim().toLowerCase() ==
+                                  banco.toLowerCase();
+                        });
+
+                    if (duplicada) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Cadastro duplicado'),
+                          content: const Text(
+                            'Já existe uma forma de pagamento com esses dados.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
+
                     final novaForma = FormaPagamento(
                       id:
                           forma?.id ??
                           DateTime.now().millisecondsSinceEpoch.toString(),
-                      descricao: _descricaoController.text,
-                      tipo: _tipoSelecionado,
-                      banco: _bancoController.text,
+                      descricao: descricao,
+                      tipo: tipoSelecionado,
+                      banco: banco,
                     );
                     if (forma == null) {
                       await _formasPagamentoBox.add(novaForma);
@@ -163,10 +214,12 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   }
 
   void _adicionarOuEditarPessoa({Pessoa? pessoa, int? index}) {
-    final _nomeController = TextEditingController(text: pessoa?.nome ?? '');
-    final _parentescoController = TextEditingController(
-      text: pessoa?.parentesco ?? '',
-    );
+    final nomeController = TextEditingController(text: pessoa?.nome ?? '');
+    String parentescoSelecionado = pessoa?.parentesco ?? 'Eu Mesmo';
+
+    if (!_grausParentesco.contains(parentescoSelecionado)) {
+      parentescoSelecionado = 'Outro';
+    }
 
     showModalBottomSheet(
       context: context,
@@ -174,81 +227,124 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              pessoa == null ? 'Nova Pessoa' : 'Editar Pessoa',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _nomeController,
-              decoration: const InputDecoration(
-                labelText: 'Nome',
-                hintText: 'Ex: Maria',
-                border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                pessoa == null ? 'Nova Pessoa' : 'Editar Pessoa',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _parentescoController,
-              decoration: const InputDecoration(
-                labelText: 'Grau de parentesco',
-                hintText: 'Ex: Esposa, Filho, Amigo',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nomeController,
+                decoration: const InputDecoration(
+                  labelText: 'Nome',
+                  hintText: 'Ex: Maria',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (_nomeController.text.isEmpty ||
-                      _parentescoController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Preencha todos os campos')),
+              const SizedBox(height: 16),
+              const Text(
+                'Grau de Parentesco',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: parentescoSelecionado,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                items: _grausParentesco.map((grau) {
+                  return DropdownMenuItem(value: grau, child: Text(grau));
+                }).toList(),
+                onChanged: (value) =>
+                    setModalState(() => parentescoSelecionado = value!),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final nome = nomeController.text.trim();
+
+                    if (nome.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Preencha o nome')),
+                      );
+                      return;
+                    }
+
+                    final duplicada = _pessoasBox.values
+                        .toList()
+                        .asMap()
+                        .entries
+                        .any((e) {
+                          if (index != null && e.key == index) return false;
+                          return e.value.nome.trim().toLowerCase() ==
+                                  nome.toLowerCase() &&
+                              e.value.parentesco == parentescoSelecionado;
+                        });
+
+                    if (duplicada) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Cadastro duplicado'),
+                          content: const Text(
+                            'Já existe uma pessoa com esse nome e parentesco.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
+
+                    final novaPessoa = Pessoa(
+                      id:
+                          pessoa?.id ??
+                          DateTime.now().millisecondsSinceEpoch.toString(),
+                      nome: nome,
+                      parentesco: parentescoSelecionado,
                     );
-                    return;
-                  }
-                  final novaPessoa = Pessoa(
-                    id:
-                        pessoa?.id ??
-                        DateTime.now().millisecondsSinceEpoch.toString(),
-                    nome: _nomeController.text,
-                    parentesco: _parentescoController.text,
-                  );
-                  if (pessoa == null) {
-                    await _pessoasBox.add(novaPessoa);
-                  } else {
-                    await _pessoasBox.putAt(index!, novaPessoa);
-                  }
-                  setState(() {});
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    if (pessoa == null) {
+                      await _pessoasBox.add(novaPessoa);
+                    } else {
+                      await _pessoasBox.putAt(index!, novaPessoa);
+                    }
+                    setState(() {});
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Salvar',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
-                child: const Text(
-                  'Salvar',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

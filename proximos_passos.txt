@@ -1,5 +1,6 @@
-Validar se as formas de pagamento não são idênticas
-Valdiar se as pessoas cadastradas não são identicas
+Em relatório, gráfico com histórico de 3, 6, 12 meses para frente e para tras - não vinculado ao período definido no topo
+retirar o gráfico de gastos vs receitas
+Funcionalidade de exportar em pdf e também enviar por email
 
 
 
