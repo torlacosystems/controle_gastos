@@ -17,6 +17,22 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
 
   DateTime _dataInicio = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _dataFim = DateTime.now();
+  int _historicoMeses = 6;
+
+  final List<String> _nomesMeses = [
+    'Jan',
+    'Fev',
+    'Mar',
+    'Abr',
+    'Mai',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Set',
+    'Out',
+    'Nov',
+    'Dez',
+  ];
 
   @override
   void initState() {
@@ -88,6 +104,35 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     return mapa;
   }
 
+  List<DateTime> _gerarMesesHistorico() {
+    final agora = DateTime.now();
+    final metade = _historicoMeses ~/ 2;
+    final List<DateTime> meses = [];
+    for (int i = -metade; i <= metade; i++) {
+      meses.add(DateTime(agora.year, agora.month + i));
+    }
+    return meses;
+  }
+
+  double _gastosPorMes(DateTime mes) {
+    return _gastosBox.values
+        .where((g) => g.data.month == mes.month && g.data.year == mes.year)
+        .fold(0, (s, g) => s + g.valor);
+  }
+
+  double _receitasPorMes(DateTime mes) {
+    return _receitasBox.values
+        .where((r) => r.data.month == mes.month && r.data.year == mes.year)
+        .fold(0, (s, r) => s + r.valor);
+  }
+
+  double _saldoPorMes(DateTime mes) {
+    final receitas = _receitasPorMes(mes);
+    final gastos = _gastosPorMes(mes);
+    final saldo = receitas - gastos;
+    return saldo < 0 ? 0 : saldo;
+  }
+
   final List<Color> _coresCategorias = [
     Colors.blue,
     Colors.red,
@@ -102,6 +147,19 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   Widget build(BuildContext context) {
     final gastosPorCat = _gastosPorCategoria;
     final categorias = gastosPorCat.keys.toList();
+    final mesesHistorico = _gerarMesesHistorico();
+    final agora = DateTime.now();
+
+    double maxY = 0;
+    for (final mes in mesesHistorico) {
+      final g = _gastosPorMes(mes);
+      final r = _receitasPorMes(mes);
+      final s = _saldoPorMes(mes);
+      if (g > maxY) maxY = g;
+      if (r > maxY) maxY = r;
+      if (s > maxY) maxY = s;
+    }
+    maxY = maxY == 0 ? 100 : maxY * 1.2;
 
     return Scaffold(
       appBar: AppBar(
@@ -233,6 +291,232 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                   isCount: true,
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+
+            // HISTÓRICO MENSAL
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Histórico Mensal',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Row(
+                  children: [3, 6, 12].map((meses) {
+                    final selecionado = _historicoMeses == meses;
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _historicoMeses = meses),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selecionado
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey[200],
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            '${meses}m',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: selecionado
+                                  ? Colors.white
+                                  : Colors.grey[700],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 220,
+                      child: LineChart(
+                        LineChartData(
+                          minY: 0,
+                          maxY: maxY,
+                          lineBarsData: [
+                            // Linha de Gastos
+                            LineChartBarData(
+                              spots: mesesHistorico.asMap().entries.map((e) {
+                                return FlSpot(
+                                  e.key.toDouble(),
+                                  _gastosPorMes(e.value),
+                                );
+                              }).toList(),
+                              isCurved: true,
+                              color: Colors.red,
+                              barWidth: 3,
+                              dotData: FlDotData(
+                                getDotPainter: (spot, percent, bar, index) {
+                                  final mes = mesesHistorico[index];
+                                  final isMesAtual =
+                                      mes.month == agora.month &&
+                                      mes.year == agora.year;
+                                  return FlDotCirclePainter(
+                                    radius: isMesAtual ? 6 : 3,
+                                    color: Colors.red,
+                                    strokeWidth: isMesAtual ? 2 : 0,
+                                    strokeColor: Colors.white,
+                                  );
+                                },
+                              ),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                color: Colors.red.withOpacity(0.08),
+                              ),
+                            ),
+                            // Linha de Receitas
+                            LineChartBarData(
+                              spots: mesesHistorico.asMap().entries.map((e) {
+                                return FlSpot(
+                                  e.key.toDouble(),
+                                  _receitasPorMes(e.value),
+                                );
+                              }).toList(),
+                              isCurved: true,
+                              color: Colors.green,
+                              barWidth: 3,
+                              dotData: FlDotData(
+                                getDotPainter: (spot, percent, bar, index) {
+                                  final mes = mesesHistorico[index];
+                                  final isMesAtual =
+                                      mes.month == agora.month &&
+                                      mes.year == agora.year;
+                                  return FlDotCirclePainter(
+                                    radius: isMesAtual ? 6 : 3,
+                                    color: Colors.green,
+                                    strokeWidth: isMesAtual ? 2 : 0,
+                                    strokeColor: Colors.white,
+                                  );
+                                },
+                              ),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                color: Colors.green.withOpacity(0.08),
+                              ),
+                            ),
+                            // Linha de Saldo
+                            LineChartBarData(
+                              spots: mesesHistorico.asMap().entries.map((e) {
+                                return FlSpot(
+                                  e.key.toDouble(),
+                                  _saldoPorMes(e.value),
+                                );
+                              }).toList(),
+                              isCurved: true,
+                              color: Colors.blue,
+                              barWidth: 3,
+                              dashArray: [6, 3],
+                              dotData: FlDotData(
+                                getDotPainter: (spot, percent, bar, index) {
+                                  final mes = mesesHistorico[index];
+                                  final isMesAtual =
+                                      mes.month == agora.month &&
+                                      mes.year == agora.year;
+                                  return FlDotCirclePainter(
+                                    radius: isMesAtual ? 6 : 3,
+                                    color: Colors.blue,
+                                    strokeWidth: isMesAtual ? 2 : 0,
+                                    strokeColor: Colors.white,
+                                  );
+                                },
+                              ),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                color: Colors.blue.withOpacity(0.05),
+                              ),
+                            ),
+                          ],
+                          titlesData: FlTitlesData(
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                interval: 1,
+                                getTitlesWidget: (value, meta) {
+                                  final i = value.toInt();
+                                  if (i < 0 || i >= mesesHistorico.length) {
+                                    return const Text('');
+                                  }
+                                  final mes = mesesHistorico[i];
+                                  final isMesAtual =
+                                      mes.month == agora.month &&
+                                      mes.year == agora.year;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      _nomesMeses[mes.month - 1],
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: isMesAtual
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: isMesAtual
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                            : Colors.grey,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 55,
+                                getTitlesWidget: (value, meta) => Text(
+                                  'R\$${value.toInt()}',
+                                  style: const TextStyle(fontSize: 9),
+                                ),
+                              ),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                          ),
+                          gridData: const FlGridData(show: true),
+                          borderData: FlBorderData(show: false),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _legenda(Colors.red, 'Gastos', ''),
+                        const SizedBox(width: 16),
+                        _legenda(Colors.green, 'Receitas', ''),
+                        const SizedBox(width: 16),
+                        _legenda(Colors.blue, 'Saldo', ''),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Mês atual destacado',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -438,10 +722,11 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label, style: const TextStyle(fontSize: 12)),
-            Text(
-              valor,
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-            ),
+            if (valor.isNotEmpty)
+              Text(
+                valor,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
           ],
         ),
       ],
