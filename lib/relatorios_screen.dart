@@ -4,6 +4,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:flutter_email_sender/flutter_email_sender.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'gasto.dart';
 import 'receita.dart';
 
@@ -194,7 +198,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     final periodoTexto = _periodoSelecionado == 'todos'
         ? 'Todos os registros'
         : '${_formatarData(_dataInicio)} ate ${_formatarData(_dataFim)}';
-
     final gastosPorCat = _gastosPorCategoria;
 
     doc.addPage(
@@ -202,7 +205,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (context) => [
-          // Cabeçalho
           pw.Text(
             'Relatorio Financeiro',
             style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
@@ -214,7 +216,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           ),
           pw.SizedBox(height: 16),
 
-          // Cards resumo
           pw.Row(
             children: [
               _pdfCard('Gastos', _formatarValor(_totalGastos)),
@@ -231,7 +232,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           ),
           pw.SizedBox(height: 20),
 
-          // Gastos por categoria
           if (gastosPorCat.isNotEmpty) ...[
             pw.Text(
               'Gastos por Categoria',
@@ -253,7 +253,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             pw.SizedBox(height: 20),
           ],
 
-          // Tabela gastos
           pw.Text(
             'Gastos',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -285,7 +284,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                 ),
           pw.SizedBox(height: 20),
 
-          // Tabela receitas
           pw.Text(
             'Receitas',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -364,11 +362,26 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   Future<void> _enviarPdfEmail() async {
     try {
       final doc = await _gerarPdf();
-      await Printing.sharePdf(
-        bytes: await doc.save(),
-        filename: 'relatorio_financeiro.pdf',
-        subject: 'Relatorio Financeiro',
-      );
+      final bytes = await doc.save();
+      final dir = await getApplicationDocumentsDirectory();
+      final arquivo = File('${dir.path}/relatorio_financeiro.pdf');
+      await arquivo.writeAsBytes(bytes);
+
+      try {
+        final email = Email(
+          body: 'Segue em anexo o relatório financeiro.',
+          subject: 'Relatório Financeiro',
+          attachmentPaths: [arquivo.path],
+          isHTML: false,
+        );
+        await FlutterEmailSender.send(email);
+      } catch (_) {
+        await Share.shareXFiles(
+          [XFile(arquivo.path)],
+          subject: 'Relatório Financeiro',
+          text: 'Segue em anexo o relatório financeiro.',
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
@@ -477,7 +490,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                       }).toList(),
                     ),
 
-                    // Seletores Personalizado
                     if (_periodoSelecionado == 'Personalizado') ...[
                       const SizedBox(height: 12),
                       Row(
@@ -555,7 +567,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                       ),
                     ],
 
-                    // Período ativo
                     if (_periodoSelecionado != 'Personalizado' &&
                         _periodoSelecionado != 'todos') ...[
                       const SizedBox(height: 8),
