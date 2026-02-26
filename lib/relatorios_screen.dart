@@ -15,9 +15,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
 
-  DateTime _dataInicio = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime _dataInicio = DateTime.now().subtract(const Duration(days: 30));
   DateTime _dataFim = DateTime.now();
   int _historicoMeses = 6;
+  String _periodoSelecionado = '30d';
 
   final List<String> _nomesMeses = [
     'Jan',
@@ -34,11 +35,67 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     'Dez',
   ];
 
+  final List<Map<String, String>> _periodos = [
+    {'label': 'Hoje', 'key': 'hoje'},
+    {'label': '1 sem', 'key': '7d'},
+    {'label': '15 dias', 'key': '15d'},
+    {'label': '30 dias', 'key': '30d'},
+    {'label': '3 meses', 'key': '3m'},
+    {'label': '6 meses', 'key': '6m'},
+    {'label': '12 meses', 'key': '12m'},
+    {'label': 'Todos', 'key': 'todos'},
+    {'label': 'Personalizado', 'key': 'Personalizado'},
+  ];
+
   @override
   void initState() {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+    _aplicarPeriodo('30d');
+  }
+
+  void _aplicarPeriodo(String key) {
+    final agora = DateTime.now();
+    setState(() {
+      _periodoSelecionado = key;
+      switch (key) {
+        case 'hoje':
+          _dataInicio = DateTime(agora.year, agora.month, agora.day);
+          _dataFim = agora;
+          break;
+        case '7d':
+          _dataInicio = agora.subtract(const Duration(days: 7));
+          _dataFim = agora;
+          break;
+        case '15d':
+          _dataInicio = agora.subtract(const Duration(days: 15));
+          _dataFim = agora;
+          break;
+        case '30d':
+          _dataInicio = agora.subtract(const Duration(days: 30));
+          _dataFim = agora;
+          break;
+        case '3m':
+          _dataInicio = agora.subtract(const Duration(days: 90));
+          _dataFim = agora;
+          break;
+        case '6m':
+          _dataInicio = agora.subtract(const Duration(days: 180));
+          _dataFim = agora;
+          break;
+        case '12m':
+          _dataInicio = agora.subtract(const Duration(days: 365));
+          _dataFim = agora;
+          break;
+        case 'todos':
+          _dataInicio = DateTime(2000);
+          _dataFim = DateTime(2100);
+          break;
+        case 'Personalizado':
+          break;
+      }
+    });
   }
 
   List<Gasto> get _gastosFiltrados => _gastosBox.values
@@ -114,23 +171,17 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     return meses;
   }
 
-  double _gastosPorMes(DateTime mes) {
-    return _gastosBox.values
-        .where((g) => g.data.month == mes.month && g.data.year == mes.year)
-        .fold(0, (s, g) => s + g.valor);
-  }
+  double _gastosPorMes(DateTime mes) => _gastosBox.values
+      .where((g) => g.data.month == mes.month && g.data.year == mes.year)
+      .fold(0, (s, g) => s + g.valor);
 
-  double _receitasPorMes(DateTime mes) {
-    return _receitasBox.values
-        .where((r) => r.data.month == mes.month && r.data.year == mes.year)
-        .fold(0, (s, r) => s + r.valor);
-  }
+  double _receitasPorMes(DateTime mes) => _receitasBox.values
+      .where((r) => r.data.month == mes.month && r.data.year == mes.year)
+      .fold(0, (s, r) => s + r.valor);
 
   double _saldoPorMes(DateTime mes) {
-    final receitas = _receitasPorMes(mes);
-    final gastos = _gastosPorMes(mes);
-    final saldo = receitas - gastos;
-    return saldo < 0 ? 0 : saldo;
+    final s = _receitasPorMes(mes) - _gastosPorMes(mes);
+    return s < 0 ? 0 : s;
   }
 
   final List<Color> _coresCategorias = [
@@ -175,7 +226,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             // FILTRO DE PERÍODO
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -186,80 +237,127 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _selecionarDataInicio,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.calendar_today,
-                                    size: 16,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _formatarData(_dataInicio),
-                                    style: const TextStyle(fontSize: 14),
-                                  ),
-                                ],
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _periodos.map((p) {
+                        final selecionado = _periodoSelecionado == p['key'];
+                        return GestureDetector(
+                          onTap: () => _aplicarPeriodo(p['key']!),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: selecionado
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              p['label']!,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: selecionado
+                                    ? Colors.white
+                                    : Colors.grey[700],
                               ),
                             ),
                           ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            'até',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _selecionarDataFim,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.calendar_today,
-                                    size: 16,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _formatarData(_dataFim),
-                                    style: const TextStyle(fontSize: 14),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                        );
+                      }).toList(),
                     ),
+
+                    // Seletores Personalizado
+                    if (_periodoSelecionado == 'Personalizado') ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _selecionarDataInicio,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 16,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _formatarData(_dataInicio),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'até',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _selecionarDataFim,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 16,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _formatarData(_dataFim),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // Período ativo
+                    if (_periodoSelecionado != 'Personalizado' &&
+                        _periodoSelecionado != 'todos') ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '${_formatarData(_dataInicio)} até ${_formatarData(_dataFim)}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -350,14 +448,17 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                           minY: 0,
                           maxY: maxY,
                           lineBarsData: [
-                            // Linha de Gastos
                             LineChartBarData(
-                              spots: mesesHistorico.asMap().entries.map((e) {
-                                return FlSpot(
-                                  e.key.toDouble(),
-                                  _gastosPorMes(e.value),
-                                );
-                              }).toList(),
+                              spots: mesesHistorico
+                                  .asMap()
+                                  .entries
+                                  .map(
+                                    (e) => FlSpot(
+                                      e.key.toDouble(),
+                                      _gastosPorMes(e.value),
+                                    ),
+                                  )
+                                  .toList(),
                               isCurved: true,
                               color: Colors.red,
                               barWidth: 3,
@@ -380,14 +481,17 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                                 color: Colors.red.withOpacity(0.08),
                               ),
                             ),
-                            // Linha de Receitas
                             LineChartBarData(
-                              spots: mesesHistorico.asMap().entries.map((e) {
-                                return FlSpot(
-                                  e.key.toDouble(),
-                                  _receitasPorMes(e.value),
-                                );
-                              }).toList(),
+                              spots: mesesHistorico
+                                  .asMap()
+                                  .entries
+                                  .map(
+                                    (e) => FlSpot(
+                                      e.key.toDouble(),
+                                      _receitasPorMes(e.value),
+                                    ),
+                                  )
+                                  .toList(),
                               isCurved: true,
                               color: Colors.green,
                               barWidth: 3,
@@ -410,14 +514,17 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                                 color: Colors.green.withOpacity(0.08),
                               ),
                             ),
-                            // Linha de Saldo
                             LineChartBarData(
-                              spots: mesesHistorico.asMap().entries.map((e) {
-                                return FlSpot(
-                                  e.key.toDouble(),
-                                  _saldoPorMes(e.value),
-                                );
-                              }).toList(),
+                              spots: mesesHistorico
+                                  .asMap()
+                                  .entries
+                                  .map(
+                                    (e) => FlSpot(
+                                      e.key.toDouble(),
+                                      _saldoPorMes(e.value),
+                                    ),
+                                  )
+                                  .toList(),
                               isCurved: true,
                               color: Colors.blue,
                               barWidth: 3,
