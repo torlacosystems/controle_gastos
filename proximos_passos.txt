@@ -1,3 +1,19 @@
-o botão de exportar email deve abrir o app de email
+Com base no que foi construído até agora, as próximas evoluções naturais seriam:
+Funcionalidades pendentes/melhorias:
 
+Backup e restore dos dados (exportar/importar o banco Hive)
+Notificações de gastos recorrentes (lembrete mensal)
+Tela de orçamento por categoria (definir limite e alertar quando ultrapassar)
+Busca/pesquisa na tela de registros
+Filtro por tipo (só gastos ou só receitas) na tela de registros
 
+Melhorias de UX:
+
+Dark mode
+Onboarding (tela de boas-vindas na primeira abertura)
+Ícone e nome do app personalizados no AndroidManifest
+
+Estabilidade:
+
+Revisar e testar todos os fluxos
+Garantir que edição e exclusão de parcelas funcionam corretamente

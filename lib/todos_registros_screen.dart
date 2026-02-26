@@ -22,9 +22,11 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
   final Set<String> _selecionados = {};
   bool _modoSelecao = false;
 
-  // Filtro de mês: null = todos
   int? _mesFiltro;
   int? _anoFiltro;
+
+  // 'todos', 'gasto', 'receita'
+  String _tipoFiltro = 'todos';
 
   final List<String> _nomesMeses = [
     'Janeiro',
@@ -46,9 +48,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
-    // Inicia sem filtro (todos)
-    _mesFiltro = null;
-    _anoFiltro = null;
   }
 
   String _formatarValor(double valor) =>
@@ -86,12 +85,11 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     }
   }
 
-  // Retorna todos os pares mês/ano disponíveis nos registros
   List<Map<String, int>> get _mesesDisponiveis {
     final Set<String> vistos = {};
     final List<Map<String, int>> lista = [];
-
     final todasDatas = <DateTime>[];
+
     for (int i = 0; i < _gastosBox.length; i++) {
       final g = _gastosBox.getAt(i);
       if (g != null) todasDatas.add(g.data);
@@ -110,30 +108,36 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         lista.add({'mes': data.month, 'ano': data.year});
       }
     }
-
     return lista;
   }
 
   List<Map<String, dynamic>> get _todosItens {
     final List<Map<String, dynamic>> itens = [];
-    for (int i = 0; i < _gastosBox.length; i++) {
-      final g = _gastosBox.getAt(i);
-      if (g != null) {
-        if (_mesFiltro == null ||
-            (g.data.month == _mesFiltro && g.data.year == _anoFiltro)) {
-          itens.add({'tipo': 'gasto', 'item': g, 'index': i});
+
+    if (_tipoFiltro != 'receita') {
+      for (int i = 0; i < _gastosBox.length; i++) {
+        final g = _gastosBox.getAt(i);
+        if (g != null) {
+          if (_mesFiltro == null ||
+              (g.data.month == _mesFiltro && g.data.year == _anoFiltro)) {
+            itens.add({'tipo': 'gasto', 'item': g, 'index': i});
+          }
         }
       }
     }
-    for (int i = 0; i < _receitasBox.length; i++) {
-      final r = _receitasBox.getAt(i);
-      if (r != null) {
-        if (_mesFiltro == null ||
-            (r.data.month == _mesFiltro && r.data.year == _anoFiltro)) {
-          itens.add({'tipo': 'receita', 'item': r, 'index': i});
+
+    if (_tipoFiltro != 'gasto') {
+      for (int i = 0; i < _receitasBox.length; i++) {
+        final r = _receitasBox.getAt(i);
+        if (r != null) {
+          if (_mesFiltro == null ||
+              (r.data.month == _mesFiltro && r.data.year == _anoFiltro)) {
+            itens.add({'tipo': 'receita', 'item': r, 'index': i});
+          }
         }
       }
     }
+
     itens.sort((a, b) {
       final DateTime dataA = a['tipo'] == 'gasto'
           ? (a['item'] as Gasto).data
@@ -214,12 +218,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     gastosParaDeletar.sort((a, b) => b.compareTo(a));
     receitasParaDeletar.sort((a, b) => b.compareTo(a));
 
-    for (final i in gastosParaDeletar) {
-      await _gastosBox.deleteAt(i);
-    }
-    for (final i in receitasParaDeletar) {
-      await _receitasBox.deleteAt(i);
-    }
+    for (final i in gastosParaDeletar) await _gastosBox.deleteAt(i);
+    for (final i in receitasParaDeletar) await _receitasBox.deleteAt(i);
 
     setState(() {
       _selecionados.clear();
@@ -236,34 +236,16 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     buffer.writeln(
       'Tipo,Categoria,Valor,Data,Descrição,Pessoa,Forma Pagamento,Estabelecimento,Parcelado,Parcelas,Recorrente',
     );
-
     for (final item in _todosItens) {
       if (item['tipo'] == 'gasto') {
         final g = item['item'] as Gasto;
         buffer.writeln(
-          'Gasto,'
-          '"${g.categoria}",'
-          '-${g.valor.toStringAsFixed(2)},'
-          '${_formatarData(g.data)},'
-          '"${g.descricao}",'
-          '"${g.pessoa}",'
-          '"${g.formaPagamento}",'
-          '"${g.estabelecimento}",'
-          '${g.parcelado ? 'Sim' : 'Não'},'
-          '${g.numeroParcelas},'
-          '${g.recorrente ? 'Sim' : 'Não'}',
+          'Gasto,"${g.categoria}",-${g.valor.toStringAsFixed(2)},${_formatarData(g.data)},"${g.descricao}","${g.pessoa}","${g.formaPagamento}","${g.estabelecimento}",${g.parcelado ? 'Sim' : 'Não'},${g.numeroParcelas},${g.recorrente ? 'Sim' : 'Não'}',
         );
       } else {
         final r = item['item'] as Receita;
         buffer.writeln(
-          'Receita,'
-          '"${r.categoria}",'
-          '+${r.valor.toStringAsFixed(2)},'
-          '${_formatarData(r.data)},'
-          '"${r.descricao}",'
-          '"${r.pessoa}",'
-          ',,,'
-          '${r.recorrente ? 'Sim' : 'Não'}',
+          'Receita,"${r.categoria}",+${r.valor.toStringAsFixed(2)},${_formatarData(r.data)},"${r.descricao}","${r.pessoa}",,,,${r.recorrente ? 'Sim' : 'Não'}',
         );
       }
     }
@@ -335,9 +317,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         ],
       ),
     );
-
     if (confirmar != true) return;
-
     if (item['tipo'] == 'gasto') {
       await _gastosBox.deleteAt(item['index'] as int);
     } else {
@@ -425,10 +405,11 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
   @override
   Widget build(BuildContext context) {
     final itens = _todosItens;
-    final filtroAtivo = _mesFiltro != null;
-    final tituloFiltro = filtroAtivo
+    final filtroMesAtivo = _mesFiltro != null;
+    final tituloFiltro = filtroMesAtivo
         ? '${_nomesMeses[_mesFiltro! - 1]} $_anoFiltro'
         : 'Todos';
+    final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
@@ -437,7 +418,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
               ? '${_selecionados.length} selecionado(s)'
               : 'Todos os Registros',
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: primary,
         foregroundColor: Colors.white,
         actions: [
           if (_modoSelecao) ...[
@@ -462,7 +443,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             IconButton(
               icon: Icon(
                 Icons.filter_list,
-                color: filtroAtivo ? Colors.yellowAccent : Colors.white,
+                color: filtroMesAtivo ? Colors.yellowAccent : Colors.white,
               ),
               tooltip: 'Filtrar por mês',
               onPressed: _mostrarFiltroMes,
@@ -501,25 +482,36 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       ),
       body: Column(
         children: [
-          // BARRA DE FILTRO ATIVO
-          if (filtroAtivo)
+          // FILTRO DE TIPO
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: Colors.grey[100],
+            child: Row(
+              children: [
+                _chipTipo('Todos', 'todos', Colors.blueGrey),
+                const SizedBox(width: 8),
+                _chipTipo('Gastos', 'gasto', Colors.red),
+                const SizedBox(width: 8),
+                _chipTipo('Receitas', 'receita', Colors.green),
+              ],
+            ),
+          ),
+
+          // BARRA FILTRO MÊS ATIVO
+          if (filtroMesAtivo)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              color: primary.withOpacity(0.1),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.filter_list,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  Icon(Icons.filter_list, size: 16, color: primary),
                   const SizedBox(width: 8),
                   Text(
                     'Filtrando: $tituloFiltro  •  ${itens.length} registro(s)',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: primary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -529,11 +521,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                       _mesFiltro = null;
                       _anoFiltro = null;
                     }),
-                    child: Icon(
-                      Icons.close,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                    child: Icon(Icons.close, size: 16, color: primary),
                   ),
                 ],
               ),
@@ -544,7 +532,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             child: itens.isEmpty
                 ? Center(
                     child: Text(
-                      filtroAtivo
+                      filtroMesAtivo
                           ? 'Nenhum registro em $tituloFiltro.'
                           : 'Nenhum registro encontrado.',
                       style: const TextStyle(color: Colors.grey, fontSize: 16),
@@ -574,11 +562,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: selecionado
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.primary.withOpacity(0.1)
-                              : null,
+                          color: selecionado ? primary.withOpacity(0.1) : null,
                           border: Border(
                             left: BorderSide(
                               color: isGasto ? Colors.red : Colors.green,
@@ -701,6 +685,29 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _chipTipo(String label, String key, Color cor) {
+    final selecionado = _tipoFiltro == key;
+    return GestureDetector(
+      onTap: () => setState(() => _tipoFiltro = key),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        decoration: BoxDecoration(
+          color: selecionado ? cor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selecionado ? cor : Colors.grey[300]!),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selecionado ? Colors.white : Colors.grey[700],
+          ),
+        ),
       ),
     );
   }
