@@ -41,6 +41,8 @@
     fl_chart: ^0.68.0
     flutter_localizations:
       sdk: flutter
+    pdf: ^3.10.8
+    printing: ^5.12.0
 
   dev_dependencies:
     flutter_test:

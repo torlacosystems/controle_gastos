@@ -1,6 +1,3 @@
-Em relatório, gráfico com histórico de 3, 6, 12 meses para frente e para tras - não vinculado ao período definido no topo
-retirar o gráfico de gastos vs receitas
-Funcionalidade de exportar em pdf e também enviar por email
-
+o botão de exportar email deve abrir o app de email
 
 

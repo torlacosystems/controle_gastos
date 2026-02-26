@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'gasto.dart';
 import 'receita.dart';
 
@@ -184,6 +187,197 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     return s < 0 ? 0 : s;
   }
 
+  // ── PDF ──────────────────────────────────────────────────────────────────
+
+  Future<pw.Document> _gerarPdf() async {
+    final doc = pw.Document();
+    final periodoTexto = _periodoSelecionado == 'todos'
+        ? 'Todos os registros'
+        : '${_formatarData(_dataInicio)} ate ${_formatarData(_dataFim)}';
+
+    final gastosPorCat = _gastosPorCategoria;
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (context) => [
+          // Cabeçalho
+          pw.Text(
+            'Relatorio Financeiro',
+            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Periodo: $periodoTexto',
+            style: const pw.TextStyle(fontSize: 12),
+          ),
+          pw.SizedBox(height: 16),
+
+          // Cards resumo
+          pw.Row(
+            children: [
+              _pdfCard('Gastos', _formatarValor(_totalGastos)),
+              pw.SizedBox(width: 8),
+              _pdfCard('Receitas', _formatarValor(_totalReceitas)),
+              pw.SizedBox(width: 8),
+              _pdfCard('Saldo', _formatarValor(_saldo)),
+              pw.SizedBox(width: 8),
+              _pdfCard(
+                'Transacoes',
+                '${_gastosFiltrados.length + _receitasFiltradas.length}',
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+
+          // Gastos por categoria
+          if (gastosPorCat.isNotEmpty) ...[
+            pw.Text(
+              'Gastos por Categoria',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Categoria', 'Total'],
+              data: gastosPorCat.entries
+                  .map((e) => [e.key, _formatarValor(e.value)])
+                  .toList(),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey200,
+              ),
+              border: pw.TableBorder.all(color: PdfColors.grey300),
+              cellAlignment: pw.Alignment.centerLeft,
+            ),
+            pw.SizedBox(height: 20),
+          ],
+
+          // Tabela gastos
+          pw.Text(
+            'Gastos',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 8),
+          _gastosFiltrados.isEmpty
+              ? pw.Text(
+                  'Nenhum gasto no periodo.',
+                  style: const pw.TextStyle(color: PdfColors.grey),
+                )
+              : pw.Table.fromTextArray(
+                  headers: ['Data', 'Categoria', 'Descricao', 'Valor'],
+                  data: _gastosFiltrados
+                      .map(
+                        (g) => [
+                          _formatarData(g.data),
+                          g.categoria,
+                          g.descricao.isEmpty ? '-' : g.descricao,
+                          _formatarValor(g.valor),
+                        ],
+                      )
+                      .toList(),
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  headerDecoration: const pw.BoxDecoration(
+                    color: PdfColors.grey200,
+                  ),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  cellAlignment: pw.Alignment.centerLeft,
+                ),
+          pw.SizedBox(height: 20),
+
+          // Tabela receitas
+          pw.Text(
+            'Receitas',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 8),
+          _receitasFiltradas.isEmpty
+              ? pw.Text(
+                  'Nenhuma receita no periodo.',
+                  style: const pw.TextStyle(color: PdfColors.grey),
+                )
+              : pw.Table.fromTextArray(
+                  headers: ['Data', 'Categoria', 'Descricao', 'Valor'],
+                  data: _receitasFiltradas
+                      .map(
+                        (r) => [
+                          _formatarData(r.data),
+                          r.categoria,
+                          r.descricao.isEmpty ? '-' : r.descricao,
+                          _formatarValor(r.valor),
+                        ],
+                      )
+                      .toList(),
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  headerDecoration: const pw.BoxDecoration(
+                    color: PdfColors.grey200,
+                  ),
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  cellAlignment: pw.Alignment.centerLeft,
+                ),
+        ],
+      ),
+    );
+    return doc;
+  }
+
+  pw.Widget _pdfCard(String titulo, String valor) {
+    return pw.Expanded(
+      child: pw.Container(
+        padding: const pw.EdgeInsets.all(8),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey300),
+          borderRadius: pw.BorderRadius.circular(4),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              titulo,
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              valor,
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportarPdf() async {
+    try {
+      final doc = await _gerarPdf();
+      await Printing.sharePdf(
+        bytes: await doc.save(),
+        filename: 'relatorio_financeiro.pdf',
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao gerar PDF: $e')));
+    }
+  }
+
+  Future<void> _enviarPdfEmail() async {
+    try {
+      final doc = await _gerarPdf();
+      await Printing.sharePdf(
+        bytes: await doc.save(),
+        filename: 'relatorio_financeiro.pdf',
+        subject: 'Relatorio Financeiro',
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao enviar PDF: $e')));
+    }
+  }
+
+  // ── FIM PDF ──────────────────────────────────────────────────────────────
+
   final List<Color> _coresCategorias = [
     Colors.blue,
     Colors.red,
@@ -217,6 +411,18 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         title: const Text('Relatórios'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Exportar PDF',
+            onPressed: _exportarPdf,
+          ),
+          IconButton(
+            icon: const Icon(Icons.email),
+            tooltip: 'Enviar PDF por e-mail',
+            onPressed: _enviarPdfEmail,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
