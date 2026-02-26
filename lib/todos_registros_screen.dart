@@ -21,11 +21,12 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
 
   final Set<String> _selecionados = {};
   bool _modoSelecao = false;
+  bool _modoBusca = false;
+  final TextEditingController _buscaController = TextEditingController();
+  String _termoBusca = '';
 
   int? _mesFiltro;
   int? _anoFiltro;
-
-  // 'todos', 'gasto', 'receita'
   String _tipoFiltro = 'todos';
 
   final List<String> _nomesMeses = [
@@ -48,6 +49,12 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+  }
+
+  @override
+  void dispose() {
+    _buscaController.dispose();
+    super.dispose();
   }
 
   String _formatarValor(double valor) =>
@@ -100,7 +107,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     }
 
     todasDatas.sort((a, b) => b.compareTo(a));
-
     for (final data in todasDatas) {
       final chave = '${data.year}-${data.month}';
       if (!vistos.contains(chave)) {
@@ -111,6 +117,22 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     return lista;
   }
 
+  bool _correspondeBusca(
+    String categoria,
+    String descricao,
+    String pessoa,
+    String formaPagamento,
+    String estabelecimento,
+  ) {
+    if (_termoBusca.isEmpty) return true;
+    final termo = _termoBusca.toLowerCase();
+    return categoria.toLowerCase().contains(termo) ||
+        descricao.toLowerCase().contains(termo) ||
+        pessoa.toLowerCase().contains(termo) ||
+        formaPagamento.toLowerCase().contains(termo) ||
+        estabelecimento.toLowerCase().contains(termo);
+  }
+
   List<Map<String, dynamic>> get _todosItens {
     final List<Map<String, dynamic>> itens = [];
 
@@ -118,8 +140,17 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       for (int i = 0; i < _gastosBox.length; i++) {
         final g = _gastosBox.getAt(i);
         if (g != null) {
-          if (_mesFiltro == null ||
-              (g.data.month == _mesFiltro && g.data.year == _anoFiltro)) {
+          final mesBateu =
+              _mesFiltro == null ||
+              (g.data.month == _mesFiltro && g.data.year == _anoFiltro);
+          final buscaBateu = _correspondeBusca(
+            g.categoria,
+            g.descricao,
+            g.pessoa,
+            g.formaPagamento,
+            g.estabelecimento,
+          );
+          if (mesBateu && buscaBateu) {
             itens.add({'tipo': 'gasto', 'item': g, 'index': i});
           }
         }
@@ -130,8 +161,17 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       for (int i = 0; i < _receitasBox.length; i++) {
         final r = _receitasBox.getAt(i);
         if (r != null) {
-          if (_mesFiltro == null ||
-              (r.data.month == _mesFiltro && r.data.year == _anoFiltro)) {
+          final mesBateu =
+              _mesFiltro == null ||
+              (r.data.month == _mesFiltro && r.data.year == _anoFiltro);
+          final buscaBateu = _correspondeBusca(
+            r.categoria,
+            r.descricao,
+            r.pessoa,
+            '',
+            '',
+          );
+          if (mesBateu && buscaBateu) {
             itens.add({'tipo': 'receita', 'item': r, 'index': i});
           }
         }
@@ -402,6 +442,22 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     );
   }
 
+  void _abrirBusca() {
+    setState(() {
+      _modoBusca = true;
+      _modoSelecao = false;
+      _selecionados.clear();
+    });
+  }
+
+  void _fecharBusca() {
+    setState(() {
+      _modoBusca = false;
+      _termoBusca = '';
+      _buscaController.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final itens = _todosItens;
@@ -413,15 +469,40 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _modoSelecao
-              ? '${_selecionados.length} selecionado(s)'
-              : 'Todos os Registros',
-        ),
         backgroundColor: primary,
         foregroundColor: Colors.white,
+        title: _modoBusca
+            ? TextField(
+                controller: _buscaController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                cursorColor: Colors.white,
+                decoration: const InputDecoration(
+                  hintText: 'Buscar por categoria, descrição, pessoa...',
+                  hintStyle: TextStyle(color: Colors.white70),
+                  border: InputBorder.none,
+                ),
+                onChanged: (v) => setState(() => _termoBusca = v),
+              )
+            : Text(
+                _modoSelecao
+                    ? '${_selecionados.length} selecionado(s)'
+                    : 'Todos os Registros',
+              ),
         actions: [
-          if (_modoSelecao) ...[
+          if (_modoBusca) ...[
+            if (_termoBusca.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  setState(() {
+                    _termoBusca = '';
+                    _buscaController.clear();
+                  });
+                },
+              ),
+            IconButton(icon: const Icon(Icons.close), onPressed: _fecharBusca),
+          ] else if (_modoSelecao) ...[
             IconButton(
               icon: const Icon(Icons.select_all),
               tooltip: 'Selecionar todos',
@@ -440,6 +521,11 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
               }),
             ),
           ] else ...[
+            IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Buscar',
+              onPressed: _abrirBusca,
+            ),
             IconButton(
               icon: Icon(
                 Icons.filter_list,
@@ -497,6 +583,38 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             ),
           ),
 
+          // BANNER BUSCA ATIVA
+          if (_termoBusca.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.orange.withOpacity(0.1),
+              child: Row(
+                children: [
+                  const Icon(Icons.search, size: 16, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Buscando: "$_termoBusca"  •  ${itens.length} resultado(s)',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _fecharBusca,
+                    child: const Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // BARRA FILTRO MÊS ATIVO
           if (filtroMesAtivo)
             Container(
@@ -531,12 +649,30 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
           Expanded(
             child: itens.isEmpty
                 ? Center(
-                    child: Text(
-                      filtroMesAtivo
-                          ? 'Nenhum registro em $tituloFiltro.'
-                          : 'Nenhum registro encontrado.',
-                      style: const TextStyle(color: Colors.grey, fontSize: 16),
-                      textAlign: TextAlign.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _termoBusca.isNotEmpty
+                              ? Icons.search_off
+                              : Icons.inbox,
+                          size: 48,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _termoBusca.isNotEmpty
+                              ? 'Nenhum resultado para "$_termoBusca".'
+                              : filtroMesAtivo
+                              ? 'Nenhum registro em $tituloFiltro.'
+                              : 'Nenhum registro encontrado.',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   )
                 : ListView.builder(
