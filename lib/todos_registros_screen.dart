@@ -87,6 +87,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         return Icons.card_giftcard;
       case 'Benefício':
         return Icons.volunteer_activism;
+      case 'Mercado':
+        return Icons.shopping_cart;
       default:
         return Icons.category;
     }

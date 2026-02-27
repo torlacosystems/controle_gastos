@@ -4,8 +4,6 @@ Funcionalidades pendentes/melhorias:
 Backup e restore dos dados (exportar/importar o banco Hive)
 Notificações de gastos recorrentes (lembrete mensal)
 Tela de orçamento por categoria (definir limite e alertar quando ultrapassar)
-Busca/pesquisa na tela de registros
-Filtro por tipo (só gastos ou só receitas) na tela de registros
 
 Melhorias de UX:
 
@@ -17,3 +15,10 @@ Estabilidade:
 
 Revisar e testar todos os fluxos
 Garantir que edição e exclusão de parcelas funcionam corretamente
+
+Forma de Pagamento: VA/VR
+
+Categorias:
+Alimentação, Transporte, Saúde, Lazer, Moradia, Educação, Mercado, Vestuário
+
+Como contabilizar o pagamento de faturas de cartão de crédito?

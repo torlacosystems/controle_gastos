@@ -4,6 +4,7 @@ import 'gasto.dart';
 import 'receita.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
+import 'orcamento.dart';
 import 'configuracoes_screen.dart';
 import 'todos_registros_screen.dart';
 import 'splash_screen.dart';
@@ -18,10 +19,12 @@ void main() async {
   Hive.registerAdapter(ReceitaAdapter());
   Hive.registerAdapter(FormaPagamentoAdapter());
   Hive.registerAdapter(PessoaAdapter());
+  Hive.registerAdapter(OrcamentoAdapter());
   await Hive.openBox<Gasto>('gastos');
   await Hive.openBox<Receita>('receitas');
   await Hive.openBox<FormaPagamento>('formas_pagamento');
   await Hive.openBox<Pessoa>('pessoas');
+  await Hive.openBox<Orcamento>('orcamentos');
   runApp(const MyApp());
 }
 
@@ -61,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late Box<Receita> _receitasBox;
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
+  late Box<Orcamento> _orcamentosBox;
 
   final List<String> _nomesMeses = [
     'Janeiro',
@@ -84,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _receitasBox = Hive.box<Receita>('receitas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _orcamentosBox = Hive.box<Orcamento>('orcamentos');
   }
 
   double get _totalGastosMes {
@@ -102,6 +107,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   double get _saldo => _totalReceitasMes - _totalGastosMes;
 
+  // Verifica se algum orçamento foi ultrapassado no mês atual
+  List<String> get _orcamentosUltrapassados {
+    final agora = DateTime.now();
+    final List<String> alertas = [];
+    for (final orc in _orcamentosBox.values) {
+      final gasto = _gastosBox.values
+          .where(
+            (g) =>
+                g.categoria == orc.categoria &&
+                g.data.month == agora.month &&
+                g.data.year == agora.year,
+          )
+          .fold(0.0, (s, g) => s + g.valor);
+      if (gasto >= orc.limite) {
+        alertas.add(orc.categoria);
+      }
+    }
+    return alertas;
+  }
+
   String _formatarValor(double valor) =>
       valor.toStringAsFixed(2).replaceAll('.', ',');
 
@@ -112,6 +137,8 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (categoria) {
       case 'Alimentação':
         return Icons.restaurant;
+      case 'Mercado':
+        return Icons.shopping_cart;
       case 'Transporte':
         return Icons.directions_car;
       case 'Saúde':
@@ -171,6 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
       setState(() {});
+      _verificarOrcamentosAposLancamento();
     }
   }
 
@@ -206,6 +234,30 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       setState(() {});
     }
+  }
+
+  void _verificarOrcamentosAposLancamento() {
+    final ultrapassados = _orcamentosUltrapassados;
+    if (ultrapassados.isEmpty) return;
+    final categorias = ultrapassados.join(', ');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            const Icon(Icons.warning_amber, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '⚠ Limite ultrapassado: $categorias',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _abrirConfiguracoes() async {
@@ -294,6 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final itens = _itensMisturados;
+    final alertas = _orcamentosUltrapassados;
 
     return Scaffold(
       appBar: AppBar(
@@ -335,6 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          // HEADER
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -395,6 +449,43 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+
+          // BANNER ALERTAS DE ORÇAMENTO
+          if (alertas.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: Colors.red[50],
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber, color: Colors.red, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '⚠ Limite ultrapassado: ${alertas.join(', ')}',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _abrirConfiguracoes,
+                    child: const Text(
+                      'Ver',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // LISTA
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Row(
@@ -593,6 +684,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
   final List<Map<String, dynamic>> _categorias = [
     {'nome': 'Alimentação', 'icone': Icons.restaurant},
+    {'nome': 'Mercado', 'icone': Icons.shopping_cart},
     {'nome': 'Transporte', 'icone': Icons.directions_car},
     {'nome': 'Saúde', 'icone': Icons.health_and_safety},
     {'nome': 'Lazer', 'icone': Icons.movie},
@@ -939,8 +1031,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
-
-              // BLOCO AGRUPADO: Tipo, Recorrente, Esperado
               Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1038,7 +1128,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-
               const Text(
                 'Forma de Pagamento',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1527,8 +1616,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
-
-              // BLOCO AGRUPADO: Tipo e Recorrente
               Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1596,7 +1683,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-
               const Text(
                 'Pessoa',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
