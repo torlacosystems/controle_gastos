@@ -3,7 +3,7 @@ Funcionalidades pendentes/melhorias:
 
 Backup e restore dos dados (exportar/importar o banco Hive)
 Notificações de gastos recorrentes (lembrete mensal)
-Tela de orçamento por categoria (definir limite e alertar quando ultrapassar)
+Remover banner da home
 
 Melhorias de UX:
 
