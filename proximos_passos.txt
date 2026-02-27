@@ -15,10 +15,3 @@ Estabilidade:
 
 Revisar e testar todos os fluxos
 Garantir que edição e exclusão de parcelas funcionam corretamente
-
-Forma de Pagamento: VA/VR
-
-Categorias:
-Alimentação, Transporte, Saúde, Lazer, Moradia, Educação, Mercado, Vestuário
-
-Como contabilizar o pagamento de faturas de cartão de crédito?

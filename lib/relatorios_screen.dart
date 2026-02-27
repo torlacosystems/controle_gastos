@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'gasto.dart';
 import 'receita.dart';
+import 'orcamento.dart';
 
 class RelatoriosScreen extends StatefulWidget {
   const RelatoriosScreen({super.key});
@@ -21,6 +22,7 @@ class RelatoriosScreen extends StatefulWidget {
 class _RelatoriosScreenState extends State<RelatoriosScreen> {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
+  late Box<Orcamento> _orcamentosBox;
 
   DateTime _dataInicio = DateTime.now().subtract(const Duration(days: 30));
   DateTime _dataFim = DateTime.now();
@@ -59,6 +61,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+    _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     _aplicarPeriodo('30d');
   }
 
@@ -191,6 +194,24 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     return s < 0 ? 0 : s;
   }
 
+  double _gastoMesPorCategoria(String categoria) {
+    final agora = DateTime.now();
+    return _gastosBox.values
+        .where(
+          (g) =>
+              g.categoria == categoria &&
+              g.data.month == agora.month &&
+              g.data.year == agora.year,
+        )
+        .fold(0, (s, g) => s + g.valor);
+  }
+
+  Color _corProgresso(double percentual) {
+    if (percentual >= 1.0) return Colors.red;
+    if (percentual >= 0.8) return Colors.orange;
+    return Colors.green;
+  }
+
   // ── PDF ──────────────────────────────────────────────────────────────────
 
   Future<pw.Document> _gerarPdf() async {
@@ -215,7 +236,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             style: const pw.TextStyle(fontSize: 12),
           ),
           pw.SizedBox(height: 16),
-
           pw.Row(
             children: [
               _pdfCard('Gastos', _formatarValor(_totalGastos)),
@@ -231,7 +251,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ],
           ),
           pw.SizedBox(height: 20),
-
           if (gastosPorCat.isNotEmpty) ...[
             pw.Text(
               'Gastos por Categoria',
@@ -252,7 +271,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             pw.SizedBox(height: 20),
           ],
-
           pw.Text(
             'Gastos',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -283,7 +301,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                   cellAlignment: pw.Alignment.centerLeft,
                 ),
           pw.SizedBox(height: 20),
-
           pw.Text(
             'Receitas',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -366,7 +383,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
       final dir = await getApplicationDocumentsDirectory();
       final arquivo = File('${dir.path}/relatorio_financeiro.pdf');
       await arquivo.writeAsBytes(bytes);
-
       try {
         final email = Email(
           body: 'Segue em anexo o relatório financeiro.',
@@ -407,6 +423,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     final categorias = gastosPorCat.keys.toList();
     final mesesHistorico = _gerarMesesHistorico();
     final agora = DateTime.now();
+    final orcamentos = _orcamentosBox.values.toList();
 
     double maxY = 0;
     for (final mes in mesesHistorico) {
@@ -489,7 +506,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                         );
                       }).toList(),
                     ),
-
                     if (_periodoSelecionado == 'Personalizado') ...[
                       const SizedBox(height: 12),
                       Row(
@@ -566,7 +582,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                         ],
                       ),
                     ],
-
                     if (_periodoSelecionado != 'Personalizado' &&
                         _periodoSelecionado != 'todos') ...[
                       const SizedBox(height: 8),
@@ -608,6 +623,106 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
               ],
             ),
             const SizedBox(height: 24),
+
+            // ORÇAMENTO POR CATEGORIA
+            if (orcamentos.isNotEmpty) ...[
+              const Text(
+                'Orçamento por Categoria',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ...orcamentos.map((orc) {
+                final gasto = _gastoMesPorCategoria(orc.categoria);
+                final percentual = orc.limite > 0 ? (gasto / orc.limite) : 0.0;
+                final cor = _corProgresso(percentual);
+                final ultrapassou = percentual >= 1.0;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: ultrapassou
+                        ? const BorderSide(color: Colors.red, width: 1.5)
+                        : BorderSide.none,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                orc.categoria,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (ultrapassou)
+                              const Icon(
+                                Icons.warning_amber,
+                                color: Colors.red,
+                                size: 16,
+                              ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${(percentual * 100).toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: cor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: percentual.clamp(0.0, 1.0),
+                            minHeight: 10,
+                            backgroundColor: Colors.grey[200],
+                            valueColor: AlwaysStoppedAnimation<Color>(cor),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Gasto: ${_formatarValor(gasto)}',
+                              style: TextStyle(fontSize: 12, color: cor),
+                            ),
+                            Text(
+                              'Limite: ${_formatarValor(orc.limite)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (ultrapassou)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '⚠ Ultrapassado em ${_formatarValor(gasto - orc.limite)}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 14),
+            ],
 
             // HISTÓRICO MENSAL
             Row(
@@ -844,7 +959,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
-            // GRÁFICO GASTOS ESPERADOS VS INESPERADOS
+            // GASTOS ESPERADOS VS INESPERADOS
             const Text(
               'Gastos Esperados vs Inesperados',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -924,7 +1039,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
-            // GRÁFICO GASTOS POR CATEGORIA
+            // GASTOS POR CATEGORIA
             const Text(
               'Gastos por Categoria',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),

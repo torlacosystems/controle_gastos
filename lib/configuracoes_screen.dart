@@ -3,7 +3,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
-import 'gasto.dart';
 
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
@@ -18,7 +17,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
   late Box<Orcamento> _orcamentosBox;
-  late Box<Gasto> _gastosBox;
 
   final List<String> _grausParentesco = [
     'Eu Mesmo',
@@ -54,24 +52,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
-    _gastosBox = Hive.box<Gasto>('gastos');
   }
-
-  // ── Gasto do mês por categoria ────────────────────────────────────────────
-
-  double _gastoMesPorCategoria(String categoria) {
-    final agora = DateTime.now();
-    return _gastosBox.values
-        .where(
-          (g) =>
-              g.categoria == categoria &&
-              g.data.month == agora.month &&
-              g.data.year == agora.year,
-        )
-        .fold(0, (s, g) => s + g.valor);
-  }
-
-  // ── Orçamento ─────────────────────────────────────────────────────────────
 
   void _adicionarOuEditarOrcamento({Orcamento? orcamento, int? index}) {
     String categoriaSelecionada =
@@ -172,7 +153,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       return;
                     }
 
-                    // Verifica duplicata
                     final duplicado = _orcamentosBox.values
                         .toList()
                         .asMap()
@@ -236,8 +216,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
       ),
     );
   }
-
-  // ── Formas de Pagamento ───────────────────────────────────────────────────
 
   void _adicionarOuEditarFormaPagamento({FormaPagamento? forma, int? index}) {
     final descricaoController = TextEditingController(
@@ -412,8 +390,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
-  // ── Pessoas ───────────────────────────────────────────────────────────────
-
   void _adicionarOuEditarPessoa({Pessoa? pessoa, int? index}) {
     final nomeController = TextEditingController(text: pessoa?.nome ?? '');
     String parentescoSelecionado = pessoa?.parentesco ?? 'Eu Mesmo';
@@ -577,12 +553,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   String _formatarValor(double valor) =>
       'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
 
-  Color _corProgresso(double percentual) {
-    if (percentual >= 1.0) return Colors.red;
-    if (percentual >= 0.8) return Colors.orange;
-    return Colors.green;
-  }
-
   @override
   Widget build(BuildContext context) {
     final formas = _formasPagamentoBox.values.toList();
@@ -739,13 +709,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   itemCount: orcamentos.length,
                   itemBuilder: (context, index) {
                     final orc = orcamentos[index];
-                    final gasto = _gastoMesPorCategoria(orc.categoria);
-                    final percentual = orc.limite > 0
-                        ? (gasto / orc.limite)
-                        : 0.0;
-                    final cor = _corProgresso(percentual);
-                    final ultrapassou = percentual >= 1.0;
-
                     return Dismissible(
                       key: Key(orc.id),
                       direction: DismissDirection.endToStart,
@@ -768,85 +731,30 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         margin: const EdgeInsets.only(bottom: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: ultrapassou
-                              ? const BorderSide(color: Colors.red, width: 1.5)
-                              : BorderSide.none,
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      orc.categoria,
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  if (ultrapassou)
-                                    const Icon(
-                                      Icons.warning_amber,
-                                      color: Colors.red,
-                                      size: 18,
-                                    ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, size: 18),
-                                    onPressed: () =>
-                                        _adicionarOuEditarOrcamento(
-                                          orcamento: orc,
-                                          index: index,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: LinearProgressIndicator(
-                                  value: percentual.clamp(0.0, 1.0),
-                                  minHeight: 10,
-                                  backgroundColor: Colors.grey[200],
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    cor,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Gasto: ${_formatarValor(gasto)}',
-                                    style: TextStyle(fontSize: 13, color: cor),
-                                  ),
-                                  Text(
-                                    'Limite: ${_formatarValor(orc.limite)}',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (ultrapassou)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    '⚠ Limite ultrapassado em ${_formatarValor(gasto - orc.limite)}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.red,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
+                            child: Icon(
+                              Icons.account_balance_wallet,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          title: Text(
+                            orc.categoria,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            'Limite: ${_formatarValor(orc.limite)}',
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit, size: 18),
+                            onPressed: () => _adicionarOuEditarOrcamento(
+                              orcamento: orc,
+                              index: index,
+                            ),
                           ),
                         ),
                       ),
