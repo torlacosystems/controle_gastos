@@ -2,8 +2,6 @@ Com base no que foi construído até agora, as próximas evoluções naturais se
 Funcionalidades pendentes/melhorias:
 
 Backup e restore dos dados (exportar/importar o banco Hive)
-Notificações de gastos recorrentes (lembrete mensal)
-Remover banner da home
 
 Melhorias de UX:
 
