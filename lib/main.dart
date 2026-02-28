@@ -11,6 +11,7 @@ import 'splash_screen.dart';
 import 'relatorios_screen.dart';
 import 'insights_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'backup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -179,6 +180,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _abrirBackup() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BackupScreen()),
+    );
+    setState(() {});
+  }
+
   void _abrirAdicionarReceita({Receita? receita, int? index}) async {
     if (!_cadastroCompleto) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -335,6 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _botaoNavegacao(Icons.list_alt, 'Registros', _abrirTodosRegistros),
             _botaoNavegacao(Icons.bar_chart, 'Relatórios', _abrirRelatorios),
             _botaoNavegacao(Icons.lightbulb, 'Insights', _abrirInsights),
+            _botaoNavegacao(Icons.backup, 'Backup', _abrirBackup),
           ],
         ),
       ),
