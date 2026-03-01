@@ -11,6 +11,8 @@ import 'dart:io';
 import 'gasto.dart';
 import 'receita.dart';
 import 'orcamento.dart';
+import 'pessoa.dart';
+import 'forma_pagamento.dart';
 
 class RelatoriosScreen extends StatefulWidget {
   const RelatoriosScreen({super.key});
@@ -23,45 +25,50 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
   late Box<Orcamento> _orcamentosBox;
+  late Box<Pessoa> _pessoasBox;
+  late Box<FormaPagamento> _formasPagamentoBox;
 
   DateTime _dataInicio = DateTime.now().subtract(const Duration(days: 30));
   DateTime _dataFim = DateTime.now();
   int _historicoMeses = 6;
   String _periodoSelecionado = '30d';
 
+  // Filtros
+  String? _pessoaSelecionada;
+  String? _tipoFormaPagamento;
+  String? _formaPagamentoSelecionada;
+
+  // Controle de linhas do gráfico
+  bool _mostrarGastos    = true;
+  bool _mostrarReceitas  = true;
+  bool _mostrarSaldo     = true;
+  bool _mostrarAcumulado = false;
+
   final List<String> _nomesMeses = [
-    'Jan',
-    'Fev',
-    'Mar',
-    'Abr',
-    'Mai',
-    'Jun',
-    'Jul',
-    'Ago',
-    'Set',
-    'Out',
-    'Nov',
-    'Dez',
+    'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+    'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
   ];
 
   final List<Map<String, String>> _periodos = [
-    {'label': 'Hoje', 'key': 'hoje'},
-    {'label': '1 sem', 'key': '7d'},
-    {'label': '15 dias', 'key': '15d'},
-    {'label': '30 dias', 'key': '30d'},
-    {'label': '3 meses', 'key': '3m'},
-    {'label': '6 meses', 'key': '6m'},
-    {'label': '12 meses', 'key': '12m'},
-    {'label': 'Todos', 'key': 'todos'},
+    {'label': 'Hoje',          'key': 'hoje'},
+    {'label': '1 sem',         'key': '7d'},
+    {'label': '15 dias',       'key': '15d'},
+    {'label': '30 dias',       'key': '30d'},
+    {'label': '3 meses',       'key': '3m'},
+    {'label': '6 meses',       'key': '6m'},
+    {'label': '12 meses',      'key': '12m'},
+    {'label': 'Todos',         'key': 'todos'},
     {'label': 'Personalizado', 'key': 'Personalizado'},
   ];
 
   @override
   void initState() {
     super.initState();
-    _gastosBox = Hive.box<Gasto>('gastos');
-    _receitasBox = Hive.box<Receita>('receitas');
-    _orcamentosBox = Hive.box<Orcamento>('orcamentos');
+    _gastosBox          = Hive.box<Gasto>('gastos');
+    _receitasBox        = Hive.box<Receita>('receitas');
+    _orcamentosBox      = Hive.box<Orcamento>('orcamentos');
+    _pessoasBox         = Hive.box<Pessoa>('pessoas');
+    _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _aplicarPeriodo('30d');
   }
 
@@ -108,34 +115,116 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     });
   }
 
-  List<Gasto> get _gastosFiltrados => _gastosBox.values
-      .where(
-        (g) =>
-            g.data.isAfter(_dataInicio.subtract(const Duration(days: 1))) &&
-            g.data.isBefore(_dataFim.add(const Duration(days: 1))),
-      )
-      .toList();
+  // ── Helpers de filtro ─────────────────────────────────────────────────────
 
-  List<Receita> get _receitasFiltradas => _receitasBox.values
-      .where(
-        (r) =>
-            r.data.isAfter(_dataInicio.subtract(const Duration(days: 1))) &&
-            r.data.isBefore(_dataFim.add(const Duration(days: 1))),
-      )
-      .toList();
+  List<String> get _todasPessoas =>
+      _pessoasBox.values.map((p) => p.nome).toList();
 
-  double get _totalGastos => _gastosFiltrados.fold(0, (s, g) => s + g.valor);
-  double get _totalReceitas =>
-      _receitasFiltradas.fold(0, (s, r) => s + r.valor);
-  double get _saldo => _totalReceitas - _totalGastos;
+  String _tipoDeForma(String descricao) {
+    final forma = _formasPagamentoBox.values
+        .firstWhere((f) => f.descricao == descricao,
+            orElse: () =>
+                FormaPagamento(id: '', descricao: '', tipo: '', banco: ''));
+    return forma.tipo;
+  }
 
-  double get _totalEsperados => _gastosFiltrados
-      .where((g) => g.gastoEsperado)
-      .fold(0, (s, g) => s + g.valor);
+  // ── Dados filtrados ───────────────────────────────────────────────────────
 
-  double get _totalInesperados => _gastosFiltrados
-      .where((g) => !g.gastoEsperado)
-      .fold(0, (s, g) => s + g.valor);
+  List<Gasto> get _gastosFiltrados {
+    return _gastosBox.values.where((g) {
+      if (g.data.isBefore(_dataInicio.subtract(const Duration(days: 1)))) return false;
+      if (g.data.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
+      if (_pessoaSelecionada != null && g.pessoa != _pessoaSelecionada) return false;
+      if (_tipoFormaPagamento != null &&
+          _tipoDeForma(g.formaPagamento) != _tipoFormaPagamento) return false;
+      if (_formaPagamentoSelecionada != null &&
+          g.formaPagamento != _formaPagamentoSelecionada) return false;
+      return true;
+    }).toList();
+  }
+
+  List<Receita> get _receitasFiltradas {
+    return _receitasBox.values.where((r) {
+      if (r.data.isBefore(_dataInicio.subtract(const Duration(days: 1)))) return false;
+      if (r.data.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
+      if (_pessoaSelecionada != null && r.pessoa != _pessoaSelecionada) return false;
+      return true;
+    }).toList();
+  }
+
+  double get _totalGastos   => _gastosFiltrados.fold(0, (s, g) => s + g.valor);
+  double get _totalReceitas => _receitasFiltradas.fold(0, (s, r) => s + r.valor);
+  double get _saldo         => _totalReceitas - _totalGastos;
+
+  double get _totalEsperados =>
+      _gastosFiltrados.where((g) => g.gastoEsperado).fold(0, (s, g) => s + g.valor);
+  double get _totalInesperados =>
+      _gastosFiltrados.where((g) => !g.gastoEsperado).fold(0, (s, g) => s + g.valor);
+
+  Map<String, double> get _gastosPorCategoria {
+    final Map<String, double> mapa = {};
+    for (final g in _gastosFiltrados) {
+      mapa[g.categoria] = (mapa[g.categoria] ?? 0) + g.valor;
+    }
+    return mapa;
+  }
+
+  // ── Histórico mensal ──────────────────────────────────────────────────────
+
+  List<DateTime> _gerarMesesHistorico() {
+    final agora = DateTime.now();
+    final metade = _historicoMeses ~/ 2;
+    final List<DateTime> meses = [];
+    for (int i = -metade; i <= metade; i++) {
+      meses.add(DateTime(agora.year, agora.month + i));
+    }
+    return meses;
+  }
+
+  double _gastosPorMes(DateTime mes) => _gastosBox.values.where((g) {
+        if (g.data.month != mes.month || g.data.year != mes.year) return false;
+        if (_pessoaSelecionada != null && g.pessoa != _pessoaSelecionada) return false;
+        if (_tipoFormaPagamento != null &&
+            _tipoDeForma(g.formaPagamento) != _tipoFormaPagamento) return false;
+        if (_formaPagamentoSelecionada != null &&
+            g.formaPagamento != _formaPagamentoSelecionada) return false;
+        return true;
+      }).fold(0, (s, g) => s + g.valor);
+
+  double _receitasPorMes(DateTime mes) => _receitasBox.values.where((r) {
+        if (r.data.month != mes.month || r.data.year != mes.year) return false;
+        if (_pessoaSelecionada != null && r.pessoa != _pessoaSelecionada) return false;
+        return true;
+      }).fold(0, (s, r) => s + r.valor);
+
+  double _saldoPorMes(DateTime mes) {
+    final s = _receitasPorMes(mes) - _gastosPorMes(mes);
+    return s < 0 ? 0 : s;
+  }
+
+  List<double> _calcularAcumulado(List<DateTime> meses) {
+    double acumulado = 0;
+    return meses.map((mes) {
+      acumulado += _receitasPorMes(mes) - _gastosPorMes(mes);
+      return acumulado;
+    }).toList();
+  }
+
+  double _gastoMesPorCategoria(String categoria) {
+    final agora = DateTime.now();
+    return _gastosBox.values
+        .where((g) =>
+            g.categoria == categoria &&
+            g.data.month == agora.month &&
+            g.data.year == agora.year)
+        .fold(0, (s, g) => s + g.valor);
+  }
+
+  Color _corProgresso(double percentual) {
+    if (percentual >= 1.0) return Colors.red;
+    if (percentual >= 0.8) return Colors.orange;
+    return Colors.green;
+  }
 
   String _formatarValor(double valor) =>
       'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
@@ -163,55 +252,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     if (picked != null) setState(() => _dataFim = picked);
   }
 
-  Map<String, double> get _gastosPorCategoria {
-    final Map<String, double> mapa = {};
-    for (final g in _gastosFiltrados) {
-      mapa[g.categoria] = (mapa[g.categoria] ?? 0) + g.valor;
-    }
-    return mapa;
-  }
-
-  List<DateTime> _gerarMesesHistorico() {
-    final agora = DateTime.now();
-    final metade = _historicoMeses ~/ 2;
-    final List<DateTime> meses = [];
-    for (int i = -metade; i <= metade; i++) {
-      meses.add(DateTime(agora.year, agora.month + i));
-    }
-    return meses;
-  }
-
-  double _gastosPorMes(DateTime mes) => _gastosBox.values
-      .where((g) => g.data.month == mes.month && g.data.year == mes.year)
-      .fold(0, (s, g) => s + g.valor);
-
-  double _receitasPorMes(DateTime mes) => _receitasBox.values
-      .where((r) => r.data.month == mes.month && r.data.year == mes.year)
-      .fold(0, (s, r) => s + r.valor);
-
-  double _saldoPorMes(DateTime mes) {
-    final s = _receitasPorMes(mes) - _gastosPorMes(mes);
-    return s < 0 ? 0 : s;
-  }
-
-  double _gastoMesPorCategoria(String categoria) {
-    final agora = DateTime.now();
-    return _gastosBox.values
-        .where(
-          (g) =>
-              g.categoria == categoria &&
-              g.data.month == agora.month &&
-              g.data.year == agora.year,
-        )
-        .fold(0, (s, g) => s + g.valor);
-  }
-
-  Color _corProgresso(double percentual) {
-    if (percentual >= 1.0) return Colors.red;
-    if (percentual >= 0.8) return Colors.orange;
-    return Colors.green;
-  }
-
   // ── PDF ───────────────────────────────────────────────────────────────────
 
   Future<pw.Document> _gerarPdf() async {
@@ -226,36 +266,34 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (context) => [
-          pw.Text(
-            'Relatorio Financeiro',
-            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-          ),
+          pw.Text('Relatorio Financeiro',
+              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
-          pw.Text(
-            'Periodo: $periodoTexto',
-            style: const pw.TextStyle(fontSize: 12),
-          ),
+          pw.Text('Periodo: $periodoTexto',
+              style: const pw.TextStyle(fontSize: 12)),
+          if (_pessoaSelecionada != null)
+            pw.Text('Pessoa: $_pessoaSelecionada',
+                style: const pw.TextStyle(fontSize: 12)),
+          if (_tipoFormaPagamento != null)
+            pw.Text(
+              'Pagamento: $_tipoFormaPagamento${_formaPagamentoSelecionada != null ? ' › $_formaPagamentoSelecionada' : ''}',
+              style: const pw.TextStyle(fontSize: 12),
+            ),
           pw.SizedBox(height: 16),
-          pw.Row(
-            children: [
-              _pdfCard('Gastos', _formatarValor(_totalGastos)),
-              pw.SizedBox(width: 8),
-              _pdfCard('Receitas', _formatarValor(_totalReceitas)),
-              pw.SizedBox(width: 8),
-              _pdfCard('Saldo', _formatarValor(_saldo)),
-              pw.SizedBox(width: 8),
-              _pdfCard(
-                'Transacoes',
-                '${_gastosFiltrados.length + _receitasFiltradas.length}',
-              ),
-            ],
-          ),
+          pw.Row(children: [
+            _pdfCard('Gastos', _formatarValor(_totalGastos)),
+            pw.SizedBox(width: 8),
+            _pdfCard('Receitas', _formatarValor(_totalReceitas)),
+            pw.SizedBox(width: 8),
+            _pdfCard('Saldo', _formatarValor(_saldo)),
+            pw.SizedBox(width: 8),
+            _pdfCard('Transacoes',
+                '${_gastosFiltrados.length + _receitasFiltradas.length}'),
+          ]),
           pw.SizedBox(height: 20),
           if (gastosPorCat.isNotEmpty) ...[
-            pw.Text(
-              'Gastos por Categoria',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-            ),
+            pw.Text('Gastos por Categoria',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
               headers: ['Categoria', 'Total'],
@@ -263,70 +301,52 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                   .map((e) => [e.key, _formatarValor(e.value)])
                   .toList(),
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey200,
-              ),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
               border: pw.TableBorder.all(color: PdfColors.grey300),
               cellAlignment: pw.Alignment.centerLeft,
             ),
             pw.SizedBox(height: 20),
           ],
-          pw.Text(
-            'Gastos',
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-          ),
+          pw.Text('Gastos',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           _gastosFiltrados.isEmpty
-              ? pw.Text(
-                  'Nenhum gasto no periodo.',
-                  style: const pw.TextStyle(color: PdfColors.grey),
-                )
+              ? pw.Text('Nenhum gasto no periodo.',
+                  style: const pw.TextStyle(color: PdfColors.grey))
               : pw.Table.fromTextArray(
                   headers: ['Data', 'Categoria', 'Descricao', 'Valor'],
                   data: _gastosFiltrados
-                      .map(
-                        (g) => [
-                          _formatarData(g.data),
-                          g.categoria,
-                          g.descricao.isEmpty ? '-' : g.descricao,
-                          _formatarValor(g.valor),
-                        ],
-                      )
+                      .map((g) => [
+                            _formatarData(g.data),
+                            g.categoria,
+                            g.descricao.isEmpty ? '-' : g.descricao,
+                            _formatarValor(g.valor),
+                          ])
                       .toList(),
                   headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                  headerDecoration: const pw.BoxDecoration(
-                    color: PdfColors.grey200,
-                  ),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   cellAlignment: pw.Alignment.centerLeft,
                 ),
           pw.SizedBox(height: 20),
-          pw.Text(
-            'Receitas',
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-          ),
+          pw.Text('Receitas',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           _receitasFiltradas.isEmpty
-              ? pw.Text(
-                  'Nenhuma receita no periodo.',
-                  style: const pw.TextStyle(color: PdfColors.grey),
-                )
+              ? pw.Text('Nenhuma receita no periodo.',
+                  style: const pw.TextStyle(color: PdfColors.grey))
               : pw.Table.fromTextArray(
                   headers: ['Data', 'Categoria', 'Descricao', 'Valor'],
                   data: _receitasFiltradas
-                      .map(
-                        (r) => [
-                          _formatarData(r.data),
-                          r.categoria,
-                          r.descricao.isEmpty ? '-' : r.descricao,
-                          _formatarValor(r.valor),
-                        ],
-                      )
+                      .map((r) => [
+                            _formatarData(r.data),
+                            r.categoria,
+                            r.descricao.isEmpty ? '-' : r.descricao,
+                            _formatarValor(r.valor),
+                          ])
                       .toList(),
                   headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                  headerDecoration: const pw.BoxDecoration(
-                    color: PdfColors.grey200,
-                  ),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   cellAlignment: pw.Alignment.centerLeft,
                 ),
@@ -347,15 +367,11 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(
-              titulo,
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
-            ),
+            pw.Text(titulo,
+                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 2),
-            pw.Text(
-              valor,
-              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
-            ),
+            pw.Text(valor,
+                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
           ],
         ),
       ),
@@ -366,13 +382,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     try {
       final doc = await _gerarPdf();
       await Printing.sharePdf(
-        bytes: await doc.save(),
-        filename: 'relatorio_financeiro.pdf',
-      );
+          bytes: await doc.save(), filename: 'relatorio_financeiro.pdf');
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao gerar PDF: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro ao gerar PDF: $e')));
     }
   }
 
@@ -392,66 +405,139 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         );
         await FlutterEmailSender.send(email);
       } catch (_) {
-        await Share.shareXFiles(
-          [XFile(arquivo.path)],
-          subject: 'Relatório Financeiro',
-          text: 'Segue em anexo o relatório financeiro.',
-        );
+        await Share.shareXFiles([XFile(arquivo.path)],
+            subject: 'Relatório Financeiro',
+            text: 'Segue em anexo o relatório financeiro.');
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao enviar PDF: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro ao enviar PDF: $e')));
     }
   }
 
-  // ── FIM PDF ───────────────────────────────────────────────────────────────
+  // ── Helpers de UI ─────────────────────────────────────────────────────────
 
   final List<Color> _coresCategorias = [
-    Colors.blue,
-    Colors.red,
-    Colors.orange,
-    Colors.green,
-    Colors.purple,
-    Colors.teal,
-    Colors.pink,
+    Colors.blue, Colors.red, Colors.orange,
+    Colors.green, Colors.purple, Colors.teal, Colors.pink,
   ];
+
+  Widget _chipFiltro(String label, bool selecionado, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selecionado
+              ? Theme.of(context).colorScheme.primary
+              : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: selecionado ? Colors.white : Colors.grey[700],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _toggleLinha(Color cor, String label, bool ativo, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: ativo ? cor : Colors.grey[300],
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: ativo ? Colors.black87 : Colors.grey,
+              decoration: ativo ? null : TextDecoration.lineThrough,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final gastosPorCat = _gastosPorCategoria;
-    final categorias = gastosPorCat.keys.toList();
+    final gastosPorCat   = _gastosPorCategoria;
+    final categorias     = gastosPorCat.keys.toList();
     final mesesHistorico = _gerarMesesHistorico();
-    final agora = DateTime.now();
-    final orcamentos = _orcamentosBox.values.toList();
+    final agora          = DateTime.now();
+    final orcamentos     = _orcamentosBox.values.toList();
+    final todasPessoas   = _todasPessoas;
+    final acumulados     = _calcularAcumulado(mesesHistorico);
+
+    final temFiltroAtivo = _pessoaSelecionada != null ||
+        _tipoFormaPagamento != null ||
+        _formaPagamentoSelecionada != null;
 
     double maxY = 0;
-    for (final mes in mesesHistorico) {
-      final g = _gastosPorMes(mes);
-      final r = _receitasPorMes(mes);
-      final s = _saldoPorMes(mes);
-      if (g > maxY) maxY = g;
-      if (r > maxY) maxY = r;
-      if (s > maxY) maxY = s;
+    for (int i = 0; i < mesesHistorico.length; i++) {
+      final mes = mesesHistorico[i];
+      if (_mostrarGastos    && _gastosPorMes(mes)   > maxY) maxY = _gastosPorMes(mes);
+      if (_mostrarReceitas  && _receitasPorMes(mes) > maxY) maxY = _receitasPorMes(mes);
+      if (_mostrarSaldo     && _saldoPorMes(mes)    > maxY) maxY = _saldoPorMes(mes);
+      if (_mostrarAcumulado && acumulados[i].abs()  > maxY) maxY = acumulados[i].abs();
     }
     maxY = maxY == 0 ? 100 : maxY * 1.2;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Relatórios'),
+        title: Row(
+          children: [
+            const Text('Relatórios'),
+            if (temFiltroAtivo) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text('Filtrado',
+                    style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
+          if (temFiltroAtivo)
+            IconButton(
+              icon: const Icon(Icons.filter_alt_off),
+              tooltip: 'Limpar filtros',
+              onPressed: () => setState(() {
+                _pessoaSelecionada        = null;
+                _tipoFormaPagamento       = null;
+                _formaPagamentoSelecionada = null;
+              }),
+            ),
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            tooltip: 'Exportar PDF',
-            onPressed: _exportarPdf,
-          ),
+              icon: const Icon(Icons.picture_as_pdf),
+              tooltip: 'Exportar PDF',
+              onPressed: _exportarPdf),
           IconButton(
-            icon: const Icon(Icons.email),
-            tooltip: 'Enviar PDF por e-mail',
-            onPressed: _enviarPdfEmail,
-          ),
+              icon: const Icon(Icons.email),
+              tooltip: 'Enviar PDF por e-mail',
+              onPressed: _enviarPdfEmail),
         ],
       ),
       body: SingleChildScrollView(
@@ -459,51 +545,25 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // FILTRO DE PERÍODO
+
+            // ── FILTRO DE PERÍODO ──────────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Período',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    const Text('Período',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: _periodos.map((p) {
-                        final selecionado = _periodoSelecionado == p['key'];
-                        return GestureDetector(
-                          onTap: () => _aplicarPeriodo(p['key']!),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: selecionado
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              p['label']!,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: selecionado
-                                    ? Colors.white
-                                    : Colors.grey[700],
-                              ),
-                            ),
-                          ),
-                        );
+                        final sel = _periodoSelecionado == p['key'];
+                        return _chipFiltro(p['label']!, sel,
+                            () => _aplicarPeriodo(p['key']!));
                       }).toList(),
                     ),
                     if (_periodoSelecionado == 'Personalizado') ...[
@@ -515,67 +575,49 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                               onTap: _selecionarDataInicio,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
+                                    horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today,
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(8)),
+                                child: Row(children: [
+                                  Icon(Icons.calendar_today,
                                       size: 16,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _formatarData(_dataInicio),
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ],
-                                ),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary),
+                                  const SizedBox(width: 6),
+                                  Text(_formatarData(_dataInicio),
+                                      style:
+                                          const TextStyle(fontSize: 14)),
+                                ]),
                               ),
                             ),
                           ),
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              'até',
-                              style: TextStyle(color: Colors.grey),
-                            ),
+                            child: Text('até',
+                                style: TextStyle(color: Colors.grey)),
                           ),
                           Expanded(
                             child: GestureDetector(
                               onTap: _selecionarDataFim,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
+                                    horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today,
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(8)),
+                                child: Row(children: [
+                                  Icon(Icons.calendar_today,
                                       size: 16,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _formatarData(_dataFim),
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ],
-                                ),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary),
+                                  const SizedBox(width: 6),
+                                  Text(_formatarData(_dataFim),
+                                      style:
+                                          const TextStyle(fontSize: 14)),
+                                ]),
                               ),
                             ),
                           ),
@@ -587,16 +629,135 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                       const SizedBox(height: 8),
                       Text(
                         '${_formatarData(_dataInicio)} até ${_formatarData(_dataFim)}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // CARDS DE RESUMO
+            // ── FILTRO POR PESSOA ──────────────────────────────────────────
+            if (todasPessoas.isNotEmpty) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Pessoa',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _chipFiltro('Todas', _pessoaSelecionada == null,
+                              () => setState(
+                                  () => _pessoaSelecionada = null)),
+                          ...todasPessoas.map((p) => _chipFiltro(
+                                p,
+                                _pessoaSelecionada == p,
+                                () => setState(() =>
+                                    _pessoaSelecionada =
+                                        _pessoaSelecionada == p ? null : p),
+                              )),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // ── FILTRO POR FORMA DE PAGAMENTO ──────────────────────────────
+            if (_formasPagamentoBox.isNotEmpty) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Forma de Pagamento',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+
+                      // Nível 1 — tipo
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _chipFiltro('Todos', _tipoFormaPagamento == null,
+                              () => setState(() {
+                                    _tipoFormaPagamento        = null;
+                                    _formaPagamentoSelecionada = null;
+                                  })),
+                          ...['Crédito', 'Débito', 'VA/VR'].where((tipo) =>
+                              _formasPagamentoBox.values
+                                  .any((f) => f.tipo == tipo)).map((tipo) =>
+                              _chipFiltro(
+                                tipo,
+                                _tipoFormaPagamento == tipo,
+                                () => setState(() {
+                                  _tipoFormaPagamento = _tipoFormaPagamento == tipo
+                                      ? null
+                                      : tipo;
+                                  _formaPagamentoSelecionada = null;
+                                }),
+                              )),
+                        ],
+                      ),
+
+                      // Nível 2 — forma específica
+                      if (_tipoFormaPagamento != null) ...[
+                        const SizedBox(height: 10),
+                        const Divider(height: 1),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Cartão / Conta ($_tipoFormaPagamento)',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _chipFiltro(
+                                'Todas',
+                                _formaPagamentoSelecionada == null,
+                                () => setState(() =>
+                                    _formaPagamentoSelecionada = null)),
+                            ..._formasPagamentoBox.values
+                                .where((f) => f.tipo == _tipoFormaPagamento)
+                                .map((f) => _chipFiltro(
+                                      f.descricao,
+                                      _formaPagamentoSelecionada == f.descricao,
+                                      () => setState(() =>
+                                          _formaPagamentoSelecionada =
+                                              _formaPagamentoSelecionada ==
+                                                      f.descricao
+                                                  ? null
+                                                  : f.descricao),
+                                    )),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // ── CARDS DE RESUMO ────────────────────────────────────────────
             Row(
               children: [
                 _cardResumo('Gastos', _totalGastos, Colors.red),
@@ -607,11 +768,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                _cardResumo(
-                  'Saldo',
-                  _saldo,
-                  _saldo >= 0 ? Colors.green : Colors.red,
-                ),
+                _cardResumo('Saldo', _saldo,
+                    _saldo >= 0 ? Colors.green : Colors.red),
                 const SizedBox(width: 8),
                 _cardResumo(
                   'Transações',
@@ -624,42 +782,37 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
-            // HISTÓRICO MENSAL
+            // ── HISTÓRICO MENSAL ───────────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Histórico Mensal',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                const Text('Histórico Mensal',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
                 Row(
                   children: [3, 6, 12].map((meses) {
-                    final selecionado = _historicoMeses == meses;
+                    final sel = _historicoMeses == meses;
                     return Padding(
                       padding: const EdgeInsets.only(left: 6),
                       child: GestureDetector(
-                        onTap: () => setState(() => _historicoMeses = meses),
+                        onTap: () =>
+                            setState(() => _historicoMeses = meses),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: selecionado
+                            color: sel
                                 ? Theme.of(context).colorScheme.primary
                                 : Colors.grey[200],
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Text(
-                            '${meses}m',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: selecionado
-                                  ? Colors.white
-                                  : Colors.grey[700],
-                            ),
-                          ),
+                          child: Text('${meses}m',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: sel
+                                      ? Colors.white
+                                      : Colors.grey[700])),
                         ),
                       ),
                     );
@@ -677,109 +830,124 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                       height: 220,
                       child: LineChart(
                         LineChartData(
-                          minY: 0,
+                          minY: _mostrarAcumulado ? null : 0,
                           maxY: maxY,
                           lineBarsData: [
-                            LineChartBarData(
-                              spots: mesesHistorico
-                                  .asMap()
-                                  .entries
-                                  .map(
-                                    (e) => FlSpot(
-                                      e.key.toDouble(),
-                                      _gastosPorMes(e.value),
-                                    ),
-                                  )
-                                  .toList(),
-                              isCurved: true,
-                              color: Colors.red,
-                              barWidth: 3,
-                              dotData: FlDotData(
-                                getDotPainter: (spot, percent, bar, index) {
-                                  final mes = mesesHistorico[index];
-                                  final isMesAtual =
-                                      mes.month == agora.month &&
-                                      mes.year == agora.year;
-                                  return FlDotCirclePainter(
-                                    radius: isMesAtual ? 6 : 3,
-                                    color: Colors.red,
-                                    strokeWidth: isMesAtual ? 2 : 0,
-                                    strokeColor: Colors.white,
-                                  );
-                                },
+                            if (_mostrarGastos)
+                              LineChartBarData(
+                                spots: mesesHistorico.asMap().entries
+                                    .map((e) => FlSpot(e.key.toDouble(),
+                                        _gastosPorMes(e.value)))
+                                    .toList(),
+                                isCurved: true,
+                                color: Colors.red,
+                                barWidth: 3,
+                                dotData: FlDotData(
+                                  getDotPainter:
+                                      (spot, percent, bar, index) {
+                                    final mes = mesesHistorico[index];
+                                    final isMesAtual =
+                                        mes.month == agora.month &&
+                                            mes.year == agora.year;
+                                    return FlDotCirclePainter(
+                                      radius: isMesAtual ? 6 : 3,
+                                      color: Colors.red,
+                                      strokeWidth: isMesAtual ? 2 : 0,
+                                      strokeColor: Colors.white,
+                                    );
+                                  },
+                                ),
+                                belowBarData: BarAreaData(
+                                    show: true,
+                                    color: Colors.red.withOpacity(0.08)),
                               ),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                color: Colors.red.withOpacity(0.08),
+                            if (_mostrarReceitas)
+                              LineChartBarData(
+                                spots: mesesHistorico.asMap().entries
+                                    .map((e) => FlSpot(e.key.toDouble(),
+                                        _receitasPorMes(e.value)))
+                                    .toList(),
+                                isCurved: true,
+                                color: Colors.green,
+                                barWidth: 3,
+                                dotData: FlDotData(
+                                  getDotPainter:
+                                      (spot, percent, bar, index) {
+                                    final mes = mesesHistorico[index];
+                                    final isMesAtual =
+                                        mes.month == agora.month &&
+                                            mes.year == agora.year;
+                                    return FlDotCirclePainter(
+                                      radius: isMesAtual ? 6 : 3,
+                                      color: Colors.green,
+                                      strokeWidth: isMesAtual ? 2 : 0,
+                                      strokeColor: Colors.white,
+                                    );
+                                  },
+                                ),
+                                belowBarData: BarAreaData(
+                                    show: true,
+                                    color: Colors.green.withOpacity(0.08)),
                               ),
-                            ),
-                            LineChartBarData(
-                              spots: mesesHistorico
-                                  .asMap()
-                                  .entries
-                                  .map(
-                                    (e) => FlSpot(
-                                      e.key.toDouble(),
-                                      _receitasPorMes(e.value),
-                                    ),
-                                  )
-                                  .toList(),
-                              isCurved: true,
-                              color: Colors.green,
-                              barWidth: 3,
-                              dotData: FlDotData(
-                                getDotPainter: (spot, percent, bar, index) {
-                                  final mes = mesesHistorico[index];
-                                  final isMesAtual =
-                                      mes.month == agora.month &&
-                                      mes.year == agora.year;
-                                  return FlDotCirclePainter(
-                                    radius: isMesAtual ? 6 : 3,
-                                    color: Colors.green,
-                                    strokeWidth: isMesAtual ? 2 : 0,
-                                    strokeColor: Colors.white,
-                                  );
-                                },
+                            if (_mostrarSaldo)
+                              LineChartBarData(
+                                spots: mesesHistorico.asMap().entries
+                                    .map((e) => FlSpot(e.key.toDouble(),
+                                        _saldoPorMes(e.value)))
+                                    .toList(),
+                                isCurved: true,
+                                color: Colors.blue,
+                                barWidth: 3,
+                                dashArray: [6, 3],
+                                dotData: FlDotData(
+                                  getDotPainter:
+                                      (spot, percent, bar, index) {
+                                    final mes = mesesHistorico[index];
+                                    final isMesAtual =
+                                        mes.month == agora.month &&
+                                            mes.year == agora.year;
+                                    return FlDotCirclePainter(
+                                      radius: isMesAtual ? 6 : 3,
+                                      color: Colors.blue,
+                                      strokeWidth: isMesAtual ? 2 : 0,
+                                      strokeColor: Colors.white,
+                                    );
+                                  },
+                                ),
+                                belowBarData: BarAreaData(
+                                    show: true,
+                                    color: Colors.blue.withOpacity(0.05)),
                               ),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                color: Colors.green.withOpacity(0.08),
+                            if (_mostrarAcumulado)
+                              LineChartBarData(
+                                spots: acumulados.asMap().entries
+                                    .map((e) => FlSpot(
+                                        e.key.toDouble(), e.value))
+                                    .toList(),
+                                isCurved: true,
+                                color: Colors.purple,
+                                barWidth: 3,
+                                dashArray: [3, 3],
+                                dotData: FlDotData(
+                                  getDotPainter:
+                                      (spot, percent, bar, index) {
+                                    final mes = mesesHistorico[index];
+                                    final isMesAtual =
+                                        mes.month == agora.month &&
+                                            mes.year == agora.year;
+                                    return FlDotCirclePainter(
+                                      radius: isMesAtual ? 6 : 3,
+                                      color: Colors.purple,
+                                      strokeWidth: isMesAtual ? 2 : 0,
+                                      strokeColor: Colors.white,
+                                    );
+                                  },
+                                ),
+                                belowBarData: BarAreaData(
+                                    show: true,
+                                    color:
+                                        Colors.purple.withOpacity(0.05)),
                               ),
-                            ),
-                            LineChartBarData(
-                              spots: mesesHistorico
-                                  .asMap()
-                                  .entries
-                                  .map(
-                                    (e) => FlSpot(
-                                      e.key.toDouble(),
-                                      _saldoPorMes(e.value),
-                                    ),
-                                  )
-                                  .toList(),
-                              isCurved: true,
-                              color: Colors.blue,
-                              barWidth: 3,
-                              dashArray: [6, 3],
-                              dotData: FlDotData(
-                                getDotPainter: (spot, percent, bar, index) {
-                                  final mes = mesesHistorico[index];
-                                  final isMesAtual =
-                                      mes.month == agora.month &&
-                                      mes.year == agora.year;
-                                  return FlDotCirclePainter(
-                                    radius: isMesAtual ? 6 : 3,
-                                    color: Colors.blue,
-                                    strokeWidth: isMesAtual ? 2 : 0,
-                                    strokeColor: Colors.white,
-                                  );
-                                },
-                              ),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                color: Colors.blue.withOpacity(0.05),
-                              ),
-                            ),
                           ],
                           titlesData: FlTitlesData(
                             bottomTitles: AxisTitles(
@@ -788,15 +956,17 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                                 interval: 1,
                                 getTitlesWidget: (value, meta) {
                                   final i = value.toInt();
-                                  if (i < 0 || i >= mesesHistorico.length) {
+                                  if (i < 0 ||
+                                      i >= mesesHistorico.length) {
                                     return const Text('');
                                   }
                                   final mes = mesesHistorico[i];
                                   final isMesAtual =
                                       mes.month == agora.month &&
-                                      mes.year == agora.year;
+                                          mes.year == agora.year;
                                   return Padding(
-                                    padding: const EdgeInsets.only(top: 4),
+                                    padding:
+                                        const EdgeInsets.only(top: 4),
                                     child: Text(
                                       _nomesMeses[mes.month - 1],
                                       style: TextStyle(
@@ -805,9 +975,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                                             ? FontWeight.bold
                                             : FontWeight.normal,
                                         color: isMesAtual
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
                                             : Colors.grey,
                                       ),
                                     ),
@@ -826,32 +996,46 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                               ),
                             ),
                             topTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
                             rightTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
                           ),
                           gridData: const FlGridData(show: true),
                           borderData: FlBorderData(show: false),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
                       children: [
-                        _legenda(Colors.red, 'Gastos', ''),
-                        const SizedBox(width: 16),
-                        _legenda(Colors.green, 'Receitas', ''),
-                        const SizedBox(width: 16),
-                        _legenda(Colors.blue, 'Saldo', ''),
+                        _toggleLinha(Colors.red, 'Gastos', _mostrarGastos,
+                            () => setState(
+                                () => _mostrarGastos = !_mostrarGastos)),
+                        _toggleLinha(Colors.green, 'Receitas',
+                            _mostrarReceitas,
+                            () => setState(() =>
+                                _mostrarReceitas = !_mostrarReceitas)),
+                        _toggleLinha(Colors.blue, 'Saldo mensal',
+                            _mostrarSaldo,
+                            () => setState(
+                                () => _mostrarSaldo = !_mostrarSaldo)),
+                        _toggleLinha(Colors.purple, 'Acumulado',
+                            _mostrarAcumulado,
+                            () => setState(() =>
+                                _mostrarAcumulado = !_mostrarAcumulado)),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Mês atual destacado',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                      'Toque nas legendas para mostrar/ocultar • Mês atual destacado',
+                      style:
+                          TextStyle(fontSize: 10, color: Colors.grey[500]),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
@@ -859,11 +1043,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
-            // GASTOS ESPERADOS VS INESPERADOS
-            const Text(
-              'Gastos Esperados vs Inesperados',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            // ── GASTOS ESPERADOS VS INESPERADOS ────────────────────────────
+            const Text('Gastos Esperados vs Inesperados',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Card(
               child: Padding(
@@ -872,65 +1055,53 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                     ? const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
-                          child: Text(
-                            'Nenhum gasto no período',
-                            style: TextStyle(color: Colors.grey),
-                          ),
+                          child: Text('Nenhum gasto no período',
+                              style: TextStyle(color: Colors.grey)),
                         ),
                       )
                     : Column(
                         children: [
                           SizedBox(
                             height: 180,
-                            child: PieChart(
-                              PieChartData(
-                                sections: [
-                                  if (_totalEsperados > 0)
-                                    PieChartSectionData(
-                                      value: _totalEsperados,
-                                      color: Colors.blue,
-                                      title:
-                                          '${(_totalEsperados / _totalGastos * 100).toStringAsFixed(1)}%',
-                                      titleStyle: const TextStyle(
+                            child: PieChart(PieChartData(
+                              sections: [
+                                if (_totalEsperados > 0)
+                                  PieChartSectionData(
+                                    value: _totalEsperados,
+                                    color: Colors.blue,
+                                    title:
+                                        '${(_totalEsperados / _totalGastos * 100).toStringAsFixed(1)}%',
+                                    titleStyle: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      radius: 70,
-                                    ),
-                                  if (_totalInesperados > 0)
-                                    PieChartSectionData(
-                                      value: _totalInesperados,
-                                      color: Colors.orange,
-                                      title:
-                                          '${(_totalInesperados / _totalGastos * 100).toStringAsFixed(1)}%',
-                                      titleStyle: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                    radius: 70,
+                                  ),
+                                if (_totalInesperados > 0)
+                                  PieChartSectionData(
+                                    value: _totalInesperados,
+                                    color: Colors.orange,
+                                    title:
+                                        '${(_totalInesperados / _totalGastos * 100).toStringAsFixed(1)}%',
+                                    titleStyle: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      radius: 70,
-                                    ),
-                                ],
-                                sectionsSpace: 2,
-                              ),
-                            ),
+                                        fontWeight: FontWeight.bold),
+                                    radius: 70,
+                                  ),
+                              ],
+                              sectionsSpace: 2,
+                            )),
                           ),
                           const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              _legenda(
-                                Colors.blue,
-                                'Esperados',
-                                _formatarValor(_totalEsperados),
-                              ),
+                              _legenda(Colors.blue, 'Esperados',
+                                  _formatarValor(_totalEsperados)),
                               const SizedBox(width: 24),
-                              _legenda(
-                                Colors.orange,
-                                'Inesperados',
-                                _formatarValor(_totalInesperados),
-                              ),
+                              _legenda(Colors.orange, 'Inesperados',
+                                  _formatarValor(_totalInesperados)),
                             ],
                           ),
                         ],
@@ -939,11 +1110,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
-            // GASTOS POR CATEGORIA
-            const Text(
-              'Gastos por Categoria',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            // ── GASTOS POR CATEGORIA ───────────────────────────────────────
+            const Text('Gastos por Categoria',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Card(
               child: Padding(
@@ -952,52 +1122,47 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                     ? const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
-                          child: Text(
-                            'Nenhum gasto no período',
-                            style: TextStyle(color: Colors.grey),
-                          ),
+                          child: Text('Nenhum gasto no período',
+                              style: TextStyle(color: Colors.grey)),
                         ),
                       )
                     : Column(
                         children: [
                           SizedBox(
                             height: 200,
-                            child: PieChart(
-                              PieChartData(
-                                sections: categorias.asMap().entries.map((
-                                  entry,
-                                ) {
-                                  final i = entry.key;
-                                  final cat = entry.value;
-                                  final valor = gastosPorCat[cat]!;
-                                  final pct = valor / _totalGastos * 100;
-                                  return PieChartSectionData(
-                                    value: valor,
-                                    color:
-                                        _coresCategorias[i %
-                                            _coresCategorias.length],
-                                    title: '${pct.toStringAsFixed(1)}%',
-                                    titleStyle: const TextStyle(
+                            child: PieChart(PieChartData(
+                              sections: categorias.asMap().entries
+                                  .map((entry) {
+                                final i   = entry.key;
+                                final cat = entry.value;
+                                final valor = gastosPorCat[cat]!;
+                                final pct = valor / _totalGastos * 100;
+                                return PieChartSectionData(
+                                  value: valor,
+                                  color: _coresCategorias[
+                                      i % _coresCategorias.length],
+                                  title: '${pct.toStringAsFixed(1)}%',
+                                  titleStyle: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    radius: 80,
-                                  );
-                                }).toList(),
-                                sectionsSpace: 2,
-                              ),
-                            ),
+                                      fontWeight: FontWeight.bold),
+                                  radius: 80,
+                                );
+                              }).toList(),
+                              sectionsSpace: 2,
+                            )),
                           ),
                           const SizedBox(height: 16),
                           Wrap(
                             spacing: 12,
                             runSpacing: 8,
-                            children: categorias.asMap().entries.map((entry) {
-                              final i = entry.key;
+                            children: categorias.asMap().entries
+                                .map((entry) {
+                              final i   = entry.key;
                               final cat = entry.value;
                               return _legenda(
-                                _coresCategorias[i % _coresCategorias.length],
+                                _coresCategorias[
+                                    i % _coresCategorias.length],
                                 cat,
                                 _formatarValor(gastosPorCat[cat]!),
                               );
@@ -1009,17 +1174,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ORÇAMENTO POR CATEGORIA
+            // ── ORÇAMENTO POR CATEGORIA ────────────────────────────────────
             if (orcamentos.isNotEmpty) ...[
-              const Text(
-                'Orçamento por Categoria',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+              const Text('Orçamento por Categoria',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               ...orcamentos.map((orc) {
-                final gasto = _gastoMesPorCategoria(orc.categoria);
+                final gasto      = _gastoMesPorCategoria(orc.categoria);
                 final percentual = orc.limite > 0 ? (gasto / orc.limite) : 0.0;
-                final cor = _corProgresso(percentual);
+                final cor        = _corProgresso(percentual);
                 final ultrapassou = percentual >= 1.0;
                 return Card(
                   margin: const EdgeInsets.only(bottom: 10),
@@ -1037,28 +1201,21 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                orc.categoria,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              child: Text(orc.categoria,
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold)),
                             ),
                             if (ultrapassou)
-                              const Icon(
-                                Icons.warning_amber,
-                                color: Colors.red,
-                                size: 16,
-                              ),
+                              const Icon(Icons.warning_amber,
+                                  color: Colors.red, size: 16),
                             const SizedBox(width: 4),
                             Text(
                               '${(percentual * 100).toStringAsFixed(0)}%',
                               style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: cor,
-                              ),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: cor),
                             ),
                           ],
                         ),
@@ -1076,17 +1233,12 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Gasto: ${_formatarValor(gasto)}',
-                              style: TextStyle(fontSize: 12, color: cor),
-                            ),
-                            Text(
-                              'Limite: ${_formatarValor(orc.limite)}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
+                            Text('Gasto: ${_formatarValor(gasto)}',
+                                style:
+                                    TextStyle(fontSize: 12, color: cor)),
+                            Text('Limite: ${_formatarValor(orc.limite)}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                         if (ultrapassou)
@@ -1095,10 +1247,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                             child: Text(
                               '⚠ Ultrapassado em ${_formatarValor(gasto - orc.limite)}',
                               style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.red,
-                                fontWeight: FontWeight.w600,
-                              ),
+                                  fontSize: 11,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w600),
                             ),
                           ),
                       ],
@@ -1114,12 +1265,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     );
   }
 
-  Widget _cardResumo(
-    String titulo,
-    double valor,
-    Color cor, {
-    bool isCount = false,
-  }) {
+  Widget _cardResumo(String titulo, double valor, Color cor,
+      {bool isCount = false}) {
     return Expanded(
       child: Card(
         child: Padding(
@@ -1127,18 +1274,18 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                titulo,
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
-              ),
+              Text(titulo,
+                  style:
+                      const TextStyle(color: Colors.grey, fontSize: 13)),
               const SizedBox(height: 4),
               Text(
-                isCount ? valor.toInt().toString() : _formatarValor(valor),
+                isCount
+                    ? valor.toInt().toString()
+                    : _formatarValor(valor),
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: cor,
-                ),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: cor),
               ),
             ],
           ),
@@ -1152,20 +1299,19 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: cor, shape: BoxShape.circle),
-        ),
+            width: 12,
+            height: 12,
+            decoration:
+                BoxDecoration(color: cor, shape: BoxShape.circle)),
         const SizedBox(width: 4),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label, style: const TextStyle(fontSize: 12)),
             if (valor.isNotEmpty)
-              Text(
-                valor,
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
-              ),
+              Text(valor,
+                  style: const TextStyle(
+                      fontSize: 11, color: Colors.grey)),
           ],
         ),
       ],
