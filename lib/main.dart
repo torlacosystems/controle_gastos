@@ -53,6 +53,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// ── HOME ──────────────────────────────────────────────────────────────────────
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -180,14 +182,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _abrirBackup() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const BackupScreen()),
-    );
-    setState(() {});
-  }
-
   void _abrirAdicionarReceita({Receita? receita, int? index}) async {
     if (!_cadastroCompleto) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -250,6 +244,14 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (context) => const InsightsScreen()),
     );
+  }
+
+  void _abrirBackup() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BackupScreen()),
+    );
+    setState(() {});
   }
 
   List<Map<String, dynamic>> get _itensMisturados {
@@ -350,7 +352,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          // HEADER
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -411,8 +412,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-
-          // LISTA
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Row(
@@ -584,6 +583,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// ── ADICIONAR GASTO ───────────────────────────────────────────────────────────
+
 class AdicionarGastoScreen extends StatefulWidget {
   final Gasto? gasto;
   const AdicionarGastoScreen({super.key, this.gasto});
@@ -605,6 +606,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   late int _numeroParcelas;
   late bool _recorrente;
   late bool _gastoEsperado;
+
+  bool _formaPagamentoOrfa = false;
+  bool _pessoaOrfa = false;
 
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
@@ -643,27 +647,39 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _gastoEsperado = g?.gastoEsperado ?? true;
 
     final formas = _formasPagamentoBox.values.toList();
-    _formaPagamentoSelecionada = g != null
-        ? formas.firstWhere(
-            (f) => f.descricao == g.formaPagamento,
-            orElse: () => formas.first,
-          )
-        : formas.first;
+    if (g != null) {
+      final existe = formas.any((f) => f.descricao == g.formaPagamento);
+      if (existe) {
+        _formaPagamentoSelecionada = formas.firstWhere(
+          (f) => f.descricao == g.formaPagamento,
+        );
+      } else {
+        _formaPagamentoSelecionada = null;
+        _formaPagamentoOrfa = true;
+      }
+    } else {
+      _formaPagamentoSelecionada = formas.isNotEmpty ? formas.first : null;
+    }
 
     final pessoas = _pessoasBox.values.toList();
-    _pessoaSelecionada = g != null
-        ? pessoas.firstWhere(
-            (p) => p.nome == g.pessoa,
-            orElse: () => pessoas.first,
-          )
-        : pessoas.first;
+    if (g != null) {
+      final existe = pessoas.any((p) => p.nome == g.pessoa);
+      if (existe) {
+        _pessoaSelecionada = pessoas.firstWhere((p) => p.nome == g.pessoa);
+      } else {
+        _pessoaSelecionada = null;
+        _pessoaOrfa = true;
+      }
+    } else {
+      _pessoaSelecionada = pessoas.isNotEmpty ? pessoas.first : null;
+    }
   }
 
   String _formatarData(DateTime data) =>
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
   Future<void> _selecionarData() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: _dataSelecionada,
       firstDate: DateTime(2020),
@@ -735,72 +751,65 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         int mesesSelecionados = 1;
         final confirmar = await showDialog<int>(
           context: context,
-          builder: (context) {
-            return StatefulBuilder(
-              builder: (context, setStateDialog) {
-                return AlertDialog(
-                  title: const Text('Replicar para próximos meses?'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setStateDialog) => AlertDialog(
+              title: const Text('Replicar para próximos meses?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Este gasto é fixo e recorrente. Deseja criá-lo para os próximos meses?',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        'Este gasto é fixo e recorrente. Deseja criá-lo para os próximos meses?',
-                        style: TextStyle(fontSize: 14),
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        onPressed: mesesSelecionados > 1
+                            ? () => setStateDialog(() => mesesSelecionados--)
+                            : null,
                       ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Column(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline),
-                            onPressed: mesesSelecionados > 1
-                                ? () =>
-                                      setStateDialog(() => mesesSelecionados--)
-                                : null,
+                          Text(
+                            '$mesesSelecionados',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          Column(
-                            children: [
-                              Text(
-                                '$mesesSelecionados',
-                                style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Text(
-                                'meses',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline),
-                            onPressed: mesesSelecionados < 24
-                                ? () =>
-                                      setStateDialog(() => mesesSelecionados++)
-                                : null,
+                          const Text(
+                            'meses',
+                            style: TextStyle(color: Colors.grey),
                           ),
                         ],
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        onPressed: mesesSelecionados < 24
+                            ? () => setStateDialog(() => mesesSelecionados++)
+                            : null,
+                      ),
                     ],
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, 1),
-                      child: const Text('Só este mês'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () =>
-                          Navigator.pop(context, mesesSelecionados),
-                      child: Text(
-                        'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 1),
+                  child: const Text('Só este mês'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, mesesSelecionados),
+                  child: Text(
+                    'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
 
         if (confirmar != null && confirmar > 1) {
@@ -860,10 +869,36 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     );
   }
 
+  Widget _avisoOrfao(String mensagem) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        border: Border.all(color: Colors.orange),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              mensagem,
+              style: const TextStyle(fontSize: 13, color: Colors.orange),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final formas = _formasPagamentoBox.values.toList();
     final pessoas = _pessoasBox.values.toList();
+    final podeSalvar =
+        _formaPagamentoSelecionada != null && _pessoaSelecionada != null;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -907,6 +942,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Categoria',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -916,7 +952,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: _categorias.map((cat) {
-                  final selecionada = cat['nome'] == _categoriaSelecionada;
+                  final sel = cat['nome'] == _categoriaSelecionada;
                   return GestureDetector(
                     onTap: () =>
                         setState(() => _categoriaSelecionada = cat['nome']),
@@ -926,7 +962,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: selecionada
+                        color: sel
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey[200],
                         borderRadius: BorderRadius.circular(20),
@@ -937,17 +973,13 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                           Icon(
                             cat['icone'],
                             size: 18,
-                            color: selecionada
-                                ? Colors.white
-                                : Colors.grey[700],
+                            color: sel ? Colors.white : Colors.grey[700],
                           ),
                           const SizedBox(width: 6),
                           Text(
                             cat['nome'],
                             style: TextStyle(
-                              color: selecionada
-                                  ? Colors.white
-                                  : Colors.grey[700],
+                              color: sel ? Colors.white : Colors.grey[700],
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -958,6 +990,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
+
               Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1015,8 +1048,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                           ),
                           Switch(
                             value: _recorrente,
-                            onChanged: (value) =>
-                                setState(() => _recorrente = value),
+                            onChanged: (v) => setState(() => _recorrente = v),
                           ),
                         ],
                       ),
@@ -1045,8 +1077,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                           ),
                           Switch(
                             value: _gastoEsperado,
-                            onChanged: (value) =>
-                                setState(() => _gastoEsperado = value),
+                            onChanged: (v) =>
+                                setState(() => _gastoEsperado = v),
                           ),
                         ],
                       ),
@@ -1055,14 +1087,31 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Forma de Pagamento',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
+              if (_formaPagamentoOrfa && _formaPagamentoSelecionada == null)
+                _avisoOrfao(
+                  'A forma de pagamento "${widget.gasto?.formaPagamento}" foi removida. Selecione uma nova.',
+                ),
               DropdownButtonFormField<FormaPagamento>(
                 value: _formaPagamentoSelecionada,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                hint: const Text('Selecione a forma de pagamento'),
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  enabledBorder:
+                      _formaPagamentoOrfa && _formaPagamentoSelecionada == null
+                      ? const OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Colors.orange,
+                            width: 2,
+                          ),
+                        )
+                      : const OutlineInputBorder(),
+                ),
                 items: formas.map((forma) {
                   return DropdownMenuItem(
                     value: forma,
@@ -1071,10 +1120,13 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ),
                   );
                 }).toList(),
-                onChanged: (value) =>
-                    setState(() => _formaPagamentoSelecionada = value),
+                onChanged: (value) => setState(() {
+                  _formaPagamentoSelecionada = value;
+                  _formaPagamentoOrfa = false;
+                }),
               ),
               const SizedBox(height: 24),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1084,7 +1136,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   ),
                   Switch(
                     value: _parcelado,
-                    onChanged: (value) => setState(() => _parcelado = value),
+                    onChanged: (v) => setState(() => _parcelado = v),
                   ),
                 ],
               ),
@@ -1130,24 +1182,43 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 ),
               ],
               const SizedBox(height: 24),
+
               const Text(
                 'Pessoa',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
+              if (_pessoaOrfa && _pessoaSelecionada == null)
+                _avisoOrfao(
+                  'A pessoa "${widget.gasto?.pessoa}" foi removida. Selecione uma nova.',
+                ),
               DropdownButtonFormField<Pessoa>(
                 value: _pessoaSelecionada,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                hint: const Text('Selecione a pessoa'),
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  enabledBorder: _pessoaOrfa && _pessoaSelecionada == null
+                      ? const OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Colors.orange,
+                            width: 2,
+                          ),
+                        )
+                      : const OutlineInputBorder(),
+                ),
                 items: pessoas.map((pessoa) {
                   return DropdownMenuItem(
                     value: pessoa,
                     child: Text('${pessoa.nome} • ${pessoa.parentesco}'),
                   );
                 }).toList(),
-                onChanged: (value) =>
-                    setState(() => _pessoaSelecionada = value),
+                onChanged: (value) => setState(() {
+                  _pessoaSelecionada = value;
+                  _pessoaOrfa = false;
+                }),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Estabelecimento (opcional)',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1161,6 +1232,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Data',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1194,6 +1266,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Descrição (opcional)',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1207,11 +1280,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _salvarGasto,
+                  onPressed: podeSalvar ? _salvarGasto : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,
@@ -1236,6 +1310,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   }
 }
 
+// ── ADICIONAR RECEITA ─────────────────────────────────────────────────────────
+
 class AdicionarReceitaScreen extends StatefulWidget {
   final Receita? receita;
   const AdicionarReceitaScreen({super.key, this.receita});
@@ -1252,6 +1328,8 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   Pessoa? _pessoaSelecionada;
   late bool _recorrente;
   late String _tipoReceita;
+
+  bool _pessoaOrfa = false;
 
   late Box<Pessoa> _pessoasBox;
 
@@ -1281,19 +1359,24 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     _tipoReceita = r?.tipoReceita ?? 'Fixo';
 
     final pessoas = _pessoasBox.values.toList();
-    _pessoaSelecionada = r != null
-        ? pessoas.firstWhere(
-            (p) => p.nome == r.pessoa,
-            orElse: () => pessoas.first,
-          )
-        : pessoas.first;
+    if (r != null) {
+      final existe = pessoas.any((p) => p.nome == r.pessoa);
+      if (existe) {
+        _pessoaSelecionada = pessoas.firstWhere((p) => p.nome == r.pessoa);
+      } else {
+        _pessoaSelecionada = null;
+        _pessoaOrfa = true;
+      }
+    } else {
+      _pessoaSelecionada = pessoas.isNotEmpty ? pessoas.first : null;
+    }
   }
 
   String _formatarData(DateTime data) =>
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
   Future<void> _selecionarData() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: _dataSelecionada,
       firstDate: DateTime(2020),
@@ -1321,6 +1404,30 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
             fontSize: 14,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _avisoOrfao(String mensagem) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        border: Border.all(color: Colors.orange),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              mensagem,
+              style: const TextStyle(fontSize: 13, color: Colors.orange),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1354,69 +1461,65 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       int mesesSelecionados = 1;
       final confirmar = await showDialog<int>(
         context: context,
-        builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setStateDialog) {
-              return AlertDialog(
-                title: const Text('Replicar para próximos meses?'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setStateDialog) => AlertDialog(
+            title: const Text('Replicar para próximos meses?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Esta receita é fixa e recorrente. Deseja criá-la para os próximos meses?',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Esta receita é fixa e recorrente. Deseja criá-la para os próximos meses?',
-                      style: TextStyle(fontSize: 14),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: mesesSelecionados > 1
+                          ? () => setStateDialog(() => mesesSelecionados--)
+                          : null,
                     ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Column(
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          onPressed: mesesSelecionados > 1
-                              ? () => setStateDialog(() => mesesSelecionados--)
-                              : null,
+                        Text(
+                          '$mesesSelecionados',
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        Column(
-                          children: [
-                            Text(
-                              '$mesesSelecionados',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const Text(
-                              'meses',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.add_circle_outline),
-                          onPressed: mesesSelecionados < 24
-                              ? () => setStateDialog(() => mesesSelecionados++)
-                              : null,
+                        const Text(
+                          'meses',
+                          style: TextStyle(color: Colors.grey),
                         ),
                       ],
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: mesesSelecionados < 24
+                          ? () => setStateDialog(() => mesesSelecionados++)
+                          : null,
+                    ),
                   ],
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, 1),
-                    child: const Text('Só este mês'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context, mesesSelecionados),
-                    child: Text(
-                      'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, 1),
+                child: const Text('Só este mês'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, mesesSelecionados),
+                child: Text(
+                  'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
+                ),
+              ),
+            ],
+          ),
+        ),
       );
 
       if (confirmar != null && confirmar > 1) {
@@ -1450,6 +1553,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   @override
   Widget build(BuildContext context) {
     final pessoas = _pessoasBox.values.toList();
+    final podeSalvar = _pessoaSelecionada != null;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -1492,6 +1596,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 autofocus: true,
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Categoria',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1501,7 +1606,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: _categorias.map((cat) {
-                  final selecionada = cat['nome'] == _categoriaSelecionada;
+                  final sel = cat['nome'] == _categoriaSelecionada;
                   return GestureDetector(
                     onTap: () =>
                         setState(() => _categoriaSelecionada = cat['nome']),
@@ -1511,7 +1616,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: selecionada
+                        color: sel
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey[200],
                         borderRadius: BorderRadius.circular(20),
@@ -1522,17 +1627,13 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                           Icon(
                             cat['icone'],
                             size: 18,
-                            color: selecionada
-                                ? Colors.white
-                                : Colors.grey[700],
+                            color: sel ? Colors.white : Colors.grey[700],
                           ),
                           const SizedBox(width: 6),
                           Text(
                             cat['nome'],
                             style: TextStyle(
-                              color: selecionada
-                                  ? Colors.white
-                                  : Colors.grey[700],
+                              color: sel ? Colors.white : Colors.grey[700],
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1543,6 +1644,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
+
               Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1600,8 +1702,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                           ),
                           Switch(
                             value: _recorrente,
-                            onChanged: (value) =>
-                                setState(() => _recorrente = value),
+                            onChanged: (v) => setState(() => _recorrente = v),
                           ),
                         ],
                       ),
@@ -1610,24 +1711,43 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Pessoa',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
+              if (_pessoaOrfa && _pessoaSelecionada == null)
+                _avisoOrfao(
+                  'A pessoa "${widget.receita?.pessoa}" foi removida. Selecione uma nova.',
+                ),
               DropdownButtonFormField<Pessoa>(
                 value: _pessoaSelecionada,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                hint: const Text('Selecione a pessoa'),
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  enabledBorder: _pessoaOrfa && _pessoaSelecionada == null
+                      ? const OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Colors.orange,
+                            width: 2,
+                          ),
+                        )
+                      : const OutlineInputBorder(),
+                ),
                 items: pessoas.map((pessoa) {
                   return DropdownMenuItem(
                     value: pessoa,
                     child: Text('${pessoa.nome} • ${pessoa.parentesco}'),
                   );
                 }).toList(),
-                onChanged: (value) =>
-                    setState(() => _pessoaSelecionada = value),
+                onChanged: (value) => setState(() {
+                  _pessoaSelecionada = value;
+                  _pessoaOrfa = false;
+                }),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Data',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1661,6 +1781,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
               const Text(
                 'Descrição (opcional)',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1674,11 +1795,12 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _salvarReceita,
+                  onPressed: podeSalvar ? _salvarReceita : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,

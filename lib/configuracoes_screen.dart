@@ -3,6 +3,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
+import 'gasto.dart';
+import 'receita.dart';
 
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
@@ -17,6 +19,8 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
   late Box<Orcamento> _orcamentosBox;
+  late Box<Gasto> _gastosBox;
+  late Box<Receita> _receitasBox;
 
   final List<String> _grausParentesco = [
     'Eu Mesmo',
@@ -52,7 +56,198 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
+    _gastosBox = Hive.box<Gasto>('gastos');
+    _receitasBox = Hive.box<Receita>('receitas');
   }
+
+  // ── Exclusão de Forma de Pagamento ────────────────────────────────────────
+
+  Future<bool> _confirmarExclusaoForma(
+    BuildContext context,
+    FormaPagamento forma,
+  ) async {
+    final gastosVinculados = _gastosBox.values
+        .where((g) => g.formaPagamento == forma.descricao)
+        .length;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Forma de Pagamento'),
+        content: Text(
+          gastosVinculados > 0
+              ? 'Existem $gastosVinculados gasto(s) vinculado(s) a "${forma.descricao}".\n\nDeseja excluir a forma de pagamento?'
+              : 'Tem certeza que deseja excluir "${forma.descricao}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return false;
+
+    if (gastosVinculados > 0) {
+      final excluirRegistros = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir registros vinculados?'),
+          content: Text(
+            'Deseja também excluir os $gastosVinculados gasto(s) cadastrado(s) com "${forma.descricao}"?\n\nSe não excluir, os gastos serão mantidos mas ficarão sem forma de pagamento válida.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Manter registros'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Excluir tudo'),
+            ),
+          ],
+        ),
+      );
+
+      if (excluirRegistros == true) {
+        final keysParaExcluir = _gastosBox.keys.where((k) {
+          final g = _gastosBox.get(k);
+          return g != null && g.formaPagamento == forma.descricao;
+        }).toList();
+        for (final k in keysParaExcluir) {
+          await _gastosBox.delete(k);
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // ── Exclusão de Pessoa ────────────────────────────────────────────────────
+
+  Future<bool> _confirmarExclusaoPessoa(
+    BuildContext context,
+    Pessoa pessoa,
+  ) async {
+    final gastosVinculados = _gastosBox.values
+        .where((g) => g.pessoa == pessoa.nome)
+        .length;
+    final receitasVinculadas = _receitasBox.values
+        .where((r) => r.pessoa == pessoa.nome)
+        .length;
+    final totalVinculados = gastosVinculados + receitasVinculadas;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Pessoa'),
+        content: Text(
+          totalVinculados > 0
+              ? 'Existem $gastosVinculados gasto(s) e $receitasVinculadas receita(s) vinculados a "${pessoa.nome}".\n\nDeseja excluir a pessoa?'
+              : 'Tem certeza que deseja excluir "${pessoa.nome}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return false;
+
+    if (totalVinculados > 0) {
+      final partes = <String>[];
+      if (gastosVinculados > 0) partes.add('$gastosVinculados gasto(s)');
+      if (receitasVinculadas > 0) partes.add('$receitasVinculadas receita(s)');
+      final descricao = partes.join(' e ');
+
+      final excluirRegistros = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir registros vinculados?'),
+          content: Text(
+            'Deseja também excluir $descricao cadastrado(s) para "${pessoa.nome}"?\n\nSe não excluir, os registros serão mantidos.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Manter registros'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Excluir tudo'),
+            ),
+          ],
+        ),
+      );
+
+      if (excluirRegistros == true) {
+        final gastosKeys = _gastosBox.keys.where((k) {
+          final g = _gastosBox.get(k);
+          return g != null && g.pessoa == pessoa.nome;
+        }).toList();
+        for (final k in gastosKeys) {
+          await _gastosBox.delete(k);
+        }
+
+        final receitasKeys = _receitasBox.keys.where((k) {
+          final r = _receitasBox.get(k);
+          return r != null && r.pessoa == pessoa.nome;
+        }).toList();
+        for (final k in receitasKeys) {
+          await _receitasBox.delete(k);
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // ── Exclusão de Orçamento ─────────────────────────────────────────────────
+
+  Future<bool?> _confirmarExclusaoOrcamento(
+    BuildContext context,
+    String categoria,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Orçamento'),
+        content: Text(
+          'Tem certeza que deseja excluir o orçamento de "$categoria"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Modais de cadastro ────────────────────────────────────────────────────
 
   void _adicionarOuEditarOrcamento({Orcamento? orcamento, int? index}) {
     String categoriaSelecionada =
@@ -143,7 +338,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         .replaceAll('.', '')
                         .replaceAll(',', '.');
                     final limite = double.tryParse(texto);
-
                     if (limite == null || limite <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -152,7 +346,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
-
                     final duplicado = _orcamentosBox.values
                         .toList()
                         .asMap()
@@ -161,7 +354,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                           if (index != null && e.key == index) return false;
                           return e.value.categoria == categoriaSelecionada;
                         });
-
                     if (duplicado) {
                       showDialog(
                         context: context,
@@ -180,7 +372,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
-
                     final novoOrcamento = Orcamento(
                       id:
                           orcamento?.id ??
@@ -188,7 +379,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       categoria: categoriaSelecionada,
                       limite: limite,
                     );
-
                     if (orcamento == null) {
                       await _orcamentosBox.add(novoOrcamento);
                     } else {
@@ -312,7 +502,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   onPressed: () async {
                     final descricao = descricaoController.text.trim();
                     final banco = bancoController.text.trim();
-
                     if (descricao.isEmpty || banco.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -321,7 +510,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
-
                     final duplicada = _formasPagamentoBox.values
                         .toList()
                         .asMap()
@@ -334,7 +522,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                               e.value.banco.trim().toLowerCase() ==
                                   banco.toLowerCase();
                         });
-
                     if (duplicada) {
                       showDialog(
                         context: context,
@@ -353,7 +540,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
-
                     final novaForma = FormaPagamento(
                       id:
                           forma?.id ??
@@ -440,9 +626,12 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               DropdownButtonFormField<String>(
                 value: parentescoSelecionado,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: _grausParentesco.map((grau) {
-                  return DropdownMenuItem(value: grau, child: Text(grau));
-                }).toList(),
+                items: _grausParentesco
+                    .map(
+                      (grau) =>
+                          DropdownMenuItem(value: grau, child: Text(grau)),
+                    )
+                    .toList(),
                 onChanged: (value) =>
                     setModalState(() => parentescoSelecionado = value!),
               ),
@@ -459,7 +648,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
-
                     final duplicada = _pessoasBox.values
                         .toList()
                         .asMap()
@@ -470,7 +658,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                                   nome.toLowerCase() &&
                               e.value.parentesco == parentescoSelecionado;
                         });
-
                     if (duplicada) {
                       showDialog(
                         context: context,
@@ -489,7 +676,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       );
                       return;
                     }
-
                     final novaPessoa = Pessoa(
                       id:
                           pessoa?.id ??
@@ -525,31 +711,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
-  Future<bool?> _confirmarExclusao(
-    BuildContext context,
-    String titulo,
-    String mensagem,
-  ) {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(titulo),
-        content: Text(mensagem),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatarValor(double valor) =>
       'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
 
@@ -579,7 +740,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ── ABA FORMAS DE PAGAMENTO ──────────────────────────────────────
+          // ── ABA FORMAS DE PAGAMENTO ────────────────────────────────────
           formas.isEmpty
               ? const Center(
                   child: Text(
@@ -601,14 +762,15 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         color: Colors.red,
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      confirmDismiss: (direction) => _confirmarExclusao(
-                        context,
-                        'Excluir Forma de Pagamento',
-                        'Tem certeza que deseja excluir esta forma de pagamento?',
-                      ),
-                      onDismissed: (_) async {
+                      confirmDismiss: (_) async {
+                        final confirmar = await _confirmarExclusaoForma(
+                          context,
+                          forma,
+                        );
+                        if (!confirmar) return false;
                         await _formasPagamentoBox.deleteAt(index);
                         setState(() {});
+                        return false;
                       },
                       child: ListTile(
                         leading: CircleAvatar(
@@ -637,7 +799,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   },
                 ),
 
-          // ── ABA PESSOAS ──────────────────────────────────────────────────
+          // ── ABA PESSOAS ────────────────────────────────────────────────
           pessoas.isEmpty
               ? const Center(
                   child: Text(
@@ -659,14 +821,15 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         color: Colors.red,
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      confirmDismiss: (direction) => _confirmarExclusao(
-                        context,
-                        'Excluir Pessoa',
-                        'Tem certeza que deseja excluir esta pessoa?',
-                      ),
-                      onDismissed: (_) async {
+                      confirmDismiss: (_) async {
+                        final confirmar = await _confirmarExclusaoPessoa(
+                          context,
+                          pessoa,
+                        );
+                        if (!confirmar) return false;
                         await _pessoasBox.deleteAt(index);
                         setState(() {});
+                        return false;
                       },
                       child: ListTile(
                         leading: CircleAvatar(
@@ -695,7 +858,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   },
                 ),
 
-          // ── ABA ORÇAMENTOS ───────────────────────────────────────────────
+          // ── ABA ORÇAMENTOS ─────────────────────────────────────────────
           orcamentos.isEmpty
               ? const Center(
                   child: Text(
@@ -718,11 +881,8 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         color: Colors.red,
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      confirmDismiss: (direction) => _confirmarExclusao(
-                        context,
-                        'Excluir Orçamento',
-                        'Tem certeza que deseja excluir o orçamento de "${orc.categoria}"?',
-                      ),
+                      confirmDismiss: (_) =>
+                          _confirmarExclusaoOrcamento(context, orc.categoria),
                       onDismissed: (_) async {
                         await _orcamentosBox.deleteAt(index);
                         setState(() {});
