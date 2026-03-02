@@ -2,10 +2,6 @@
 
 part of 'gasto.dart';
 
-// **************************************************************************
-// TypeAdapterGenerator
-// **************************************************************************
-
 class GastoAdapter extends TypeAdapter<Gasto> {
   @override
   final int typeId = 0;
@@ -30,13 +26,15 @@ class GastoAdapter extends TypeAdapter<Gasto> {
       estabelecimento: fields[10] as String,
       recorrente: fields[11] as bool,
       gastoEsperado: fields[12] as bool,
+      grupoId: fields[13] as String? ?? '',
+      numeroParcela: fields[14] as int? ?? 0,
     );
   }
 
   @override
   void write(BinaryWriter writer, Gasto obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +60,11 @@ class GastoAdapter extends TypeAdapter<Gasto> {
       ..writeByte(11)
       ..write(obj.recorrente)
       ..writeByte(12)
-      ..write(obj.gastoEsperado);
+      ..write(obj.gastoEsperado)
+      ..writeByte(13)
+      ..write(obj.grupoId)
+      ..writeByte(14)
+      ..write(obj.numeroParcela);
   }
 
   @override

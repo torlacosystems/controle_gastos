@@ -12,6 +12,7 @@ import 'relatorios_screen.dart';
 import 'insights_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'backup_screen.dart';
+import 'atualizar_parcelas_result.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -176,6 +177,13 @@ class _HomeScreenState extends State<HomeScreen> {
           await _gastosBox.putAt(index, resultado);
         } else {
           await _gastosBox.add(resultado);
+        }
+      } else if (resultado is AtualizarParcelasResult) {
+        // Atualiza esta parcela
+        await _gastosBox.putAt(index!, resultado.gastoAtual);
+        // Atualiza as próximas parcelas do mesmo grupo
+        for (final entry in resultado.proximas) {
+          await _gastosBox.putAt(entry.key, entry.value);
         }
       }
       setState(() {});
@@ -583,6 +591,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// ── RESULTADO ATUALIZAR PARCELAS ──────────────────────────────────────────────
+
 // ── ADICIONAR GASTO ───────────────────────────────────────────────────────────
 
 class AdicionarGastoScreen extends StatefulWidget {
@@ -612,6 +622,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
+  late Box<Gasto> _gastosBox;
 
   final List<Map<String, dynamic>> _categorias = [
     {'nome': 'Alimentação', 'icone': Icons.restaurant},
@@ -629,6 +640,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     super.initState();
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _gastosBox = Hive.box<Gasto>('gastos');
 
     final g = widget.gasto;
     _valorController = TextEditingController(
@@ -704,6 +716,28 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     if (picked != null) setState(() => _dataSelecionada = picked);
   }
 
+  // Busca todas as parcelas do mesmo grupo com numeroParcela >= parcelaAtual
+  // retorna lista de MapEntry<boxIndex, Gasto>
+  List<MapEntry<int, Gasto>> _buscarProximasParcelas(
+    String grupoId,
+    int parcelaAtual,
+  ) {
+    final List<MapEntry<int, Gasto>> resultado = [];
+    for (int i = 0; i < _gastosBox.length; i++) {
+      final g = _gastosBox.getAt(i);
+      if (g != null &&
+          g.grupoId == grupoId &&
+          g.grupoId.isNotEmpty &&
+          g.numeroParcela > parcelaAtual) {
+        resultado.add(MapEntry(i, g));
+      }
+    }
+    resultado.sort(
+      (a, b) => a.value.numeroParcela.compareTo(b.value.numeroParcela),
+    );
+    return resultado;
+  }
+
   Future<void> _salvarGasto() async {
     String textoValor = _valorController.text.replaceAll('.', ',');
     if (!textoValor.contains(',')) textoValor = '$textoValor,00';
@@ -718,13 +752,15 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
     final isEdicao = widget.gasto != null;
 
-    if (_parcelado) {
+    // ── Criação de parcelamento novo ──────────────────────────────────────
+    if (_parcelado && !isEdicao) {
+      final grupoId = DateTime.now().millisecondsSinceEpoch.toString();
       final valorParcela = valor / _numeroParcelas;
       final List<Gasto> parcelas = [];
       for (int i = 0; i < _numeroParcelas; i++) {
         parcelas.add(
           Gasto(
-            id: '${DateTime.now().millisecondsSinceEpoch}_$i',
+            id: '${grupoId}_$i',
             descricao:
                 '${_descricaoController.text} (${i + 1}/$_numeroParcelas)',
             valor: double.parse(valorParcela.toStringAsFixed(2)),
@@ -742,136 +778,238 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             estabelecimento: _estabelecimentoController.text,
             recorrente: _recorrente,
             gastoEsperado: _gastoEsperado,
+            grupoId: grupoId,
+            numeroParcela: i + 1,
           ),
         );
       }
-      _mostrarSnackbarSucesso(
-        isEdicao ? 'Gasto atualizado com sucesso!' : 'Gasto salvo com sucesso!',
-      );
+      _mostrarSnackbarSucesso('Gasto salvo com sucesso!');
       await Future.delayed(const Duration(milliseconds: 300));
       Navigator.pop(context, parcelas);
-    } else {
-      final novoGasto = Gasto(
-        id:
-            widget.gasto?.id ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
-        descricao: _descricaoController.text,
+      return;
+    }
+
+    // ── Edição de parcela existente ───────────────────────────────────────
+    if (isEdicao &&
+        widget.gasto!.parcelado &&
+        widget.gasto!.grupoId.isNotEmpty) {
+      final gastoOriginal = widget.gasto!;
+      final proximasParcelas = _buscarProximasParcelas(
+        gastoOriginal.grupoId,
+        gastoOriginal.numeroParcela,
+      );
+
+      // Monta o gasto atualizado desta parcela
+      final gastoAtualizado = Gasto(
+        id: gastoOriginal.id,
+        descricao: gastoOriginal.descricao, // mantém label (X/N)
         valor: valor,
         categoria: _categoriaSelecionada,
         data: _dataSelecionada,
         formaPagamento: _formaPagamentoSelecionada!.descricao,
         pessoa: _pessoaSelecionada!.nome,
         tipoGasto: _tipoGasto,
-        parcelado: false,
-        numeroParcelas: 1,
+        parcelado: true,
+        numeroParcelas: gastoOriginal.numeroParcelas,
         estabelecimento: _estabelecimentoController.text,
         recorrente: _recorrente,
         gastoEsperado: _gastoEsperado,
+        grupoId: gastoOriginal.grupoId,
+        numeroParcela: gastoOriginal.numeroParcela,
       );
 
-      if (_tipoGasto == 'Fixo' && _recorrente && widget.gasto == null) {
-        int mesesSelecionados = 1;
-        final confirmar = await showDialog<int>(
+      // Se há parcelas posteriores, pergunta se atualiza só esta ou as próximas
+      if (proximasParcelas.isNotEmpty) {
+        final escolha = await showDialog<String>(
           context: context,
-          builder: (context) => StatefulBuilder(
-            builder: (context, setStateDialog) => AlertDialog(
-              title: const Text('Replicar para próximos meses?'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Este gasto é fixo e recorrente. Deseja criá-lo para os próximos meses?',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: mesesSelecionados > 1
-                            ? () => setStateDialog(() => mesesSelecionados--)
-                            : null,
-                      ),
-                      Column(
-                        children: [
-                          Text(
-                            '$mesesSelecionados',
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Text(
-                            'meses',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: mesesSelecionados < 24
-                            ? () => setStateDialog(() => mesesSelecionados++)
-                            : null,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 1),
-                  child: const Text('Só este mês'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, mesesSelecionados),
-                  child: Text(
-                    'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
-                  ),
-                ),
-              ],
+          builder: (ctx) => AlertDialog(
+            title: const Text('Editar parcelas'),
+            content: Text(
+              'Esta é a parcela ${gastoOriginal.numeroParcela} de ${gastoOriginal.numeroParcelas}.\n\n'
+              'Deseja atualizar só esta parcela ou também as ${proximasParcelas.length} parcela(s) seguinte(s)?',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'soEsta'),
+                child: const Text('Só esta'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, 'estaEProximas'),
+                child: Text('Esta e as próximas (${proximasParcelas.length})'),
+              ),
+            ],
           ),
         );
 
-        if (confirmar != null && confirmar > 1) {
-          final List<Gasto> gastosMeses = [];
-          for (int i = 0; i < confirmar; i++) {
-            gastosMeses.add(
-              Gasto(
-                id: '${DateTime.now().millisecondsSinceEpoch}_$i',
-                descricao: novoGasto.descricao,
-                valor: novoGasto.valor,
-                categoria: novoGasto.categoria,
-                data: DateTime(
-                  _dataSelecionada.year,
-                  _dataSelecionada.month + i,
-                  _dataSelecionada.day,
+        if (escolha == null) return; // cancelou
+
+        if (escolha == 'estaEProximas') {
+          // Atualiza cada parcela seguinte mantendo sua data original
+          final List<MapEntry<int, Gasto>> proximasAtualizadas = [];
+          for (final entry in proximasParcelas) {
+            final p = entry.value;
+            proximasAtualizadas.add(
+              MapEntry(
+                entry.key,
+                Gasto(
+                  id: p.id,
+                  descricao: p.descricao,
+                  valor: valor,
+                  categoria: _categoriaSelecionada,
+                  data: p.data, // mantém a data original de cada parcela
+                  formaPagamento: _formaPagamentoSelecionada!.descricao,
+                  pessoa: _pessoaSelecionada!.nome,
+                  tipoGasto: _tipoGasto,
+                  parcelado: true,
+                  numeroParcelas: p.numeroParcelas,
+                  estabelecimento: _estabelecimentoController.text,
+                  recorrente: _recorrente,
+                  gastoEsperado: _gastoEsperado,
+                  grupoId: p.grupoId,
+                  numeroParcela: p.numeroParcela,
                 ),
-                formaPagamento: novoGasto.formaPagamento,
-                pessoa: novoGasto.pessoa,
-                tipoGasto: novoGasto.tipoGasto,
-                parcelado: false,
-                numeroParcelas: 1,
-                estabelecimento: novoGasto.estabelecimento,
-                recorrente: true,
-                gastoEsperado: novoGasto.gastoEsperado,
               ),
             );
           }
-          _mostrarSnackbarSucesso('Gasto salvo com sucesso!');
+          _mostrarSnackbarSucesso('Gasto atualizado com sucesso!');
           await Future.delayed(const Duration(milliseconds: 300));
-          Navigator.pop(context, gastosMeses);
+          Navigator.pop(
+            context,
+            AtualizarParcelasResult(
+              gastoAtual: gastoAtualizado,
+              proximas: proximasAtualizadas,
+            ),
+          );
           return;
         }
       }
 
-      _mostrarSnackbarSucesso(
-        isEdicao ? 'Gasto atualizado com sucesso!' : 'Gasto salvo com sucesso!',
-      );
+      // Só esta parcela
+      _mostrarSnackbarSucesso('Gasto atualizado com sucesso!');
       await Future.delayed(const Duration(milliseconds: 300));
-      Navigator.pop(context, novoGasto);
+      Navigator.pop(context, gastoAtualizado);
+      return;
     }
+
+    // ── Gasto simples (não parcelado) ─────────────────────────────────────
+    final novoGasto = Gasto(
+      id: widget.gasto?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      descricao: _descricaoController.text,
+      valor: valor,
+      categoria: _categoriaSelecionada,
+      data: _dataSelecionada,
+      formaPagamento: _formaPagamentoSelecionada!.descricao,
+      pessoa: _pessoaSelecionada!.nome,
+      tipoGasto: _tipoGasto,
+      parcelado: false,
+      numeroParcelas: 1,
+      estabelecimento: _estabelecimentoController.text,
+      recorrente: _recorrente,
+      gastoEsperado: _gastoEsperado,
+    );
+
+    if (_tipoGasto == 'Fixo' && _recorrente && !isEdicao) {
+      int mesesSelecionados = 1;
+      final confirmar = await showDialog<int>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setStateDialog) => AlertDialog(
+            title: const Text('Replicar para próximos meses?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Este gasto é fixo e recorrente. Deseja criá-lo para os próximos meses?',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: mesesSelecionados > 1
+                          ? () => setStateDialog(() => mesesSelecionados--)
+                          : null,
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          '$mesesSelecionados',
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Text(
+                          'meses',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: mesesSelecionados < 24
+                          ? () => setStateDialog(() => mesesSelecionados++)
+                          : null,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, 1),
+                child: const Text('Só este mês'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, mesesSelecionados),
+                child: Text(
+                  'Replicar $mesesSelecionados ${mesesSelecionados == 1 ? 'mês' : 'meses'}',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (confirmar != null && confirmar > 1) {
+        final List<Gasto> gastosMeses = [];
+        for (int i = 0; i < confirmar; i++) {
+          gastosMeses.add(
+            Gasto(
+              id: '${DateTime.now().millisecondsSinceEpoch}_$i',
+              descricao: novoGasto.descricao,
+              valor: novoGasto.valor,
+              categoria: novoGasto.categoria,
+              data: DateTime(
+                _dataSelecionada.year,
+                _dataSelecionada.month + i,
+                _dataSelecionada.day,
+              ),
+              formaPagamento: novoGasto.formaPagamento,
+              pessoa: novoGasto.pessoa,
+              tipoGasto: novoGasto.tipoGasto,
+              parcelado: false,
+              numeroParcelas: 1,
+              estabelecimento: novoGasto.estabelecimento,
+              recorrente: true,
+              gastoEsperado: novoGasto.gastoEsperado,
+            ),
+          );
+        }
+        _mostrarSnackbarSucesso('Gasto salvo com sucesso!');
+        await Future.delayed(const Duration(milliseconds: 300));
+        Navigator.pop(context, gastosMeses);
+        return;
+      }
+    }
+
+    _mostrarSnackbarSucesso(
+      isEdicao ? 'Gasto atualizado com sucesso!' : 'Gasto salvo com sucesso!',
+    );
+    await Future.delayed(const Duration(milliseconds: 300));
+    Navigator.pop(context, novoGasto);
   }
 
   Widget _chipOpcao(String label, bool selecionado, VoidCallback onTap) {
@@ -927,6 +1065,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     final pessoas = _pessoasBox.values.toList();
     final podeSalvar =
         _formaPagamentoSelecionada != null && _pessoaSelecionada != null;
+
+    // Se é edição de parcela, desabilita o switch de parcelado
+    final isEdicaoParcela = widget.gasto != null && widget.gasto!.parcelado;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -1155,61 +1296,100 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               ),
               const SizedBox(height: 24),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Parcelado',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Switch(
-                    value: _parcelado,
-                    onChanged: (v) => setState(() => _parcelado = v),
-                  ),
-                ],
-              ),
-              if (_parcelado) ...[
-                const SizedBox(height: 8),
+              // Parcelado — desabilitado na edição de parcela
+              if (!isEdicaoParcela) ...[
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Número de parcelas: ',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: _numeroParcelas > 2
-                          ? () => setState(() => _numeroParcelas--)
-                          : null,
-                    ),
-                    Text(
-                      '$_numeroParcelas',
-                      style: const TextStyle(
-                        fontSize: 18,
+                      'Parcelado',
+                      style: TextStyle(
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: _numeroParcelas < 48
-                          ? () => setState(() => _numeroParcelas++)
-                          : null,
+                    Switch(
+                      value: _parcelado,
+                      onChanged: (v) => setState(() => _parcelado = v),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _valorController.text.isNotEmpty
-                      ? 'Valor por parcela: R\$ ${(() {
-                          final v = double.tryParse(_valorController.text.replaceAll('.', '').replaceAll(',', '.'));
-                          if (v == null) return '0,00';
-                          return (v / _numeroParcelas).toStringAsFixed(2).replaceAll('.', ',');
-                        })()}'
-                      : 'Informe o valor para calcular a parcela',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                if (_parcelado) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text(
+                        'Número de parcelas: ',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        onPressed: _numeroParcelas > 2
+                            ? () => setState(() => _numeroParcelas--)
+                            : null,
+                      ),
+                      Text(
+                        '$_numeroParcelas',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        onPressed: _numeroParcelas < 48
+                            ? () => setState(() => _numeroParcelas++)
+                            : null,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _valorController.text.isNotEmpty
+                        ? 'Valor por parcela: R\$ ${(() {
+                            final v = double.tryParse(_valorController.text.replaceAll('.', '').replaceAll(',', '.'));
+                            if (v == null) return '0,00';
+                            return (v / _numeroParcelas).toStringAsFixed(2).replaceAll('.', ',');
+                          })()}'
+                        : 'Informe o valor para calcular a parcela',
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ],
+                const SizedBox(height: 24),
+              ],
+
+              // Badge informativo quando é edição de parcela
+              if (isEdicaoParcela) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    border: Border.all(color: Colors.blue),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        color: Colors.blue,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Parcela ${widget.gasto!.numeroParcela} de ${widget.gasto!.numeroParcelas}. '
+                          'Você poderá atualizar só esta ou esta e as próximas ao salvar.',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-              const SizedBox(height: 24),
 
               const Text(
                 'Pessoa',
@@ -1503,7 +1683,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       tipoReceita: _tipoReceita,
     );
 
-    if (_tipoReceita == 'Fixo' && _recorrente && widget.receita == null) {
+    if (_tipoReceita == 'Fixo' && _recorrente && !isEdicao) {
       int mesesSelecionados = 1;
       final confirmar = await showDialog<int>(
         context: context,

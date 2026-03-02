@@ -7,6 +7,7 @@ import 'dart:io';
 import 'gasto.dart';
 import 'receita.dart';
 import 'main.dart';
+import 'atualizar_parcelas_result.dart';
 
 class TodosRegistrosScreen extends StatefulWidget {
   const TodosRegistrosScreen({super.key});
@@ -368,6 +369,36 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     setState(() {});
   }
 
+  // ── Editar gasto — trata Gasto simples e AtualizarParcelasResult ──────────
+  Future<void> _editarGasto(Map<String, dynamic> item) async {
+    final boxIndex = item['index'] as int;
+    final resultado = await Navigator.push<dynamic>(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            AdicionarGastoScreen(gasto: item['item'] as Gasto),
+      ),
+    );
+
+    if (resultado == null) return;
+
+    if (resultado is Gasto) {
+      await _gastosBox.putAt(boxIndex, resultado);
+    } else if (resultado is AtualizarParcelasResult) {
+      await _gastosBox.putAt(boxIndex, resultado.gastoAtual);
+      for (final entry in resultado.proximas) {
+        await _gastosBox.putAt(entry.key, entry.value);
+      }
+    } else if (resultado is List<Gasto>) {
+      // novo parcelamento criado a partir desta tela (não deve ocorrer na edição, mas por segurança)
+      for (final parcela in resultado) {
+        await _gastosBox.add(parcela);
+      }
+    }
+
+    setState(() {});
+  }
+
   void _mostrarFiltroMes() {
     final meses = _mesesDisponiveis;
     showModalBottomSheet(
@@ -496,12 +527,10 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             if (_termoBusca.isNotEmpty)
               IconButton(
                 icon: const Icon(Icons.clear),
-                onPressed: () {
-                  setState(() {
-                    _termoBusca = '';
-                    _buscaController.clear();
-                  });
-                },
+                onPressed: () => setState(() {
+                  _termoBusca = '';
+                  _buscaController.clear();
+                }),
               ),
             IconButton(icon: const Icon(Icons.close), onPressed: _fecharBusca),
           ] else if (_modoSelecao) ...[
@@ -755,29 +784,10 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                                     IconButton(
                                       icon: const Icon(Icons.edit, size: 18),
                                       onPressed: () async {
-                                        final boxIndex = item['index'] as int;
                                         if (isGasto) {
-                                          final resultado =
-                                              await Navigator.push<dynamic>(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      AdicionarGastoScreen(
-                                                        gasto:
-                                                            item['item']
-                                                                as Gasto,
-                                                      ),
-                                                ),
-                                              );
-                                          if (resultado != null &&
-                                              resultado is Gasto) {
-                                            await _gastosBox.putAt(
-                                              boxIndex,
-                                              resultado,
-                                            );
-                                            setState(() {});
-                                          }
+                                          await _editarGasto(item);
                                         } else {
+                                          final boxIndex = item['index'] as int;
                                           final resultado =
                                               await Navigator.push<Receita>(
                                                 context,

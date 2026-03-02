@@ -43,6 +43,12 @@ class Gasto extends HiveObject {
   @HiveField(12)
   late bool gastoEsperado;
 
+  @HiveField(13)
+  late String grupoId;
+
+  @HiveField(14)
+  late int numeroParcela;
+
   Gasto({
     required this.id,
     required this.descricao,
@@ -57,5 +63,7 @@ class Gasto extends HiveObject {
     required this.estabelecimento,
     required this.recorrente,
     required this.gastoEsperado,
+    this.grupoId = '',
+    this.numeroParcela = 0,
   });
 }
