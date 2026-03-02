@@ -60,6 +60,22 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     _receitasBox = Hive.box<Receita>('receitas');
   }
 
+  void _mostrarSnackbarSucesso(String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(mensagem),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   // ── Exclusão de Forma de Pagamento ────────────────────────────────────────
 
   Future<bool> _confirmarExclusaoForma(
@@ -247,7 +263,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
-  // ── Modais de cadastro ────────────────────────────────────────────────────
+  // ── Modal Orçamento ───────────────────────────────────────────────────────
 
   void _adicionarOuEditarOrcamento({Orcamento? orcamento, int? index}) {
     String categoriaSelecionada =
@@ -257,6 +273,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           ? orcamento.limite.toStringAsFixed(2).replaceAll('.', ',')
           : '',
     );
+    final isEdicao = orcamento != null;
 
     showModalBottomSheet(
       context: context,
@@ -277,7 +294,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                orcamento == null ? 'Novo Orçamento' : 'Editar Orçamento',
+                isEdicao ? 'Editar Orçamento' : 'Novo Orçamento',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -386,6 +403,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     }
                     setState(() {});
                     Navigator.pop(context);
+                    _mostrarSnackbarSucesso(
+                      isEdicao
+                          ? 'Orçamento atualizado com sucesso!'
+                          : 'Orçamento salvo com sucesso!',
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
@@ -394,9 +416,12 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Salvar',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: Text(
+                    isEdicao ? 'Atualizar' : 'Salvar',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -407,12 +432,15 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
+  // ── Modal Forma de Pagamento ──────────────────────────────────────────────
+
   void _adicionarOuEditarFormaPagamento({FormaPagamento? forma, int? index}) {
     final descricaoController = TextEditingController(
       text: forma?.descricao ?? '',
     );
     final bancoController = TextEditingController(text: forma?.banco ?? '');
     String tipoSelecionado = forma?.tipo ?? 'Crédito';
+    final isEdicao = forma != null;
 
     showModalBottomSheet(
       context: context,
@@ -433,9 +461,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                forma == null
-                    ? 'Nova Forma de Pagamento'
-                    : 'Editar Forma de Pagamento',
+                isEdicao
+                    ? 'Editar Forma de Pagamento'
+                    : 'Nova Forma de Pagamento',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -555,6 +583,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     }
                     setState(() {});
                     Navigator.pop(context);
+                    _mostrarSnackbarSucesso(
+                      isEdicao
+                          ? 'Forma de pagamento atualizada com sucesso!'
+                          : 'Forma de pagamento salva com sucesso!',
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
@@ -563,9 +596,12 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Salvar',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: Text(
+                    isEdicao ? 'Atualizar' : 'Salvar',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -576,12 +612,15 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
+  // ── Modal Pessoa ──────────────────────────────────────────────────────────
+
   void _adicionarOuEditarPessoa({Pessoa? pessoa, int? index}) {
     final nomeController = TextEditingController(text: pessoa?.nome ?? '');
     String parentescoSelecionado = pessoa?.parentesco ?? 'Eu Mesmo';
     if (!_grausParentesco.contains(parentescoSelecionado)) {
       parentescoSelecionado = 'Outro';
     }
+    final isEdicao = pessoa != null;
 
     showModalBottomSheet(
       context: context,
@@ -602,7 +641,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                pessoa == null ? 'Nova Pessoa' : 'Editar Pessoa',
+                isEdicao ? 'Editar Pessoa' : 'Nova Pessoa',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -690,6 +729,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     }
                     setState(() {});
                     Navigator.pop(context);
+                    _mostrarSnackbarSucesso(
+                      isEdicao
+                          ? 'Pessoa atualizada com sucesso!'
+                          : 'Pessoa salva com sucesso!',
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
@@ -698,9 +742,12 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Salvar',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: Text(
+                    isEdicao ? 'Atualizar' : 'Salvar',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),

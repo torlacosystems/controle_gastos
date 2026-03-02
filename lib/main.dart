@@ -675,6 +675,22 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     }
   }
 
+  void _mostrarSnackbarSucesso(String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(mensagem),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   String _formatarData(DateTime data) =>
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
@@ -699,6 +715,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       ).showSnackBar(const SnackBar(content: Text('Informe um valor válido')));
       return;
     }
+
+    final isEdicao = widget.gasto != null;
 
     if (_parcelado) {
       final valorParcela = valor / _numeroParcelas;
@@ -727,6 +745,10 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
           ),
         );
       }
+      _mostrarSnackbarSucesso(
+        isEdicao ? 'Gasto atualizado com sucesso!' : 'Gasto salvo com sucesso!',
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
       Navigator.pop(context, parcelas);
     } else {
       final novoGasto = Gasto(
@@ -837,11 +859,17 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               ),
             );
           }
+          _mostrarSnackbarSucesso('Gasto salvo com sucesso!');
+          await Future.delayed(const Duration(milliseconds: 300));
           Navigator.pop(context, gastosMeses);
           return;
         }
       }
 
+      _mostrarSnackbarSucesso(
+        isEdicao ? 'Gasto atualizado com sucesso!' : 'Gasto salvo com sucesso!',
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
       Navigator.pop(context, novoGasto);
     }
   }
@@ -1372,6 +1400,22 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     }
   }
 
+  void _mostrarSnackbarSucesso(String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(mensagem),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   String _formatarData(DateTime data) =>
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
@@ -1443,6 +1487,8 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       ).showSnackBar(const SnackBar(content: Text('Informe um valor válido')));
       return;
     }
+
+    final isEdicao = widget.receita != null;
 
     final novaReceita = Receita(
       id:
@@ -1542,11 +1588,19 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
             ),
           );
         }
+        _mostrarSnackbarSucesso('Receita salva com sucesso!');
+        await Future.delayed(const Duration(milliseconds: 300));
         Navigator.pop(context, receitasMeses);
         return;
       }
     }
 
+    _mostrarSnackbarSucesso(
+      isEdicao
+          ? 'Receita atualizada com sucesso!'
+          : 'Receita salva com sucesso!',
+    );
+    await Future.delayed(const Duration(milliseconds: 300));
     Navigator.pop(context, novaReceita);
   }
 
