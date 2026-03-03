@@ -5,6 +5,7 @@ import 'pessoa.dart';
 import 'orcamento.dart';
 import 'gasto.dart';
 import 'receita.dart';
+import 'categoria.dart';
 
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
@@ -21,6 +22,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   late Box<Orcamento> _orcamentosBox;
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
+  late Box<Categoria> _categoriasBox;
 
   final List<String> _grausParentesco = [
     'Eu Mesmo',
@@ -50,14 +52,22 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   ];
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+    _categoriasBox = Hive.box<Categoria>('categorias');
   }
 
   void _mostrarSnackbarSucesso(String mensagem) {
@@ -758,6 +768,234 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
+  // ── Grid de ícones para categoria personalizada ───────────────────────────
+
+  static const List<Map<String, dynamic>> _iconesDisponiveis = [
+    {'icone': Icons.restaurant, 'label': 'Alimentação'},
+    {'icone': Icons.shopping_bag, 'label': 'Compras'},
+    {'icone': Icons.sports_soccer, 'label': 'Esportes'},
+    {'icone': Icons.pets, 'label': 'Pets'},
+    {'icone': Icons.music_note, 'label': 'Música'},
+    {'icone': Icons.flight, 'label': 'Viagem'},
+    {'icone': Icons.wifi, 'label': 'Internet'},
+    {'icone': Icons.phone_android, 'label': 'Celular'},
+    {'icone': Icons.checkroom, 'label': 'Vestuário'},
+    {'icone': Icons.local_gas_station, 'label': 'Combustível'},
+    {'icone': Icons.child_care, 'label': 'Filhos'},
+    {'icone': Icons.casino, 'label': 'Lazer extra'},
+    {'icone': Icons.science, 'label': 'Tecnologia'},
+    {'icone': Icons.spa, 'label': 'Beleza'},
+    {'icone': Icons.volunteer_activism, 'label': 'Doação'},
+    {'icone': Icons.fastfood, 'label': 'Fast food'},
+    {'icone': Icons.local_cafe, 'label': 'Café'},
+    {'icone': Icons.cake, 'label': 'Festas'},
+    {'icone': Icons.build, 'label': 'Manutenção'},
+    {'icone': Icons.attach_money, 'label': 'Finanças'},
+    {'icone': Icons.local_hospital, 'label': 'Hospital'},
+    {'icone': Icons.directions_bike, 'label': 'Bike'},
+    {'icone': Icons.videogame_asset, 'label': 'Games'},
+    {'icone': Icons.book, 'label': 'Livros'},
+  ];
+
+  void _adicionarNovaCategoria() {
+    final nomeController = TextEditingController();
+    final limiteController = TextEditingController();
+    IconData iconeSelecionado = Icons.category;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Nova Categoria',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nomeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome da categoria',
+                    hintText: 'Ex: Pets',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Limite mensal (R\$)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: limiteController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: '0,00',
+                    border: OutlineInputBorder(),
+                    prefixText: 'R\$ ',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Ícone',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 6,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                  ),
+                  itemCount: _iconesDisponiveis.length,
+                  itemBuilder: (context, i) {
+                    final icone = _iconesDisponiveis[i]['icone'] as IconData;
+                    final selecionado = icone == iconeSelecionado;
+                    return GestureDetector(
+                      onTap: () =>
+                          setModalState(() => iconeSelecionado = icone),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: selecionado
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: selecionado
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                        child: Icon(
+                          icone,
+                          size: 22,
+                          color: selecionado ? Colors.white : Colors.grey[700],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final nome = nomeController.text.trim();
+                      if (nome.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Informe o nome da categoria'),
+                          ),
+                        );
+                        return;
+                      }
+                      final texto = limiteController.text
+                          .replaceAll('.', '')
+                          .replaceAll(',', '.');
+                      final limite = double.tryParse(texto) ?? 0.0;
+                      final categoriasFixas = [
+                        'Alimentação',
+                        'Mercado',
+                        'Transporte',
+                        'Saúde',
+                        'Lazer',
+                        'Moradia',
+                        'Educação',
+                        'Outros',
+                      ];
+                      final nomeExiste =
+                          categoriasFixas.any(
+                            (c) => c.toLowerCase() == nome.toLowerCase(),
+                          ) ||
+                          _categoriasBox.values.any(
+                            (c) => c.nome.toLowerCase() == nome.toLowerCase(),
+                          );
+                      if (nomeExiste) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Categoria duplicada'),
+                            content: Text(
+                              'Já existe uma categoria chamada "$nome".',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('OK'),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+                      final id = DateTime.now().millisecondsSinceEpoch
+                          .toString();
+                      final novaCategoria = Categoria(
+                        id: id,
+                        nome: nome,
+                        iconeCodePoint: iconeSelecionado.codePoint,
+                        iconeFontFamily:
+                            iconeSelecionado.fontFamily ?? 'MaterialIcons',
+                        limiteMensal: limite,
+                      );
+                      await _categoriasBox.add(novaCategoria);
+                      if (limite > 0) {
+                        final novoOrcamento = Orcamento(
+                          id: id,
+                          categoria: nome,
+                          limite: limite,
+                        );
+                        await _orcamentosBox.add(novoOrcamento);
+                      }
+                      setState(() {});
+                      Navigator.pop(context);
+                      _mostrarSnackbarSucesso(
+                        'Categoria "$nome" criada com sucesso!',
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Salvar Categoria',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   String _formatarValor(double valor) =>
       'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
 
@@ -906,19 +1144,126 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                 ),
 
           // ── ABA ORÇAMENTOS ─────────────────────────────────────────────
-          orcamentos.isEmpty
-              ? const Center(
-                  child: Text(
-                    'Nenhum orçamento definido.\nToque em + para adicionar.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: orcamentos.length,
-                  itemBuilder: (context, index) {
-                    final orc = orcamentos[index];
+          Builder(
+            builder: (context) {
+              final categorias = _categoriasBox.values.toList();
+              return ListView(
+                padding: const EdgeInsets.all(12),
+                children: [
+                  if (categorias.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'CATEGORIAS PERSONALIZADAS',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    ...categorias.asMap().entries.map((entry) {
+                      final cat = entry.value;
+                      return Dismissible(
+                        key: Key('cat_\${cat.id}'),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          color: Colors.red,
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (_) => showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Excluir Categoria'),
+                            content: Text(
+                              'Excluir a categoria "\${cat.nome}"? O orçamento vinculado também será removido.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancelar'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Excluir'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        onDismissed: (_) async {
+                          final orcIdx = _orcamentosBox.values
+                              .toList()
+                              .indexWhere((o) => o.categoria == cat.nome);
+                          if (orcIdx >= 0) {
+                            await _orcamentosBox.deleteAt(orcIdx);
+                          }
+                          await _categoriasBox.deleteAt(entry.key);
+                          setState(() {});
+                        },
+                        child: Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              child: Icon(
+                                cat.icone,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            title: Text(
+                              cat.nome,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: cat.limiteMensal > 0
+                                ? Text(
+                                    'Limite: ${_formatarValor(cat.limiteMensal)}',
+                                  )
+                                : const Text('Sem limite definido'),
+                          ),
+                        ),
+                      );
+                    }),
+                    const Divider(height: 24),
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'ORÇAMENTOS',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (orcamentos.isEmpty && categorias.isEmpty)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 60),
+                        child: Text(
+                          'Nenhum orçamento definido.\nToque em + para adicionar.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  ...orcamentos.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final orc = entry.value;
                     return Dismissible(
                       key: Key(orc.id),
                       direction: DismissDirection.endToStart,
@@ -966,22 +1311,46 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         ),
                       ),
                     );
-                  },
-                ),
+                  }),
+                ],
+              );
+            },
+          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          if (_tabController.index == 0) {
-            _adicionarOuEditarFormaPagamento();
-          } else if (_tabController.index == 1) {
-            _adicionarOuEditarPessoa();
-          } else {
-            _adicionarOuEditarOrcamento();
-          }
-        },
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _tabController.index == 2
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'nova_categoria',
+                  onPressed: _adicionarNovaCategoria,
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('Nova Categoria'),
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                  foregroundColor: Colors.white,
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton.extended(
+                  heroTag: 'novo_orcamento',
+                  onPressed: _adicionarOuEditarOrcamento,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Novo Orçamento'),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ],
+            )
+          : FloatingActionButton(
+              onPressed: () {
+                if (_tabController.index == 0) {
+                  _adicionarOuEditarFormaPagamento();
+                } else {
+                  _adicionarOuEditarPessoa();
+                }
+              },
+              child: const Icon(Icons.add),
+            ),
     );
   }
 }

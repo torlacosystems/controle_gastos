@@ -1,15 +1,9 @@
-Com base no que foi construído até agora, as próximas evoluções naturais seriam:
-Funcionalidades pendentes/melhorias:
-
-Backup e restore dos dados (exportar/importar o banco Hive)
-
-Melhorias de UX:
-
-Dark mode
 Onboarding (tela de boas-vindas na primeira abertura)
 Ícone e nome do app personalizados no AndroidManifest
+ao mudar o tema do celular, atualizar em tempo real no app
 
-Estabilidade:
+categorias na tela de cadastro inicial não está aparecendo para incluir uma nova, escolher icone e inserir limite mensal
 
-Revisar e testar todos os fluxos
-Garantir que edição e exclusão de parcelas funcionam corretamente
+analise de dados na tela insight
+
+
