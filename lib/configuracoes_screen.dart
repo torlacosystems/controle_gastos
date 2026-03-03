@@ -769,7 +769,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Configurações'),
+        title: const Text('Cadastro Inicial'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         bottom: TabBar(

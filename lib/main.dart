@@ -6,6 +6,7 @@ import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
 import 'configuracoes_screen.dart';
+import 'configuracoes_sistema_screen.dart';
 import 'todos_registros_screen.dart';
 import 'splash_screen.dart';
 import 'relatorios_screen.dart';
@@ -14,6 +15,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'backup_screen.dart';
 import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
+import 'app_settings.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,25 +38,37 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Controle de Gastos',
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('pt', 'BR')],
-      locale: const Locale('pt', 'BR'),
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      home: const SplashScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, themeMode, _) {
+        return MaterialApp(
+          title: 'Controle de Gastos',
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('pt', 'BR')],
+          locale: const Locale('pt', 'BR'),
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.blue,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+          ),
+          themeMode: themeMode,
+          home: const SplashScreen(),
+        );
+      },
     );
   }
 }
-
 // ── HOME ──────────────────────────────────────────────────────────────────────
 
 class HomeScreen extends StatefulWidget {
@@ -224,6 +238,14 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
+  void _abrirConfiguracoesSistema() async {
+    await Navigator.push(
+      context,
+      FadeRoute(page: const ConfiguracoesSistemaScreen()),
+    );
+    setState(() {});
+  }
+
   void _abrirTodosRegistros() async {
     await Navigator.push(
       context,
@@ -314,14 +336,21 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.white),
+            tooltip: 'Configurações',
+            onPressed: _abrirConfiguracoesSistema,
+          ),
+        ],
       ),
       bottomNavigationBar: BottomAppBar(
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _botaoNavegacao(
-              Icons.settings,
-              'Configurações',
+              Icons.tune,
+              'Cadastro Inicial',
               _abrirConfiguracoes,
             ),
             _botaoNavegacao(
