@@ -5,6 +5,7 @@ import 'receita.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
+import 'categoria.dart';
 import 'configuracoes_screen.dart';
 import 'configuracoes_sistema_screen.dart';
 import 'todos_registros_screen.dart';
@@ -25,11 +26,21 @@ void main() async {
   Hive.registerAdapter(FormaPagamentoAdapter());
   Hive.registerAdapter(PessoaAdapter());
   Hive.registerAdapter(OrcamentoAdapter());
+  Hive.registerAdapter(CategoriaAdapter());
   await Hive.openBox<Gasto>('gastos');
   await Hive.openBox<Receita>('receitas');
   await Hive.openBox<FormaPagamento>('formas_pagamento');
   await Hive.openBox<Pessoa>('pessoas');
   await Hive.openBox<Orcamento>('orcamentos');
+  try {
+    await Hive.openBox<Categoria>('categorias');
+  } catch (e) {
+    await Hive.deleteBoxFromDisk('categorias');
+    await Hive.openBox<Categoria>('categorias');
+  }
+  final brightness =
+      WidgetsBinding.instance.platformDispatcher.platformBrightness;
+  await carregarTema(brightness);
   runApp(const MyApp());
 }
 
@@ -84,6 +95,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
 
+  final TextEditingController _buscaHomeController = TextEditingController();
+
   final List<String> _nomesMeses = [
     'Janeiro',
     'Fevereiro',
@@ -106,6 +119,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _receitasBox = Hive.box<Receita>('receitas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+  }
+
+  @override
+  void dispose() {
+    _buscaHomeController.dispose();
+    super.dispose();
   }
 
   double get _totalGastosMes {
@@ -246,11 +265,12 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
-  void _abrirTodosRegistros() async {
+  void _abrirTodosRegistros({String termoBusca = ''}) async {
     await Navigator.push(
       context,
-      FadeRoute(page: const TodosRegistrosScreen()),
+      FadeRoute(page: TodosRegistrosScreen(termoBuscaInicial: termoBusca)),
     );
+    _buscaHomeController.clear();
     setState(() {});
   }
 
@@ -363,7 +383,11 @@ class _HomeScreenState extends State<HomeScreen> {
               'Nova Receita',
               () => _abrirAdicionarReceita(),
             ),
-            _botaoNavegacao(Icons.list_alt, 'Registros', _abrirTodosRegistros),
+            _botaoNavegacao(
+              Icons.list_alt,
+              'Registros',
+              () => _abrirTodosRegistros(),
+            ),
             _botaoNavegacao(Icons.bar_chart, 'Relatórios', _abrirRelatorios),
             _botaoNavegacao(Icons.lightbulb, 'Insights', _abrirInsights),
             _botaoNavegacao(Icons.backup, 'Backup', _abrirBackup),
@@ -433,6 +457,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: TextField(
+              controller: _buscaHomeController,
+              decoration: InputDecoration(
+                hintText: 'Buscar registros...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _buscaHomeController,
+                  builder: (_, value, __) => value.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => _buscaHomeController.clear(),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                filled: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              onSubmitted: (termo) {
+                if (termo.isNotEmpty) _abrirTodosRegistros(termoBusca: termo);
+              },
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -445,7 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 TextButton(
-                  onPressed: _abrirTodosRegistros,
+                  onPressed: () => _abrirTodosRegistros(),
                   child: const Text('Ver todos'),
                 ),
               ],
@@ -635,8 +687,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
   late Box<Gasto> _gastosBox;
+  late Box<Categoria> _categoriasBox;
 
-  final List<Map<String, dynamic>> _categorias = [
+  static const List<Map<String, dynamic>> _categoriasFixas = [
     {'nome': 'Alimentação', 'icone': Icons.restaurant},
     {'nome': 'Mercado', 'icone': Icons.shopping_cart},
     {'nome': 'Transporte', 'icone': Icons.directions_car},
@@ -647,12 +700,20 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     {'nome': 'Outros', 'icone': Icons.category},
   ];
 
+  List<Map<String, dynamic>> get _categorias {
+    final custom = _categoriasBox.values
+        .map((c) => {'nome': c.nome, 'icone': c.icone})
+        .toList();
+    return [..._categoriasFixas, ...custom];
+  }
+
   @override
   void initState() {
     super.initState();
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _gastosBox = Hive.box<Gasto>('gastos');
+    _categoriasBox = Hive.box<Categoria>('categorias');
 
     final g = widget.gasto;
     _valorController = TextEditingController(

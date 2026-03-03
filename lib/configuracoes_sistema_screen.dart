@@ -73,15 +73,21 @@ class _ConfiguracoesSistemaScreenState
           ValueListenableBuilder<ThemeMode>(
             valueListenable: themeModeNotifier,
             builder: (context, themeMode, _) {
+              final brightnessAtual = MediaQuery.platformBrightnessOf(context);
+              final isDark =
+                  themeMode == ThemeMode.dark ||
+                  (themeMode == ThemeMode.system &&
+                      brightnessAtual == Brightness.dark);
               return SwitchListTile(
                 secondary: const Icon(Icons.dark_mode),
                 title: const Text('Modo escuro'),
                 subtitle: const Text('Ativar tema dark no app'),
-                value: themeMode == ThemeMode.dark,
+                value: isDark,
                 onChanged: (v) {
                   themeModeNotifier.value = v
                       ? ThemeMode.dark
                       : ThemeMode.light;
+                  salvarTema(v, brightnessAtual);
                 },
               );
             },

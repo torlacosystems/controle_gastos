@@ -2,6 +2,10 @@
 
 part of 'gasto.dart';
 
+// **************************************************************************
+// TypeAdapterGenerator
+// **************************************************************************
+
 class GastoAdapter extends TypeAdapter<Gasto> {
   @override
   final int typeId = 0;
@@ -26,8 +30,8 @@ class GastoAdapter extends TypeAdapter<Gasto> {
       estabelecimento: fields[10] as String,
       recorrente: fields[11] as bool,
       gastoEsperado: fields[12] as bool,
-      grupoId: fields[13] as String? ?? '',
-      numeroParcela: fields[14] as int? ?? 0,
+      grupoId: fields[13] as String,
+      numeroParcela: fields[14] as int,
     );
   }
 

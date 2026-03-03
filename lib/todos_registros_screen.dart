@@ -9,9 +9,12 @@ import 'receita.dart';
 import 'main.dart';
 import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
+import 'categoria.dart';
 
 class TodosRegistrosScreen extends StatefulWidget {
-  const TodosRegistrosScreen({super.key});
+  final String termoBuscaInicial;
+
+  const TodosRegistrosScreen({super.key, this.termoBuscaInicial = ''});
 
   @override
   State<TodosRegistrosScreen> createState() => _TodosRegistrosScreenState();
@@ -20,6 +23,7 @@ class TodosRegistrosScreen extends StatefulWidget {
 class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
+  late Box<Categoria> _categoriasBox;
 
   final Set<String> _selecionados = {};
   bool _modoSelecao = false;
@@ -51,6 +55,12 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+    _categoriasBox = Hive.box<Categoria>('categorias');
+    if (widget.termoBuscaInicial.isNotEmpty) {
+      _termoBusca = widget.termoBuscaInicial;
+      _modoBusca = true;
+      _buscaController.text = widget.termoBuscaInicial;
+    }
   }
 
   @override
@@ -92,7 +102,12 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       case 'Mercado':
         return Icons.shopping_cart;
       default:
-        return Icons.category;
+        // Busca em categorias personalizadas
+        final custom = _categoriasBox.values.cast<Categoria?>().firstWhere(
+          (c) => c?.nome == categoria,
+          orElse: () => null,
+        );
+        return custom?.icone ?? Icons.category;
     }
   }
 
