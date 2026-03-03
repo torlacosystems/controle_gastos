@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'main.dart';
+import 'fade_route.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -23,10 +24,7 @@ class _SplashScreenState extends State<SplashScreen> {
       await Future.delayed(const Duration(milliseconds: 100));
       setState(() => _progresso = i / etapas);
     }
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-    );
+    Navigator.pushReplacement(context, FadeRoute(page: const HomeScreen()));
   }
 
   @override

@@ -8,6 +8,7 @@ import 'gasto.dart';
 import 'receita.dart';
 import 'main.dart';
 import 'atualizar_parcelas_result.dart';
+import 'fade_route.dart';
 
 class TodosRegistrosScreen extends StatefulWidget {
   const TodosRegistrosScreen({super.key});
@@ -369,15 +370,11 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     setState(() {});
   }
 
-  // ── Editar gasto — trata Gasto simples e AtualizarParcelasResult ──────────
   Future<void> _editarGasto(Map<String, dynamic> item) async {
     final boxIndex = item['index'] as int;
     final resultado = await Navigator.push<dynamic>(
       context,
-      MaterialPageRoute(
-        builder: (context) =>
-            AdicionarGastoScreen(gasto: item['item'] as Gasto),
-      ),
+      FadeRoute(page: AdicionarGastoScreen(gasto: item['item'] as Gasto)),
     );
 
     if (resultado == null) return;
@@ -390,7 +387,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         await _gastosBox.putAt(entry.key, entry.value);
       }
     } else if (resultado is List<Gasto>) {
-      // novo parcelamento criado a partir desta tela (não deve ocorrer na edição, mas por segurança)
       for (final parcela in resultado) {
         await _gastosBox.add(parcela);
       }
@@ -599,7 +595,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       ),
       body: Column(
         children: [
-          // FILTRO DE TIPO
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey[100],
@@ -614,7 +609,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             ),
           ),
 
-          // BANNER BUSCA ATIVA
           if (_termoBusca.isNotEmpty)
             Container(
               width: double.infinity,
@@ -646,7 +640,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
               ),
             ),
 
-          // BARRA FILTRO MÊS ATIVO
           if (filtroMesAtivo)
             Container(
               width: double.infinity,
@@ -676,7 +669,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
               ),
             ),
 
-          // LISTA
           Expanded(
             child: itens.isEmpty
                 ? Center(
@@ -791,13 +783,11 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                                           final resultado =
                                               await Navigator.push<Receita>(
                                                 context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      AdicionarReceitaScreen(
-                                                        receita:
-                                                            item['item']
-                                                                as Receita,
-                                                      ),
+                                                FadeRoute(
+                                                  page: AdicionarReceitaScreen(
+                                                    receita:
+                                                        item['item'] as Receita,
+                                                  ),
                                                 ),
                                               );
                                           if (resultado != null) {

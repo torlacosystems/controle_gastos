@@ -13,6 +13,7 @@ import 'insights_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'backup_screen.dart';
 import 'atualizar_parcelas_result.dart';
+import 'fade_route.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -163,9 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final resultado = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => AdicionarGastoScreen(gasto: gasto),
-      ),
+      FadeRoute(page: AdicionarGastoScreen(gasto: gasto)),
     );
     if (resultado != null) {
       if (resultado is List<Gasto>) {
@@ -179,9 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await _gastosBox.add(resultado);
         }
       } else if (resultado is AtualizarParcelasResult) {
-        // Atualiza esta parcela
         await _gastosBox.putAt(index!, resultado.gastoAtual);
-        // Atualiza as próximas parcelas do mesmo grupo
         for (final entry in resultado.proximas) {
           await _gastosBox.putAt(entry.key, entry.value);
         }
@@ -204,9 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final resultado = await Navigator.push<dynamic>(
       context,
-      MaterialPageRoute(
-        builder: (context) => AdicionarReceitaScreen(receita: receita),
-      ),
+      FadeRoute(page: AdicionarReceitaScreen(receita: receita)),
     );
     if (resultado != null) {
       if (resultado is List<Receita>) {
@@ -225,40 +220,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _abrirConfiguracoes() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ConfiguracoesScreen()),
-    );
+    await Navigator.push(context, FadeRoute(page: const ConfiguracoesScreen()));
     setState(() {});
   }
 
   void _abrirTodosRegistros() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const TodosRegistrosScreen()),
+      FadeRoute(page: const TodosRegistrosScreen()),
     );
     setState(() {});
   }
 
   void _abrirRelatorios() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const RelatoriosScreen()),
-    );
+    await Navigator.push(context, FadeRoute(page: const RelatoriosScreen()));
   }
 
   void _abrirInsights() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const InsightsScreen()),
-    );
+    await Navigator.push(context, FadeRoute(page: const InsightsScreen()));
   }
 
   void _abrirBackup() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const BackupScreen()),
-    );
+    await Navigator.push(context, FadeRoute(page: const BackupScreen()));
     setState(() {});
   }
 
@@ -716,8 +699,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     if (picked != null) setState(() => _dataSelecionada = picked);
   }
 
-  // Busca todas as parcelas do mesmo grupo com numeroParcela >= parcelaAtual
-  // retorna lista de MapEntry<boxIndex, Gasto>
   List<MapEntry<int, Gasto>> _buscarProximasParcelas(
     String grupoId,
     int parcelaAtual,
@@ -752,7 +733,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
     final isEdicao = widget.gasto != null;
 
-    // ── Criação de parcelamento novo ──────────────────────────────────────
     if (_parcelado && !isEdicao) {
       final grupoId = DateTime.now().millisecondsSinceEpoch.toString();
       final valorParcela = valor / _numeroParcelas;
@@ -789,7 +769,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       return;
     }
 
-    // ── Edição de parcela existente ───────────────────────────────────────
     if (isEdicao &&
         widget.gasto!.parcelado &&
         widget.gasto!.grupoId.isNotEmpty) {
@@ -799,10 +778,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         gastoOriginal.numeroParcela,
       );
 
-      // Monta o gasto atualizado desta parcela
       final gastoAtualizado = Gasto(
         id: gastoOriginal.id,
-        descricao: gastoOriginal.descricao, // mantém label (X/N)
+        descricao: gastoOriginal.descricao,
         valor: valor,
         categoria: _categoriaSelecionada,
         data: _dataSelecionada,
@@ -818,7 +796,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         numeroParcela: gastoOriginal.numeroParcela,
       );
 
-      // Se há parcelas posteriores, pergunta se atualiza só esta ou as próximas
       if (proximasParcelas.isNotEmpty) {
         final escolha = await showDialog<String>(
           context: context,
@@ -841,10 +818,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
           ),
         );
 
-        if (escolha == null) return; // cancelou
+        if (escolha == null) return;
 
         if (escolha == 'estaEProximas') {
-          // Atualiza cada parcela seguinte mantendo sua data original
           final List<MapEntry<int, Gasto>> proximasAtualizadas = [];
           for (final entry in proximasParcelas) {
             final p = entry.value;
@@ -856,7 +832,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   descricao: p.descricao,
                   valor: valor,
                   categoria: _categoriaSelecionada,
-                  data: p.data, // mantém a data original de cada parcela
+                  data: p.data,
                   formaPagamento: _formaPagamentoSelecionada!.descricao,
                   pessoa: _pessoaSelecionada!.nome,
                   tipoGasto: _tipoGasto,
@@ -884,14 +860,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         }
       }
 
-      // Só esta parcela
       _mostrarSnackbarSucesso('Gasto atualizado com sucesso!');
       await Future.delayed(const Duration(milliseconds: 300));
       Navigator.pop(context, gastoAtualizado);
       return;
     }
 
-    // ── Gasto simples (não parcelado) ─────────────────────────────────────
     final novoGasto = Gasto(
       id: widget.gasto?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       descricao: _descricaoController.text,
@@ -1066,7 +1040,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     final podeSalvar =
         _formaPagamentoSelecionada != null && _pessoaSelecionada != null;
 
-    // Se é edição de parcela, desabilita o switch de parcelado
     final isEdicaoParcela = widget.gasto != null && widget.gasto!.parcelado;
 
     return Scaffold(
@@ -1296,7 +1269,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Parcelado — desabilitado na edição de parcela
               if (!isEdicaoParcela) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1358,7 +1330,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 const SizedBox(height: 24),
               ],
 
-              // Badge informativo quando é edição de parcela
               if (isEdicaoParcela) ...[
                 Container(
                   margin: const EdgeInsets.only(bottom: 24),
