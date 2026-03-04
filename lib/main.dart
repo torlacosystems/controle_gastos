@@ -524,6 +524,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   )
                 : ListView.builder(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).padding.bottom,
+                    ),
                     itemCount: itens.length,
                     itemBuilder: (context, index) {
                       final item = itens[index];
@@ -741,21 +744,29 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _estabelecimentoController = TextEditingController(
       text: g?.estabelecimento ?? '',
     );
+    _categoriaSelecionada = g?.categoria ?? 'Alimentação';
+    // Detecta categoria inválida (excluída)
     if (g != null) {
+      final categoriasFixas = [
+        'Alimentação',
+        'Mercado',
+        'Transporte',
+        'Saúde',
+        'Lazer',
+        'Moradia',
+        'Educação',
+        'Outros',
+      ];
       final categoriaInvalida =
-          g.categoria == 'Sem Categoria' ||
-          (!_categoriasFixas.any((c) => c['nome'] == g.categoria) &&
-              !Hive.box<Categoria>(
-                'categorias',
-              ).values.any((c) => c.nome == g.categoria));
+          _categoriaSelecionada == 'Sem Categoria' ||
+          (!categoriasFixas.any((c) => c == _categoriaSelecionada) &&
+              !_categoriasBox.values.any(
+                (c) => c.nome == _categoriaSelecionada,
+              ));
       if (categoriaInvalida) {
         _categoriaSelecionada = '';
         _categoriaOrfa = true;
-      } else {
-        _categoriaSelecionada = g.categoria;
       }
-    } else {
-      _categoriaSelecionada = 'Alimentação';
     }
     _dataSelecionada = g?.data ?? DateTime.now();
     _tipoGasto = g?.tipoGasto ?? 'Variável';
@@ -1188,7 +1199,10 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1222,20 +1236,20 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              if (_categoriaOrfa && _categoriaSelecionada.isEmpty)
+              if (_categoriaOrfa)
                 _avisoOrfao(
-                  'A categoria deste gasto é inválida. Selecione uma nova categoria.',
+                  'A categoria deste gasto foi excluída. Selecione uma nova categoria.',
                 ),
               Container(
-                padding: _categoriaOrfa && _categoriaSelecionada.isEmpty
-                    ? const EdgeInsets.all(8)
-                    : EdgeInsets.zero,
-                decoration: _categoriaOrfa && _categoriaSelecionada.isEmpty
+                decoration: _categoriaOrfa
                     ? BoxDecoration(
                         border: Border.all(color: Colors.orange, width: 1.5),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       )
                     : null,
+                padding: _categoriaOrfa
+                    ? const EdgeInsets.all(8)
+                    : EdgeInsets.zero,
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -1923,7 +1937,10 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

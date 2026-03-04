@@ -297,7 +297,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -319,53 +322,22 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               DropdownButtonFormField<String>(
                 value: categoriaSelecionada,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: () {
-                  final nomesPersonalizados = _categoriasBox.values
-                      .map((c) => c.nome)
-                      .toSet();
-                  final fixas = _categoriasGasto
-                      .where(
-                        (cat) => !nomesPersonalizados.contains(
-                          cat['nome'] as String,
+                items: _categoriasGasto.map((cat) {
+                  return DropdownMenuItem<String>(
+                    value: cat['nome'] as String,
+                    child: Row(
+                      children: [
+                        Icon(
+                          cat['icone'] as IconData,
+                          size: 18,
+                          color: Colors.grey[700],
                         ),
-                      )
-                      .map(
-                        (cat) => DropdownMenuItem<String>(
-                          value: cat['nome'] as String,
-                          child: Row(
-                            children: [
-                              Icon(
-                                cat['icone'] as IconData,
-                                size: 18,
-                                color: Colors.grey[700],
-                              ),
-                              const SizedBox(width: 8),
-                              Text(cat['nome'] as String),
-                            ],
-                          ),
-                        ),
-                      )
-                      .toList();
-                  final personalizadas = _categoriasBox.values
-                      .map(
-                        (cat) => DropdownMenuItem<String>(
-                          value: cat.nome,
-                          child: Row(
-                            children: [
-                              Icon(
-                                cat.icone,
-                                size: 18,
-                                color: Colors.grey[700],
-                              ),
-                              const SizedBox(width: 8),
-                              Text(cat.nome),
-                            ],
-                          ),
-                        ),
-                      )
-                      .toList();
-                  return [...fixas, ...personalizadas];
-                }(),
+                        const SizedBox(width: 8),
+                        Text(cat['nome'] as String),
+                      ],
+                    ),
+                  );
+                }).toList(),
                 onChanged: (v) =>
                     setModalState(() => categoriaSelecionada = v!),
               ),
@@ -495,7 +467,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -675,7 +650,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -802,18 +780,15 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   // ── Editar limite de categoria fixa ──────────────────────────────────────
 
   void _editarLimiteCategoriaFixa(String nomeCategoria, IconData icone) {
-    // Busca orçamento existente para esta categoria fixa
     final orcIdx = _orcamentosBox.values.toList().indexWhere(
       (o) => o.categoria == nomeCategoria,
     );
     final orcExistente = orcIdx >= 0 ? _orcamentosBox.getAt(orcIdx) : null;
-
     final limiteController = TextEditingController(
       text: orcExistente != null
           ? orcExistente.limite.toStringAsFixed(2).replaceAll('.', ',')
           : '',
     );
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -825,7 +800,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           left: 24,
           right: 24,
           top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          bottom:
+              MediaQuery.of(context).viewInsets.bottom +
+              MediaQuery.of(context).padding.bottom +
+              24,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -931,7 +909,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     final gastosVinculados = _gastosBox.values
         .where((g) => g.categoria == cat.nome)
         .length;
-
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -954,16 +931,14 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
         ],
       ),
     );
-
     if (confirmar != true) return false;
-
     if (gastosVinculados > 0) {
       final excluirRegistros = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Excluir registros vinculados?'),
           content: Text(
-            'Deseja também excluir os $gastosVinculados gasto(s) cadastrado(s) na categoria "${cat.nome}"?\n\nSe não excluir, você poderá migrar os registros para outra categoria.',
+            'Deseja também excluir os $gastosVinculados gasto(s) cadastrado(s) na categoria "${cat.nome}"?\n\nSe não excluir, os registros ficarão como "Sem Categoria".',
           ),
           actions: [
             TextButton(
@@ -978,18 +953,13 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           ],
         ),
       );
-
       if (excluirRegistros == true) {
-        // Excluir todos os gastos vinculados
-        final keysParaExcluir = _gastosBox.keys.where((k) {
+        final keys = _gastosBox.keys.where((k) {
           final g = _gastosBox.get(k);
           return g != null && g.categoria == cat.nome;
         }).toList();
-        for (final k in keysParaExcluir) {
-          await _gastosBox.delete(k);
-        }
+        for (final k in keys) await _gastosBox.delete(k);
       } else {
-        // Manter registros: marcar como "Sem Categoria" para o usuário corrigir ao abrir
         final keys = _gastosBox.keys.where((k) {
           final g = _gastosBox.get(k);
           return g != null && g.categoria == cat.nome;
@@ -1019,14 +989,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
         }
       }
     }
-
-    // Remove orçamento vinculado
     final orcIdx = _orcamentosBox.values.toList().indexWhere(
       (o) => o.categoria == cat.nome,
     );
     if (orcIdx >= 0) await _orcamentosBox.deleteAt(orcIdx);
-
-    // Remove a categoria
     await _categoriasBox.deleteAt(index);
     setState(() {});
     return false;
@@ -1038,7 +1004,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           ? cat.limiteMensal.toStringAsFixed(2).replaceAll('.', ',')
           : '',
     );
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1050,7 +1015,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           left: 24,
           right: 24,
           top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          bottom:
+              MediaQuery.of(context).viewInsets.bottom +
+              MediaQuery.of(context).padding.bottom +
+              24,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1113,7 +1081,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     limiteMensal: limite,
                   );
                   await _categoriasBox.putAt(index, categoriaAtualizada);
-                  // Atualiza ou cria orçamento vinculado
                   final orcIdx = _orcamentosBox.values.toList().indexWhere(
                     (o) => o.categoria == cat.nome,
                   );
@@ -1202,7 +1169,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -1423,6 +1393,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   ),
                 )
               : ListView.builder(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).padding.bottom,
+                  ),
                   itemCount: formas.length,
                   itemBuilder: (context, index) {
                     final forma = formas[index];
@@ -1482,6 +1455,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   ),
                 )
               : ListView.builder(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).padding.bottom,
+                  ),
                   itemCount: pessoas.length,
                   itemBuilder: (context, index) {
                     final pessoa = pessoas[index];
@@ -1535,22 +1511,16 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           Builder(
             builder: (context) {
               final categoriasPersonalizadas = _categoriasBox.values.toList();
-
-              // Monta mapa de limite por categoria
               final limitePorCategoria = <String, double>{};
               for (final orc in _orcamentosBox.values) {
                 limitePorCategoria[orc.categoria] = orc.limite;
               }
-
-              // Fixas: "Outros" por último
               final fixasSemOutros = _categoriasGasto
                   .where((c) => c['nome'] != 'Outros')
                   .toList();
               final outros = _categoriasGasto
                   .where((c) => c['nome'] == 'Outros')
                   .toList();
-
-              // Todas as categorias na ordem certa: fixas (sem Outros) + personalizadas + Outros
               final todasCategorias = [
                 ...fixasSemOutros.map(
                   (cat) => _CategoriaItem(
@@ -1587,7 +1557,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     (item.catObj != null && item.catObj!.limiteMensal > 0
                         ? item.catObj!.limiteMensal
                         : null);
-
                 final card = Card(
                   margin: const EdgeInsets.all(4),
                   shape: RoundedRectangleBorder(
@@ -1648,10 +1617,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     ),
                   ),
                 );
-
                 if (item.isPersonalizada) {
                   return Dismissible(
-                    key: Key('cat_${item.catObj!.id}'),
+                    key: Key('cat_\${item.catObj!.id}'),
                     direction: DismissDirection.endToStart,
                     background: Container(
                       alignment: Alignment.centerRight,
@@ -1678,7 +1646,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                 return card;
               }
 
-              // Agrupa em pares para GridView manual com 2 colunas
               final rows = <Widget>[];
               for (int i = 0; i < todasCategorias.length; i += 2) {
                 final left = todasCategorias[i];
@@ -1696,8 +1663,15 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   ),
                 );
               }
-
-              return ListView(padding: const EdgeInsets.all(8), children: rows);
+              return ListView(
+                padding: EdgeInsets.only(
+                  left: 8,
+                  right: 8,
+                  top: 8,
+                  bottom: MediaQuery.of(context).padding.bottom + 80,
+                ),
+                children: rows,
+              );
             },
           ),
         ],

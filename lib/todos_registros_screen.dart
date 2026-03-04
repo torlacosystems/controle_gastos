@@ -418,7 +418,12 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -714,6 +719,9 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                     ),
                   )
                 : ListView.builder(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).padding.bottom,
+                    ),
                     itemCount: itens.length,
                     itemBuilder: (context, index) {
                       final item = itens[index];
