@@ -319,22 +319,53 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               DropdownButtonFormField<String>(
                 value: categoriaSelecionada,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: _categoriasGasto.map((cat) {
-                  return DropdownMenuItem<String>(
-                    value: cat['nome'] as String,
-                    child: Row(
-                      children: [
-                        Icon(
-                          cat['icone'] as IconData,
-                          size: 18,
-                          color: Colors.grey[700],
+                items: () {
+                  final nomesPersonalizados = _categoriasBox.values
+                      .map((c) => c.nome)
+                      .toSet();
+                  final fixas = _categoriasGasto
+                      .where(
+                        (cat) => !nomesPersonalizados.contains(
+                          cat['nome'] as String,
                         ),
-                        const SizedBox(width: 8),
-                        Text(cat['nome'] as String),
-                      ],
-                    ),
-                  );
-                }).toList(),
+                      )
+                      .map(
+                        (cat) => DropdownMenuItem<String>(
+                          value: cat['nome'] as String,
+                          child: Row(
+                            children: [
+                              Icon(
+                                cat['icone'] as IconData,
+                                size: 18,
+                                color: Colors.grey[700],
+                              ),
+                              const SizedBox(width: 8),
+                              Text(cat['nome'] as String),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList();
+                  final personalizadas = _categoriasBox.values
+                      .map(
+                        (cat) => DropdownMenuItem<String>(
+                          value: cat.nome,
+                          child: Row(
+                            children: [
+                              Icon(
+                                cat.icone,
+                                size: 18,
+                                color: Colors.grey[700],
+                              ),
+                              const SizedBox(width: 8),
+                              Text(cat.nome),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList();
+                  return [...fixas, ...personalizadas];
+                }(),
                 onChanged: (v) =>
                     setModalState(() => categoriaSelecionada = v!),
               ),
@@ -768,6 +799,363 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
+  // ── Editar limite de categoria fixa ──────────────────────────────────────
+
+  void _editarLimiteCategoriaFixa(String nomeCategoria, IconData icone) {
+    // Busca orçamento existente para esta categoria fixa
+    final orcIdx = _orcamentosBox.values.toList().indexWhere(
+      (o) => o.categoria == nomeCategoria,
+    );
+    final orcExistente = orcIdx >= 0 ? _orcamentosBox.getAt(orcIdx) : null;
+
+    final limiteController = TextEditingController(
+      text: orcExistente != null
+          ? orcExistente.limite.toStringAsFixed(2).replaceAll('.', ',')
+          : '',
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer,
+                  child: Icon(
+                    icone,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  nomeCategoria,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Limite mensal (R\$)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: limiteController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '0,00 (deixe vazio para sem limite)',
+                border: OutlineInputBorder(),
+                prefixText: 'R\$ ',
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final texto = limiteController.text
+                      .replaceAll('.', '')
+                      .replaceAll(',', '.');
+                  final limite = double.tryParse(texto) ?? 0.0;
+                  if (limite > 0) {
+                    final novoOrcamento = Orcamento(
+                      id:
+                          orcExistente?.id ??
+                          DateTime.now().millisecondsSinceEpoch.toString(),
+                      categoria: nomeCategoria,
+                      limite: limite,
+                    );
+                    if (orcIdx >= 0) {
+                      await _orcamentosBox.putAt(orcIdx, novoOrcamento);
+                    } else {
+                      await _orcamentosBox.add(novoOrcamento);
+                    }
+                  } else {
+                    if (orcIdx >= 0) await _orcamentosBox.deleteAt(orcIdx);
+                  }
+                  setState(() {});
+                  Navigator.pop(context);
+                  _mostrarSnackbarSucesso(
+                    'Limite de "$nomeCategoria" atualizado!',
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Salvar',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Exclusão de Categoria Personalizada ──────────────────────────────────
+
+  Future<bool> _confirmarExclusaoCategoria(
+    BuildContext context,
+    Categoria cat,
+    int index,
+  ) async {
+    final gastosVinculados = _gastosBox.values
+        .where((g) => g.categoria == cat.nome)
+        .length;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Categoria'),
+        content: Text(
+          gastosVinculados > 0
+              ? 'Existem $gastosVinculados gasto(s) vinculado(s) à categoria "${cat.nome}".\n\nDeseja excluir a categoria?'
+              : 'Tem certeza que deseja excluir a categoria "${cat.nome}"? O orçamento vinculado também será removido.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return false;
+
+    if (gastosVinculados > 0) {
+      final excluirRegistros = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir registros vinculados?'),
+          content: Text(
+            'Deseja também excluir os $gastosVinculados gasto(s) cadastrado(s) na categoria "${cat.nome}"?\n\nSe não excluir, você poderá migrar os registros para outra categoria.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Manter registros'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Excluir tudo'),
+            ),
+          ],
+        ),
+      );
+
+      if (excluirRegistros == true) {
+        // Excluir todos os gastos vinculados
+        final keysParaExcluir = _gastosBox.keys.where((k) {
+          final g = _gastosBox.get(k);
+          return g != null && g.categoria == cat.nome;
+        }).toList();
+        for (final k in keysParaExcluir) {
+          await _gastosBox.delete(k);
+        }
+      } else {
+        // Manter registros: marcar como "Sem Categoria" para o usuário corrigir ao abrir
+        final keys = _gastosBox.keys.where((k) {
+          final g = _gastosBox.get(k);
+          return g != null && g.categoria == cat.nome;
+        }).toList();
+        for (final k in keys) {
+          final g = _gastosBox.get(k)!;
+          await _gastosBox.put(
+            k,
+            Gasto(
+              id: g.id,
+              descricao: g.descricao,
+              valor: g.valor,
+              categoria: 'Sem Categoria',
+              data: g.data,
+              formaPagamento: g.formaPagamento,
+              pessoa: g.pessoa,
+              tipoGasto: g.tipoGasto,
+              parcelado: g.parcelado,
+              numeroParcelas: g.numeroParcelas,
+              estabelecimento: g.estabelecimento,
+              recorrente: g.recorrente,
+              gastoEsperado: g.gastoEsperado,
+              grupoId: g.grupoId,
+              numeroParcela: g.numeroParcela,
+            ),
+          );
+        }
+      }
+    }
+
+    // Remove orçamento vinculado
+    final orcIdx = _orcamentosBox.values.toList().indexWhere(
+      (o) => o.categoria == cat.nome,
+    );
+    if (orcIdx >= 0) await _orcamentosBox.deleteAt(orcIdx);
+
+    // Remove a categoria
+    await _categoriasBox.deleteAt(index);
+    setState(() {});
+    return false;
+  }
+
+  void _editarLimiteCategoria(Categoria cat, int index) {
+    final limiteController = TextEditingController(
+      text: cat.limiteMensal > 0
+          ? cat.limiteMensal.toStringAsFixed(2).replaceAll('.', ',')
+          : '',
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer,
+                  child: Icon(
+                    cat.icone,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  cat.nome,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Limite mensal (R\$)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: limiteController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '0,00 (deixe vazio para sem limite)',
+                border: OutlineInputBorder(),
+                prefixText: 'R\$ ',
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final texto = limiteController.text
+                      .replaceAll('.', '')
+                      .replaceAll(',', '.');
+                  final limite = double.tryParse(texto) ?? 0.0;
+                  final categoriaAtualizada = Categoria(
+                    id: cat.id,
+                    nome: cat.nome,
+                    iconeCodePoint: cat.iconeCodePoint,
+                    iconeFontFamily: cat.iconeFontFamily,
+                    limiteMensal: limite,
+                  );
+                  await _categoriasBox.putAt(index, categoriaAtualizada);
+                  // Atualiza ou cria orçamento vinculado
+                  final orcIdx = _orcamentosBox.values.toList().indexWhere(
+                    (o) => o.categoria == cat.nome,
+                  );
+                  if (limite > 0) {
+                    final novoOrcamento = Orcamento(
+                      id: cat.id,
+                      categoria: cat.nome,
+                      limite: limite,
+                    );
+                    if (orcIdx >= 0) {
+                      await _orcamentosBox.putAt(orcIdx, novoOrcamento);
+                    } else {
+                      await _orcamentosBox.add(novoOrcamento);
+                    }
+                  } else {
+                    if (orcIdx >= 0) await _orcamentosBox.deleteAt(orcIdx);
+                  }
+                  setState(() {});
+                  Navigator.pop(context);
+                  _mostrarSnackbarSucesso(
+                    'Limite de "${cat.nome}" atualizado!',
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Salvar',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Grid de ícones para categoria personalizada ───────────────────────────
 
   static const List<Map<String, dynamic>> _iconesDisponiveis = [
@@ -1146,200 +1534,182 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           // ── ABA ORÇAMENTOS ─────────────────────────────────────────────
           Builder(
             builder: (context) {
-              final categorias = _categoriasBox.values.toList();
-              return ListView(
-                padding: const EdgeInsets.all(12),
-                children: [
-                  if (categorias.isNotEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        'CATEGORIAS PERSONALIZADAS',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey,
-                          letterSpacing: 0.8,
-                        ),
+              final categoriasPersonalizadas = _categoriasBox.values.toList();
+
+              // Monta mapa de limite por categoria
+              final limitePorCategoria = <String, double>{};
+              for (final orc in _orcamentosBox.values) {
+                limitePorCategoria[orc.categoria] = orc.limite;
+              }
+
+              // Fixas: "Outros" por último
+              final fixasSemOutros = _categoriasGasto
+                  .where((c) => c['nome'] != 'Outros')
+                  .toList();
+              final outros = _categoriasGasto
+                  .where((c) => c['nome'] == 'Outros')
+                  .toList();
+
+              // Todas as categorias na ordem certa: fixas (sem Outros) + personalizadas + Outros
+              final todasCategorias = [
+                ...fixasSemOutros.map(
+                  (cat) => _CategoriaItem(
+                    nome: cat['nome'] as String,
+                    icone: cat['icone'] as IconData,
+                    isPersonalizada: false,
+                    catObj: null,
+                    catIndex: -1,
+                  ),
+                ),
+                ...categoriasPersonalizadas.asMap().entries.map(
+                  (e) => _CategoriaItem(
+                    nome: e.value.nome,
+                    icone: e.value.icone,
+                    isPersonalizada: true,
+                    catObj: e.value,
+                    catIndex: e.key,
+                  ),
+                ),
+                ...outros.map(
+                  (cat) => _CategoriaItem(
+                    nome: cat['nome'] as String,
+                    icone: cat['icone'] as IconData,
+                    isPersonalizada: false,
+                    catObj: null,
+                    catIndex: -1,
+                  ),
+                ),
+              ];
+
+              Widget buildCard(_CategoriaItem item) {
+                final limite =
+                    limitePorCategoria[item.nome] ??
+                    (item.catObj != null && item.catObj!.limiteMensal > 0
+                        ? item.catObj!.limiteMensal
+                        : null);
+
+                final card = Card(
+                  margin: const EdgeInsets.all(4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => item.isPersonalizada
+                        ? _editarLimiteCategoria(item.catObj!, item.catIndex)
+                        : _editarLimiteCategoriaFixa(item.nome, item.icone),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
                       ),
-                    ),
-                    ...categorias.asMap().entries.map((entry) {
-                      final cat = entry.value;
-                      return Dismissible(
-                        key: Key('cat_\${cat.id}'),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          color: Colors.red,
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        confirmDismiss: (_) => showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Excluir Categoria'),
-                            content: Text(
-                              'Excluir a categoria "\${cat.nome}"? O orçamento vinculado também será removido.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Cancelar'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                ),
-                                child: const Text('Excluir'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        onDismissed: (_) async {
-                          final orcIdx = _orcamentosBox.values
-                              .toList()
-                              .indexWhere((o) => o.categoria == cat.nome);
-                          if (orcIdx >= 0) {
-                            await _orcamentosBox.deleteAt(orcIdx);
-                          }
-                          await _categoriasBox.deleteAt(entry.key);
-                          setState(() {});
-                        },
-                        child: Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              child: Icon(
-                                cat.icone,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                            title: Text(
-                              cat.nome,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: cat.limiteMensal > 0
-                                ? Text(
-                                    'Limite: ${_formatarValor(cat.limiteMensal)}',
-                                  )
-                                : const Text('Sem limite definido'),
-                          ),
-                        ),
-                      );
-                    }),
-                    const Divider(height: 24),
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        'ORÇAMENTOS',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (orcamentos.isEmpty && categorias.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 60),
-                        child: Text(
-                          'Nenhum orçamento definido.\nToque em + para adicionar.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey, fontSize: 16),
-                        ),
-                      ),
-                    ),
-                  ...orcamentos.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final orc = entry.value;
-                    return Dismissible(
-                      key: Key(orc.id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        color: Colors.red,
-                        child: const Icon(Icons.delete, color: Colors.white),
-                      ),
-                      confirmDismiss: (_) =>
-                          _confirmarExclusaoOrcamento(context, orc.categoria),
-                      onDismissed: (_) async {
-                        await _orcamentosBox.deleteAt(index);
-                        setState(() {});
-                      },
-                      child: Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
                             backgroundColor: Theme.of(
                               context,
                             ).colorScheme.primaryContainer,
                             child: Icon(
-                              Icons.account_balance_wallet,
+                              item.icone,
+                              size: 18,
                               color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
-                          title: Text(
-                            orc.categoria,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            'Limite: ${_formatarValor(orc.limite)}',
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.edit, size: 18),
-                            onPressed: () => _adicionarOuEditarOrcamento(
-                              orcamento: orc,
-                              index: index,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  item.nome,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  limite != null
+                                      ? _formatarValor(limite)
+                                      : 'Sem limite',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
+                          Icon(Icons.edit, size: 14, color: Colors.grey[400]),
+                        ],
                       ),
-                    );
-                  }),
-                ],
-              );
+                    ),
+                  ),
+                );
+
+                if (item.isPersonalizada) {
+                  return Dismissible(
+                    key: Key('cat_${item.catObj!.id}'),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.delete,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    confirmDismiss: (_) => _confirmarExclusaoCategoria(
+                      context,
+                      item.catObj!,
+                      item.catIndex,
+                    ),
+                    onDismissed: (_) {},
+                    child: card,
+                  );
+                }
+                return card;
+              }
+
+              // Agrupa em pares para GridView manual com 2 colunas
+              final rows = <Widget>[];
+              for (int i = 0; i < todasCategorias.length; i += 2) {
+                final left = todasCategorias[i];
+                final right = i + 1 < todasCategorias.length
+                    ? todasCategorias[i + 1]
+                    : null;
+                rows.add(
+                  Row(
+                    children: [
+                      Expanded(child: buildCard(left)),
+                      right != null
+                          ? Expanded(child: buildCard(right))
+                          : const Expanded(child: SizedBox()),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView(padding: const EdgeInsets.all(8), children: rows);
             },
           ),
         ],
       ),
       floatingActionButton: _tabController.index == 2
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'nova_categoria',
-                  onPressed: _adicionarNovaCategoria,
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('Nova Categoria'),
-                  backgroundColor: Theme.of(context).colorScheme.secondary,
-                  foregroundColor: Colors.white,
-                ),
-                const SizedBox(height: 10),
-                FloatingActionButton.extended(
-                  heroTag: 'novo_orcamento',
-                  onPressed: _adicionarOuEditarOrcamento,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Novo Orçamento'),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
-              ],
+          ? FloatingActionButton.extended(
+              heroTag: 'nova_categoria',
+              onPressed: _adicionarNovaCategoria,
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('Nova Categoria'),
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+              foregroundColor: Colors.white,
             )
           : FloatingActionButton(
               onPressed: () {
@@ -1353,4 +1723,20 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
             ),
     );
   }
+}
+
+class _CategoriaItem {
+  final String nome;
+  final IconData icone;
+  final bool isPersonalizada;
+  final Categoria? catObj;
+  final int catIndex;
+
+  _CategoriaItem({
+    required this.nome,
+    required this.icone,
+    required this.isPersonalizada,
+    required this.catObj,
+    required this.catIndex,
+  });
 }

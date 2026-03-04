@@ -150,6 +150,17 @@ class _HomeScreenState extends State<HomeScreen> {
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
   IconData _iconeCategoria(String categoria) {
+    // Verifica primeiro nas categorias personalizadas do Hive
+    try {
+      final box = Hive.box<Categoria>('categorias');
+      final custom = box.values.firstWhere(
+        (c) => c.nome == categoria,
+        orElse: () => throw Exception(),
+      );
+      return custom.icone;
+    } catch (_) {}
+
+    // Categorias fixas
     switch (categoria) {
       case 'Alimentação':
         return Icons.restaurant;
@@ -683,6 +694,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
   bool _formaPagamentoOrfa = false;
   bool _pessoaOrfa = false;
+  bool _categoriaOrfa = false;
 
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
@@ -704,7 +716,13 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     final custom = _categoriasBox.values
         .map((c) => {'nome': c.nome, 'icone': c.icone})
         .toList();
-    return [..._categoriasFixas, ...custom];
+    final semOutros = _categoriasFixas
+        .where((c) => c['nome'] != 'Outros')
+        .toList();
+    final outros = _categoriasFixas
+        .where((c) => c['nome'] == 'Outros')
+        .toList();
+    return [...semOutros, ...custom, ...outros];
   }
 
   @override
@@ -723,7 +741,22 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _estabelecimentoController = TextEditingController(
       text: g?.estabelecimento ?? '',
     );
-    _categoriaSelecionada = g?.categoria ?? 'Alimentação';
+    if (g != null) {
+      final categoriaInvalida =
+          g.categoria == 'Sem Categoria' ||
+          (!_categoriasFixas.any((c) => c['nome'] == g.categoria) &&
+              !Hive.box<Categoria>(
+                'categorias',
+              ).values.any((c) => c.nome == g.categoria));
+      if (categoriaInvalida) {
+        _categoriaSelecionada = '';
+        _categoriaOrfa = true;
+      } else {
+        _categoriaSelecionada = g.categoria;
+      }
+    } else {
+      _categoriaSelecionada = 'Alimentação';
+    }
     _dataSelecionada = g?.data ?? DateTime.now();
     _tipoGasto = g?.tipoGasto ?? 'Variável';
     _parcelado = g?.parcelado ?? false;
@@ -818,6 +851,15 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Informe um valor válido')));
+      return;
+    }
+
+    if (_categoriaSelecionada.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione uma categoria antes de salvar'),
+        ),
+      );
       return;
     }
 
@@ -1180,46 +1222,63 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _categorias.map((cat) {
-                  final sel = cat['nome'] == _categoriaSelecionada;
-                  return GestureDetector(
-                    onTap: () =>
-                        setState(() => _categoriaSelecionada = cat['nome']),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: sel
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.grey[200],
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            cat['icone'],
-                            size: 18,
-                            color: sel ? Colors.white : Colors.grey[700],
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            cat['nome'],
-                            style: TextStyle(
+              if (_categoriaOrfa && _categoriaSelecionada.isEmpty)
+                _avisoOrfao(
+                  'A categoria deste gasto é inválida. Selecione uma nova categoria.',
+                ),
+              Container(
+                padding: _categoriaOrfa && _categoriaSelecionada.isEmpty
+                    ? const EdgeInsets.all(8)
+                    : EdgeInsets.zero,
+                decoration: _categoriaOrfa && _categoriaSelecionada.isEmpty
+                    ? BoxDecoration(
+                        border: Border.all(color: Colors.orange, width: 1.5),
+                        borderRadius: BorderRadius.circular(8),
+                      )
+                    : null,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _categorias.map((cat) {
+                    final sel = cat['nome'] == _categoriaSelecionada;
+                    return GestureDetector(
+                      onTap: () => setState(() {
+                        _categoriaSelecionada = cat['nome'];
+                        _categoriaOrfa = false;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: sel
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              cat['icone'],
+                              size: 18,
                               color: sel ? Colors.white : Colors.grey[700],
-                              fontWeight: FontWeight.w500,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Text(
+                              cat['nome'],
+                              style: TextStyle(
+                                color: sel ? Colors.white : Colors.grey[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
               const SizedBox(height: 24),
 

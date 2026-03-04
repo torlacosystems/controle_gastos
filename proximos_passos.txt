@@ -1,9 +1,11 @@
 Onboarding (tela de boas-vindas na primeira abertura)
 Ícone e nome do app personalizados no AndroidManifest
-ao mudar o tema do celular, atualizar em tempo real no app
 
-categorias na tela de cadastro inicial não está aparecendo para incluir uma nova, escolher icone e inserir limite mensal
-
-analise de dados na tela insight
-
-
+acertar tamanho dos botões em orçamentos
+implementar notificação para lembrar ao usuário
+alinhar as telas aos botões embaixo do android
+outros sempre ser o ultimo
+erro na string de exclusão de categoria nova
+erro no símbolo de pets na main
+possibilidade de editar o limite pra categoria nova
+rever comportamento ao excluir categoria nova = o que fazer com os registros
