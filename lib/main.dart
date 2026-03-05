@@ -18,6 +18,7 @@ import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
 import 'app_settings.dart';
 import 'lock_screen.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,7 +76,7 @@ class MyApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeMode,
-          home: const LockScreen(child: SplashScreen()),
+          home: const SplashScreen(),
         );
       },
     );
@@ -288,6 +289,55 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
+  Map<String, double> get _graficoData {
+    final agora = DateTime.now();
+    final mapa = <String, double>{};
+    for (final g in _gastosBox.values) {
+      if (g.data.month == agora.month && g.data.year == agora.year) {
+        mapa[g.categoria] = (mapa[g.categoria] ?? 0) + g.valor;
+      }
+    }
+    // Ordenar por valor desc, manter só top 6
+    final sorted = mapa.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return Map.fromEntries(sorted.take(6));
+  }
+
+  List<Map<String, dynamic>> get _ultimos3Gastos {
+    final agora = DateTime.now();
+    final lista = <Map<String, dynamic>>[];
+    for (int i = 0; i < _gastosBox.length; i++) {
+      final g = _gastosBox.getAt(i);
+      if (g != null &&
+          g.data.month == agora.month &&
+          g.data.year == agora.year) {
+        lista.add({'item': g, 'index': i});
+      }
+    }
+    lista.sort(
+      (a, b) => (b['item'] as Gasto).data.compareTo((a['item'] as Gasto).data),
+    );
+    return lista.take(3).toList();
+  }
+
+  List<Map<String, dynamic>> get _ultimas3Receitas {
+    final agora = DateTime.now();
+    final lista = <Map<String, dynamic>>[];
+    for (int i = 0; i < _receitasBox.length; i++) {
+      final r = _receitasBox.getAt(i);
+      if (r != null &&
+          r.data.month == agora.month &&
+          r.data.year == agora.year) {
+        lista.add({'item': r, 'index': i});
+      }
+    }
+    lista.sort(
+      (a, b) =>
+          (b['item'] as Receita).data.compareTo((a['item'] as Receita).data),
+    );
+    return lista.take(3).toList();
+  }
+
   List<Map<String, dynamic>> get _itensMisturados {
     final agora = DateTime.now();
     final List<Map<String, dynamic>> itens = [];
@@ -485,170 +535,330 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Lançamentos de ${_nomesMeses[DateTime.now().month - 1]}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => _abrirTodosRegistros(),
-                  child: const Text('Ver todos'),
-                ),
-              ],
-            ),
-          ),
           Expanded(
-            child: itens.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Nenhum lançamento este mês.\nToque em + para adicionar.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).padding.bottom + 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── GRÁFICO DE CATEGORIAS ──────────────────────────────
+                  if (_graficoData.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                      child: Text(
+                        'Gastos por Categoria',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  )
-                : ListView.builder(
-                    itemCount: itens.length,
-                    itemBuilder: (context, index) {
-                      final item = itens[index];
-                      final isGasto = item['tipo'] == 'gasto';
-                      final boxIndex = item['index'] as int;
-                      final String categoria = isGasto
-                          ? (item['item'] as Gasto).categoria
-                          : (item['item'] as Receita).categoria;
-                      final double valor = isGasto
-                          ? (item['item'] as Gasto).valor
-                          : (item['item'] as Receita).valor;
-                      final DateTime data = isGasto
-                          ? (item['item'] as Gasto).data
-                          : (item['item'] as Receita).data;
-                      final String descricao = isGasto
-                          ? (item['item'] as Gasto).descricao
-                          : (item['item'] as Receita).descricao;
+                    SizedBox(
+                      height: 200,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: PieChart(
+                              PieChartData(
+                                sections: _graficoData.entries.map((e) {
+                                  final cores = [
+                                    Colors.blue,
+                                    Colors.red,
+                                    Colors.orange,
+                                    Colors.green,
+                                    Colors.purple,
+                                    Colors.teal,
+                                    Colors.pink,
+                                  ];
+                                  final idx = _graficoData.keys
+                                      .toList()
+                                      .indexOf(e.key);
+                                  return PieChartSectionData(
+                                    value: e.value,
+                                    color: cores[idx % cores.length],
+                                    title: '',
+                                    radius: 55,
+                                  );
+                                }).toList(),
+                                centerSpaceRadius: 36,
+                                sectionsSpace: 2,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: _graficoData.entries.map((e) {
+                                  final cores = [
+                                    Colors.blue,
+                                    Colors.red,
+                                    Colors.orange,
+                                    Colors.green,
+                                    Colors.purple,
+                                    Colors.teal,
+                                    Colors.pink,
+                                  ];
+                                  final idx = _graficoData.keys
+                                      .toList()
+                                      .indexOf(e.key);
+                                  final pct = _totalGastosMes > 0
+                                      ? (e.value / _totalGastosMes * 100)
+                                            .toStringAsFixed(1)
+                                      : '0';
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 3,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: cores[idx % cores.length],
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            '${e.key} $pct%',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
-                      return Dismissible(
-                        key: Key(
-                          isGasto
-                              ? (item['item'] as Gasto).id
-                              : (item['item'] as Receita).id,
-                        ),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          color: Colors.red,
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        confirmDismiss: (direction) async {
-                          return await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text(
-                                'Excluir ${isGasto ? 'Gasto' : 'Receita'}',
-                              ),
-                              content: Text(
-                                'Tem certeza que deseja excluir este ${isGasto ? 'gasto' : 'receita'}?',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('Cancelar'),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.red,
-                                  ),
-                                  child: const Text('Excluir'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        onDismissed: (direction) async {
-                          if (isGasto) {
-                            await _gastosBox.deleteAt(boxIndex);
-                          } else {
-                            await _receitasBox.deleteAt(boxIndex);
-                          }
-                          setState(() {});
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '${isGasto ? 'Gasto' : 'Receita'} removido',
-                              ),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: isGasto ? Colors.red : Colors.green,
-                                width: 4,
-                              ),
-                            ),
-                          ),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: isGasto
-                                  ? Colors.red[50]
-                                  : Colors.green[50],
-                              child: Icon(
-                                _iconeCategoria(categoria),
-                                color: isGasto ? Colors.red : Colors.green,
-                              ),
-                            ),
-                            title: Text(
-                              categoria,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '${isGasto ? 'Gasto' : 'Receita'} • ${_formatarData(data)}${descricao.isNotEmpty ? ' • $descricao' : ''}',
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '${isGasto ? '-' : '+'} R\$ ${_formatarValor(valor)}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: isGasto ? Colors.red : Colors.green,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit, size: 18),
-                                  onPressed: () {
-                                    if (isGasto) {
-                                      _abrirAdicionarGasto(
-                                        gasto: item['item'] as Gasto,
-                                        index: boxIndex,
-                                      );
-                                    } else {
-                                      _abrirAdicionarReceita(
-                                        receita: item['item'] as Receita,
-                                        index: boxIndex,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
+                  // ── LANÇAMENTOS ───────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Lançamentos de ${_nomesMeses[DateTime.now().month - 1]}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                    },
+                        TextButton(
+                          onPressed: () => _abrirTodosRegistros(),
+                          child: const Text('Ver todos'),
+                        ),
+                      ],
+                    ),
                   ),
+                  if (_ultimos3Gastos.isEmpty && _ultimas3Receitas.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          'Nenhum lançamento este mês.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // GASTOS
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_downward,
+                                      color: Colors.red,
+                                      size: 14,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Gastos',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                ..._ultimos3Gastos.map((item) {
+                                  final g = item['item'] as Gasto;
+                                  final boxIndex = item['index'] as int;
+                                  return GestureDetector(
+                                    onTap: () => _abrirAdicionarGasto(
+                                      gasto: g,
+                                      index: boxIndex,
+                                    ),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        border: const Border(
+                                          left: BorderSide(
+                                            color: Colors.red,
+                                            width: 3,
+                                          ),
+                                        ),
+                                        color: Theme.of(context).cardColor,
+                                        borderRadius: BorderRadius.circular(6),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black12,
+                                            blurRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            g.categoria,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            'R\$ ${_formatarValor(g.valor)}',
+                                            style: const TextStyle(
+                                              color: Colors.red,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatarData(g.data),
+                                            style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // RECEITAS
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_upward,
+                                      color: Colors.green,
+                                      size: 14,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Receitas',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                ..._ultimas3Receitas.map((item) {
+                                  final r = item['item'] as Receita;
+                                  final boxIndex = item['index'] as int;
+                                  return GestureDetector(
+                                    onTap: () => _abrirAdicionarReceita(
+                                      receita: r,
+                                      index: boxIndex,
+                                    ),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        border: const Border(
+                                          left: BorderSide(
+                                            color: Colors.green,
+                                            width: 3,
+                                          ),
+                                        ),
+                                        color: Theme.of(context).cardColor,
+                                        borderRadius: BorderRadius.circular(6),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black12,
+                                            blurRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            r.categoria,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            'R\$ ${_formatarValor(r.valor)}',
+                                            style: const TextStyle(
+                                              color: Colors.green,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatarData(r.data),
+                                            style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -656,7 +866,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ── RESULTADO ATUALIZAR PARCELAS ──────────────────────────────────────────────
+// ── RESULTADO ATUALIZAR PARCELAS// ── RESULTADO ATUALIZAR PARCELAS ──────────────────────────────────────────────
 
 // ── ADICIONAR GASTO ───────────────────────────────────────────────────────────
 
