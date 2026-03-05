@@ -6,6 +6,9 @@ import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
 import 'categoria.dart';
+import 'package:workmanager/workmanager.dart';
+import 'background_task.dart';
+import 'notification_service.dart';
 import 'configuracoes_screen.dart';
 import 'configuracoes_sistema_screen.dart';
 import 'todos_registros_screen.dart';
@@ -38,6 +41,12 @@ void main() async {
     await Hive.deleteBoxFromDisk('categorias');
     await Hive.openBox<Categoria>('categorias');
   }
+  // ── Notificações + Workmanager (inicialização obrigatória) ───────────
+  await NotificationService.initialize();
+  await NotificationService.requestPermission();
+  await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+  // O agendamento só ocorre se o usuário ativar em Configurações > Notificações
+
   final brightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
   await carregarTema(brightness);

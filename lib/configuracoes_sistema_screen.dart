@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 import 'gasto.dart';
 import 'receita.dart';
 import 'forma_pagamento.dart';
@@ -8,6 +10,8 @@ import 'orcamento.dart';
 import 'backup_screen.dart';
 import 'fade_route.dart';
 import 'app_settings.dart';
+import 'background_task.dart';
+import 'notification_service.dart';
 
 class ConfiguracoesSistemaScreen extends StatefulWidget {
   const ConfiguracoesSistemaScreen({super.key});
@@ -19,6 +23,122 @@ class ConfiguracoesSistemaScreen extends StatefulWidget {
 
 class _ConfiguracoesSistemaScreenState
     extends State<ConfiguracoesSistemaScreen> {
+  bool _lembreteAtivo = false;
+  TimeOfDay _horarioLembrete = const TimeOfDay(hour: 21, minute: 0);
+
+  static const _kLembreteAtivo = 'lembrete_ativo';
+  static const _kLembreteHora = 'lembrete_hora';
+  static const _kLembreteMinuto = 'lembrete_minuto';
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarConfiguracoes();
+  }
+
+  Future<void> _carregarConfiguracoes() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _lembreteAtivo = prefs.getBool(_kLembreteAtivo) ?? false;
+      final hora = prefs.getInt(_kLembreteHora) ?? 21;
+      final minuto = prefs.getInt(_kLembreteMinuto) ?? 0;
+      _horarioLembrete = TimeOfDay(hour: hora, minute: minuto);
+    });
+  }
+
+  Future<void> _salvarConfiguracoes() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kLembreteAtivo, _lembreteAtivo);
+    await prefs.setInt(_kLembreteHora, _horarioLembrete.hour);
+    await prefs.setInt(_kLembreteMinuto, _horarioLembrete.minute);
+  }
+
+  Future<void> _toggleLembrete(bool ativo) async {
+    setState(() => _lembreteAtivo = ativo);
+    await _salvarConfiguracoes();
+
+    if (ativo) {
+      await _agendarLembrete();
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Lembrete ativado!'),
+            content: const Text(
+              'Para garantir que o lembrete funcione corretamente, desative a otimização de bateria para este app nas configurações do Android.\n\nCaminho: Configurações → Aplicativos → Controle de Gastos → Bateria → Sem restrições.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendi'),
+              ),
+            ],
+          ),
+        );
+      }
+    } else {
+      await Workmanager().cancelByUniqueName(taskLembreteGasto);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Lembrete desativado.')));
+      }
+    }
+  }
+
+  Future<void> _agendarLembrete() async {
+    await Workmanager().cancelByUniqueName(taskLembreteGasto);
+
+    final agora = DateTime.now();
+    var alvo = DateTime(
+      agora.year,
+      agora.month,
+      agora.day,
+      _horarioLembrete.hour,
+      _horarioLembrete.minute,
+    );
+    if (agora.isAfter(alvo)) {
+      alvo = alvo.add(const Duration(days: 1));
+    }
+    final delay = alvo.difference(agora);
+
+    await Workmanager().registerPeriodicTask(
+      taskLembreteGasto,
+      taskLembreteGasto,
+      frequency: const Duration(hours: 24),
+      initialDelay: delay,
+      constraints: Constraints(networkType: NetworkType.notRequired),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+    );
+  }
+
+  Future<void> _escolherHorario() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _horarioLembrete,
+      helpText: 'Horário do lembrete diário',
+    );
+    if (picked == null) return;
+
+    setState(() => _horarioLembrete = picked);
+    await _salvarConfiguracoes();
+
+    // Se lembrete ativo, reagenda com novo horário
+    if (_lembreteAtivo) {
+      await _agendarLembrete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Lembrete reagendado para ${picked.format(context)}.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _limparDados() async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -94,6 +214,48 @@ class _ConfiguracoesSistemaScreenState
           ),
           const Divider(),
 
+          // ── NOTIFICAÇÕES ────────────────────────────────────────────────
+          _cabecalhoSecao('Notificações'),
+          SwitchListTile(
+            secondary: const Icon(Icons.notifications_outlined),
+            title: const Text('Lembrete diário'),
+            subtitle: const Text(
+              'Notificar se nenhum gasto for registrado no dia',
+            ),
+            value: _lembreteAtivo,
+            onChanged: _toggleLembrete,
+          ),
+          if (_lembreteAtivo) ...[
+            ListTile(
+              leading: const Icon(Icons.access_time),
+              title: const Text('Horário do lembrete'),
+              subtitle: Text(_horarioLembrete.format(context)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _escolherHorario,
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.notifications_active_outlined,
+                color: Colors.orange,
+              ),
+              title: const Text('Testar notificação agora'),
+              subtitle: const Text('Dispara o lembrete imediatamente'),
+              onTap: () async {
+                await NotificationService.mostrarNotificacaoSemRegistro();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Notificação enviada!'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+          const Divider(),
+
+          // ── DADOS ────────────────────────────────────────────────────────
           _cabecalhoSecao('Dados'),
           ListTile(
             leading: const Icon(Icons.backup),
