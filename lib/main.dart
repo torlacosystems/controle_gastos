@@ -6,9 +6,6 @@ import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
 import 'categoria.dart';
-import 'package:workmanager/workmanager.dart';
-import 'background_task.dart';
-import 'notification_service.dart';
 import 'configuracoes_screen.dart';
 import 'configuracoes_sistema_screen.dart';
 import 'todos_registros_screen.dart';
@@ -41,12 +38,6 @@ void main() async {
     await Hive.deleteBoxFromDisk('categorias');
     await Hive.openBox<Categoria>('categorias');
   }
-  // ── Notificações + Workmanager (inicialização obrigatória) ───────────
-  await NotificationService.initialize();
-  await NotificationService.requestPermission();
-  await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
-  // O agendamento só ocorre se o usuário ativar em Configurações > Notificações
-
   final brightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
   await carregarTema(brightness);
@@ -159,17 +150,6 @@ class _HomeScreenState extends State<HomeScreen> {
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
 
   IconData _iconeCategoria(String categoria) {
-    // Verifica primeiro nas categorias personalizadas do Hive
-    try {
-      final box = Hive.box<Categoria>('categorias');
-      final custom = box.values.firstWhere(
-        (c) => c.nome == categoria,
-        orElse: () => throw Exception(),
-      );
-      return custom.icone;
-    } catch (_) {}
-
-    // Categorias fixas
     switch (categoria) {
       case 'Alimentação':
         return Icons.restaurant;
@@ -533,9 +513,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).padding.bottom,
-                    ),
                     itemCount: itens.length,
                     itemBuilder: (context, index) {
                       final item = itens[index];
@@ -706,7 +683,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
   bool _formaPagamentoOrfa = false;
   bool _pessoaOrfa = false;
-  bool _categoriaOrfa = false;
 
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
@@ -728,13 +704,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     final custom = _categoriasBox.values
         .map((c) => {'nome': c.nome, 'icone': c.icone})
         .toList();
-    final semOutros = _categoriasFixas
-        .where((c) => c['nome'] != 'Outros')
-        .toList();
-    final outros = _categoriasFixas
-        .where((c) => c['nome'] == 'Outros')
-        .toList();
-    return [...semOutros, ...custom, ...outros];
+    return [..._categoriasFixas, ...custom];
   }
 
   @override
@@ -754,29 +724,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       text: g?.estabelecimento ?? '',
     );
     _categoriaSelecionada = g?.categoria ?? 'Alimentação';
-    // Detecta categoria inválida (excluída)
-    if (g != null) {
-      final categoriasFixas = [
-        'Alimentação',
-        'Mercado',
-        'Transporte',
-        'Saúde',
-        'Lazer',
-        'Moradia',
-        'Educação',
-        'Outros',
-      ];
-      final categoriaInvalida =
-          _categoriaSelecionada == 'Sem Categoria' ||
-          (!categoriasFixas.any((c) => c == _categoriaSelecionada) &&
-              !_categoriasBox.values.any(
-                (c) => c.nome == _categoriaSelecionada,
-              ));
-      if (categoriaInvalida) {
-        _categoriaSelecionada = '';
-        _categoriaOrfa = true;
-      }
-    }
     _dataSelecionada = g?.data ?? DateTime.now();
     _tipoGasto = g?.tipoGasto ?? 'Variável';
     _parcelado = g?.parcelado ?? false;
@@ -871,15 +818,6 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Informe um valor válido')));
-      return;
-    }
-
-    if (_categoriaSelecionada.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecione uma categoria antes de salvar'),
-        ),
-      );
       return;
     }
 
@@ -1208,10 +1146,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom +
-                24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1245,63 +1180,46 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              if (_categoriaOrfa)
-                _avisoOrfao(
-                  'A categoria deste gasto foi excluída. Selecione uma nova categoria.',
-                ),
-              Container(
-                decoration: _categoriaOrfa
-                    ? BoxDecoration(
-                        border: Border.all(color: Colors.orange, width: 1.5),
-                        borderRadius: BorderRadius.circular(12),
-                      )
-                    : null,
-                padding: _categoriaOrfa
-                    ? const EdgeInsets.all(8)
-                    : EdgeInsets.zero,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _categorias.map((cat) {
-                    final sel = cat['nome'] == _categoriaSelecionada;
-                    return GestureDetector(
-                      onTap: () => setState(() {
-                        _categoriaSelecionada = cat['nome'];
-                        _categoriaOrfa = false;
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: sel
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              cat['icone'],
-                              size: 18,
-                              color: sel ? Colors.white : Colors.grey[700],
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              cat['nome'],
-                              style: TextStyle(
-                                color: sel ? Colors.white : Colors.grey[700],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _categorias.map((cat) {
+                  final sel = cat['nome'] == _categoriaSelecionada;
+                  return GestureDetector(
+                    onTap: () =>
+                        setState(() => _categoriaSelecionada = cat['nome']),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
                       ),
-                    );
-                  }).toList(),
-                ),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            cat['icone'],
+                            size: 18,
+                            color: sel ? Colors.white : Colors.grey[700],
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            cat['nome'],
+                            style: TextStyle(
+                              color: sel ? Colors.white : Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 24),
 
@@ -1811,6 +1729,13 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       return;
     }
 
+    if (_pessoaSelecionada == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecione uma pessoa antes de salvar')),
+      );
+      return;
+    }
+
     final isEdicao = widget.receita != null;
 
     final novaReceita = Receita(
@@ -1946,10 +1871,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom +
-                24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
