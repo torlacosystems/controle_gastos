@@ -12,6 +12,7 @@ import 'fade_route.dart';
 import 'app_settings.dart';
 import 'background_task.dart';
 import 'notification_service.dart';
+import 'auth_service.dart';
 
 class ConfiguracoesSistemaScreen extends StatefulWidget {
   const ConfiguracoesSistemaScreen({super.key});
@@ -25,6 +26,7 @@ class _ConfiguracoesSistemaScreenState
     extends State<ConfiguracoesSistemaScreen> {
   bool _lembreteAtivo = false;
   TimeOfDay _horarioLembrete = const TimeOfDay(hour: 21, minute: 0);
+  bool _bloqueioAtivo = false;
 
   static const _kLembreteAtivo = 'lembrete_ativo';
   static const _kLembreteHora = 'lembrete_hora';
@@ -34,6 +36,7 @@ class _ConfiguracoesSistemaScreenState
   void initState() {
     super.initState();
     _carregarConfiguracoes();
+    _carregarBloqueio();
   }
 
   Future<void> _carregarConfiguracoes() async {
@@ -44,6 +47,11 @@ class _ConfiguracoesSistemaScreenState
       final minuto = prefs.getInt(_kLembreteMinuto) ?? 0;
       _horarioLembrete = TimeOfDay(hour: hora, minute: minuto);
     });
+  }
+
+  Future<void> _carregarBloqueio() async {
+    final ativo = await AuthService.bloqueioAtivo;
+    if (mounted) setState(() => _bloqueioAtivo = ativo);
   }
 
   Future<void> _salvarConfiguracoes() async {
@@ -123,7 +131,6 @@ class _ConfiguracoesSistemaScreenState
     setState(() => _horarioLembrete = picked);
     await _salvarConfiguracoes();
 
-    // Se lembrete ativo, reagenda com novo horário
     if (_lembreteAtivo) {
       await _agendarLembrete();
       if (mounted) {
@@ -136,6 +143,46 @@ class _ConfiguracoesSistemaScreenState
           ),
         );
       }
+    }
+  }
+
+  Future<void> _toggleBloqueio(bool ativo) async {
+    if (ativo) {
+      final disponivel = await AuthService.disponivel;
+      if (!disponivel) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Seu dispositivo não suporta biometria ou PIN.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      // Autentica uma vez para confirmar que funciona antes de ativar
+      final autenticado = await AuthService.autenticar();
+      if (!autenticado) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Autenticação necessária para ativar o bloqueio.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+    }
+    await AuthService.setBloqueio(ativo);
+    setState(() => _bloqueioAtivo = ativo);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ativo ? 'Bloqueio ativado.' : 'Bloqueio desativado.'),
+          backgroundColor: ativo ? Colors.green : Colors.grey,
+        ),
+      );
     }
   }
 
@@ -189,6 +236,7 @@ class _ConfiguracoesSistemaScreenState
       ),
       body: ListView(
         children: [
+          // ── APARÊNCIA ───────────────────────────────────────────────────
           _cabecalhoSecao('Aparência'),
           ValueListenableBuilder<ThemeMode>(
             valueListenable: themeModeNotifier,
@@ -211,6 +259,17 @@ class _ConfiguracoesSistemaScreenState
                 },
               );
             },
+          ),
+          const Divider(),
+
+          // ── SEGURANÇA ───────────────────────────────────────────────────
+          _cabecalhoSecao('Segurança'),
+          SwitchListTile(
+            secondary: const Icon(Icons.lock_outline),
+            title: const Text('Bloquear app'),
+            subtitle: const Text('Pedir biometria ou PIN ao abrir o app'),
+            value: _bloqueioAtivo,
+            onChanged: _toggleBloqueio,
           ),
           const Divider(),
 
@@ -276,6 +335,7 @@ class _ConfiguracoesSistemaScreenState
           ),
           const Divider(),
 
+          // ── SOBRE ────────────────────────────────────────────────────────
           _cabecalhoSecao('Sobre'),
           const ListTile(
             leading: Icon(Icons.info_outline),

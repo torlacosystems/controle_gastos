@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'gasto.dart';
 import 'receita.dart';
 
@@ -61,6 +62,23 @@ class _InsightsScreenState extends State<InsightsScreen> {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+    _carregarMeta();
+  }
+
+  Future<void> _carregarMeta() async {
+    final prefs = await SharedPreferences.getInstance();
+    final valor = prefs.getDouble('meta_economia');
+    if (valor != null && valor > 0) {
+      setState(() {
+        _metaEconomia = valor;
+        _metaController.text = valor.toStringAsFixed(2).replaceAll('.', ',');
+      });
+    }
+  }
+
+  Future<void> _salvarMeta(double valor) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('meta_economia', valor);
   }
 
   @override
@@ -172,12 +190,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.of(context).padding.bottom + 16,
-        ),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -347,6 +360,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                             );
                             if (valor != null && valor > 0) {
                               setState(() => _metaEconomia = valor);
+                              _salvarMeta(valor);
                             }
                           },
                           child: const Text('Definir'),

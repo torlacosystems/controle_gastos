@@ -17,6 +17,7 @@ import 'backup_screen.dart';
 import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
 import 'app_settings.dart';
+import 'lock_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,7 +75,7 @@ class MyApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeMode,
-          home: const SplashScreen(),
+          home: const LockScreen(child: SplashScreen()),
         );
       },
     );
@@ -513,9 +514,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).padding.bottom,
-                    ),
                     itemCount: itens.length,
                     itemBuilder: (context, index) {
                       final item = itens[index];
@@ -1149,10 +1147,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom +
-                24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1735,13 +1730,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       return;
     }
 
-    if (_pessoaSelecionada == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecione uma pessoa antes de salvar')),
-      );
-      return;
-    }
-
     final isEdicao = widget.receita != null;
 
     final novaReceita = Receita(
@@ -1877,10 +1865,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom +
-                24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
