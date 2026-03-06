@@ -49,9 +49,6 @@ class Gasto extends HiveObject {
   @HiveField(14)
   late int numeroParcela;
 
-  @HiveField(15)
-  bool gastoEvitavel;
-
   Gasto({
     required this.id,
     required this.descricao,
@@ -68,6 +65,5 @@ class Gasto extends HiveObject {
     required this.gastoEsperado,
     this.grupoId = '',
     this.numeroParcela = 0,
-    this.gastoEvitavel = false,
   });
 }

@@ -76,7 +76,7 @@ class MyApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeMode,
-          home: const LockScreen(child: SplashScreen()),
+          home: const SplashScreen(),
         );
       },
     );

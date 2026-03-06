@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'gasto.dart';
 import 'receita.dart';
 
@@ -61,6 +62,23 @@ class _InsightsScreenState extends State<InsightsScreen> {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+    _carregarMeta();
+  }
+
+  Future<void> _carregarMeta() async {
+    final prefs = await SharedPreferences.getInstance();
+    final valor = prefs.getDouble('meta_economia');
+    if (valor != null && valor > 0) {
+      setState(() {
+        _metaEconomia = valor;
+        _metaController.text = valor.toStringAsFixed(2).replaceAll('.', ',');
+      });
+    }
+  }
+
+  Future<void> _salvarMeta(double valor) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('meta_economia', valor);
   }
 
   @override
@@ -105,14 +123,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   double get _totalInesperados => _gastosMesAtual
       .where((g) => !g.gastoEsperado)
-      .fold(0, (s, g) => s + g.valor);
-
-  double get _totalEvitaveis => _gastosMesAtual
-      .where((g) => g.gastoEvitavel)
-      .fold(0, (s, g) => s + g.valor);
-
-  double get _totalInevitaveis => _gastosMesAtual
-      .where((g) => !g.gastoEvitavel)
       .fold(0, (s, g) => s + g.valor);
 
   String get _categoriaMaisGasta {
@@ -304,24 +314,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   : '',
               destaque: _totalInesperados > 0,
             ),
-            const SizedBox(height: 12),
-
-            // Gastos evitáveis
-            _cardInsightComBarra(
-              icone: Icons.block,
-              cor: Colors.red,
-              titulo: 'Gastos evitáveis',
-              conteudo: _totalEvitaveis == 0
-                  ? 'Nenhum gasto evitável registrado este mês.'
-                  : '${_formatarValor(_totalEvitaveis)} dos seus gastos poderiam ter sido evitados.',
-              percentual: _totalMesAtual > 0
-                  ? (_totalEvitaveis / _totalMesAtual).clamp(0.0, 1.0)
-                  : 0,
-              corBarra:
-                  _totalMesAtual > 0 && (_totalEvitaveis / _totalMesAtual) > 0.3
-                  ? Colors.red
-                  : Colors.orange,
-            ),
             const SizedBox(height: 20),
 
             // SEÇÃO: META DE ECONOMIA
@@ -368,6 +360,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                             );
                             if (valor != null && valor > 0) {
                               setState(() => _metaEconomia = valor);
+                              _salvarMeta(valor);
                             }
                           },
                           child: const Text('Definir'),
