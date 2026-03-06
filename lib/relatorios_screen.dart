@@ -206,6 +206,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     return mapa;
   }
 
+  Map<String, double> get _gastosPorPessoa {
+    final Map<String, double> mapa = {};
+    for (final g in _gastosFiltrados) {
+      if (g.pessoa.isNotEmpty) {
+        mapa[g.pessoa] = (mapa[g.pessoa] ?? 0) + g.valor;
+      }
+    }
+    return mapa;
+  }
+
   // ── Histórico mensal ──────────────────────────────────────────────────────
 
   List<DateTime> _gerarMesesHistorico() {
@@ -602,6 +612,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     final orcamentos = _orcamentosBox.values.toList();
     final todasPessoas = _todasPessoas;
     final acumulados = _calcularAcumulado(mesesHistorico);
+    final gastosPorPessoa = _gastosPorPessoa;
+    final pessoasList = gastosPorPessoa.keys.toList();
+    final totalPessoas = gastosPorPessoa.values.fold(0.0, (s, v) => s + v);
 
     final temFiltroAtivo =
         _pessoaSelecionada != null ||
@@ -1312,6 +1325,73 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
+            // ── GASTOS POR PESSOA ──────────────────────────────────────────
+            const Text(
+              'Gastos por Pessoa',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: pessoasList.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'Nenhum gasto com pessoa associada no período',
+                            style: TextStyle(color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          SizedBox(
+                            height: 200,
+                            child: PieChart(
+                              PieChartData(
+                                sections: pessoasList.asMap().entries.map((entry) {
+                                  final i = entry.key;
+                                  final pessoa = entry.value;
+                                  final valor = gastosPorPessoa[pessoa]!;
+                                  final pct = totalPessoas > 0 ? valor / totalPessoas * 100 : 0;
+                                  return PieChartSectionData(
+                                    value: valor,
+                                    color: _coresCategorias[i % _coresCategorias.length],
+                                    title: '${pct.toStringAsFixed(1)}%',
+                                    titleStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    radius: 80,
+                                  );
+                                }).toList(),
+                                sectionsSpace: 2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            children: pessoasList.asMap().entries.map((entry) {
+                              final i = entry.key;
+                              final pessoa = entry.value;
+                              return _legenda(
+                                _coresCategorias[i % _coresCategorias.length],
+                                pessoa,
+                                _formatarValor(gastosPorPessoa[pessoa]!),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
             // ── GASTOS ESPERADOS VS INESPERADOS ────────────────────────────
             const Text(
               'Gastos Esperados vs Inesperados',
@@ -1541,6 +1621,112 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // ── GASTO VS LIMITE POR CATEGORIA (BAR CHART) ─────────────────
+            if (orcamentos.isNotEmpty) ...[
+              const Text(
+                'Gasto vs Limite por Categoria',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: 220,
+                        child: BarChart(
+                          BarChartData(
+                            barGroups: orcamentos.asMap().entries.map((entry) {
+                              final i = entry.key;
+                              final orc = entry.value;
+                              final gasto = _gastoMesPorCategoria(orc.categoria);
+                              final percentual = orc.limite > 0 ? gasto / orc.limite : 0.0;
+                              return BarChartGroupData(
+                                x: i,
+                                barRods: [
+                                  BarChartRodData(
+                                    toY: gasto,
+                                    color: _corProgresso(percentual),
+                                    width: 14,
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(4),
+                                    ),
+                                  ),
+                                  BarChartRodData(
+                                    toY: orc.limite,
+                                    color: Colors.grey[300]!,
+                                    width: 14,
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(4),
+                                    ),
+                                  ),
+                                ],
+                                barsSpace: 4,
+                              );
+                            }).toList(),
+                            titlesData: FlTitlesData(
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 55,
+                                  getTitlesWidget: (value, meta) => Text(
+                                    'R\$${value.toInt()}',
+                                    style: const TextStyle(fontSize: 9),
+                                  ),
+                                ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 36,
+                                  getTitlesWidget: (value, meta) {
+                                    final i = value.toInt();
+                                    if (i < 0 || i >= orcamentos.length) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final cat = orcamentos[i].categoria;
+                                    final short = cat.length > 7 ? '${cat.substring(0, 6)}.' : cat;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        short,
+                                        style: const TextStyle(fontSize: 9),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                            ),
+                            gridData: const FlGridData(show: true),
+                            borderData: FlBorderData(show: false),
+                            groupsSpace: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          _legenda(Colors.green, 'Gasto (mês atual)', ''),
+                          _legenda(Colors.grey[300]!, 'Limite', ''),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // ── ORÇAMENTO POR CATEGORIA ────────────────────────────────────
             if (orcamentos.isNotEmpty) ...[

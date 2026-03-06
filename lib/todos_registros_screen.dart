@@ -34,6 +34,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
   int? _mesFiltro;
   int? _anoFiltro;
   String _tipoFiltro = 'todos';
+  bool _filtroParcelado = false;
 
   final List<String> _nomesMeses = [
     'Janeiro',
@@ -169,7 +170,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             g.formaPagamento,
             g.estabelecimento,
           );
-          if (mesBateu && buscaBateu) {
+          final parceladoBateu = !_filtroParcelado || g.parcelado;
+          if (mesBateu && buscaBateu && parceladoBateu) {
             itens.add({'tipo': 'gasto', 'item': g, 'index': i});
           }
         }
@@ -618,14 +620,19 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey[100],
-            child: Row(
-              children: [
-                _chipTipo('Todos', 'todos', Colors.blueGrey),
-                const SizedBox(width: 8),
-                _chipTipo('Gastos', 'gasto', Colors.red),
-                const SizedBox(width: 8),
-                _chipTipo('Receitas', 'receita', Colors.green),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _chipTipo('Todos', 'todos', Colors.blueGrey),
+                  const SizedBox(width: 8),
+                  _chipTipo('Gastos', 'gasto', Colors.red),
+                  const SizedBox(width: 8),
+                  _chipTipo('Receitas', 'receita', Colors.green),
+                  const SizedBox(width: 8),
+                  _chipParcelado(),
+                ],
+              ),
             ),
           ),
 
@@ -772,7 +779,16 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            '${isGasto ? 'Gasto' : 'Receita'} • ${_formatarData(data)}${descricao.isNotEmpty ? ' • $descricao' : ''}',
+                            () {
+                              final base = '${isGasto ? 'Gasto' : 'Receita'} • ${_formatarData(data)}${descricao.isNotEmpty ? ' • $descricao' : ''}';
+                              if (isGasto) {
+                                final g = item['item'] as Gasto;
+                                if (g.parcelado) {
+                                  return '$base • Parcela ${g.numeroParcela}/${g.numeroParcelas}';
+                                }
+                              }
+                              return base;
+                            }(),
                           ),
                           trailing: _modoSelecao
                               ? Text(
@@ -846,6 +862,45 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _chipParcelado() {
+    final cor = Colors.purple;
+    return GestureDetector(
+      onTap: () => setState(() {
+        _filtroParcelado = !_filtroParcelado;
+        if (_filtroParcelado && _tipoFiltro == 'receita') {
+          _tipoFiltro = 'gasto';
+        }
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        decoration: BoxDecoration(
+          color: _filtroParcelado ? cor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _filtroParcelado ? cor : Colors.grey[300]!),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.credit_card,
+              size: 14,
+              color: _filtroParcelado ? Colors.white : Colors.grey[700],
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Parcelados',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _filtroParcelado ? Colors.white : Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
