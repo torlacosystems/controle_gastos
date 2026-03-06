@@ -66,6 +66,7 @@ class _ConfiguracoesSistemaScreenState
     await _salvarConfiguracoes();
 
     if (ativo) {
+      await NotificationService.requestPermission();
       await _agendarLembrete();
       if (mounted) {
         await showDialog(

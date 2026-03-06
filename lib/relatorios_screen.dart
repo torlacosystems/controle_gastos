@@ -37,6 +37,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   String? _pessoaSelecionada;
   String? _tipoFormaPagamento;
   String? _formaPagamentoSelecionada;
+  bool? _filtroEsperado;
+  bool? _filtroEvitavel;
+  bool? _filtroFixo;
+  bool? _filtroRecorrente;
 
   // Controle de linhas do gráfico
   bool _mostrarGastos = true;
@@ -153,6 +157,14 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
       if (_formaPagamentoSelecionada != null &&
           g.formaPagamento != _formaPagamentoSelecionada)
         return false;
+      if (_filtroEsperado != null && g.gastoEsperado != _filtroEsperado)
+        return false;
+      if (_filtroEvitavel != null && g.gastoEvitavel != _filtroEvitavel)
+        return false;
+      if (_filtroFixo != null && (g.tipoGasto == 'Fixo') != _filtroFixo)
+        return false;
+      if (_filtroRecorrente != null && g.recorrente != _filtroRecorrente)
+        return false;
       return true;
     }).toList();
   }
@@ -178,6 +190,12 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
       .fold(0, (s, g) => s + g.valor);
   double get _totalInesperados => _gastosFiltrados
       .where((g) => !g.gastoEsperado)
+      .fold(0, (s, g) => s + g.valor);
+  double get _totalEvitaveis => _gastosFiltrados
+      .where((g) => g.gastoEvitavel)
+      .fold(0, (s, g) => s + g.valor);
+  double get _totalInevitaveis => _gastosFiltrados
+      .where((g) => !g.gastoEvitavel)
       .fold(0, (s, g) => s + g.valor);
 
   Map<String, double> get _gastosPorCategoria {
@@ -210,6 +228,14 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           return false;
         if (_formaPagamentoSelecionada != null &&
             g.formaPagamento != _formaPagamentoSelecionada)
+          return false;
+        if (_filtroEsperado != null && g.gastoEsperado != _filtroEsperado)
+          return false;
+        if (_filtroEvitavel != null && g.gastoEvitavel != _filtroEvitavel)
+          return false;
+        if (_filtroFixo != null && (g.tipoGasto == 'Fixo') != _filtroFixo)
+          return false;
+        if (_filtroRecorrente != null && g.recorrente != _filtroRecorrente)
           return false;
         return true;
       })
@@ -519,6 +545,26 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     );
   }
 
+  Widget _linhaFiltroBoolean(
+    String label,
+    bool? valor,
+    void Function(bool?) onChange,
+  ) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(label, style: const TextStyle(fontSize: 13)),
+        ),
+        _chipFiltro('Todos', valor == null, () => onChange(null)),
+        const SizedBox(width: 8),
+        _chipFiltro('Sim', valor == true, () => onChange(valor == true ? null : true)),
+        const SizedBox(width: 8),
+        _chipFiltro('Não', valor == false, () => onChange(valor == false ? null : false)),
+      ],
+    );
+  }
+
   Widget _toggleLinha(Color cor, String label, bool ativo, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -560,7 +606,11 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     final temFiltroAtivo =
         _pessoaSelecionada != null ||
         _tipoFormaPagamento != null ||
-        _formaPagamentoSelecionada != null;
+        _formaPagamentoSelecionada != null ||
+        _filtroEsperado != null ||
+        _filtroEvitavel != null ||
+        _filtroFixo != null ||
+        _filtroRecorrente != null;
 
     double maxY = 0;
     for (int i = 0; i < mesesHistorico.length; i++) {
@@ -604,6 +654,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                 _pessoaSelecionada = null;
                 _tipoFormaPagamento = null;
                 _formaPagamentoSelecionada = null;
+                _filtroEsperado = null;
+                _filtroEvitavel = null;
+                _filtroFixo = null;
+                _filtroRecorrente = null;
               }),
             ),
           IconButton(
@@ -890,6 +944,50 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
               ),
               const SizedBox(height: 12),
             ],
+
+            // ── FILTRO POR CARACTERÍSTICAS ─────────────────────────────────
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Características',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _linhaFiltroBoolean(
+                      'Esperado',
+                      _filtroEsperado,
+                      (v) => setState(() => _filtroEsperado = v),
+                    ),
+                    const SizedBox(height: 8),
+                    _linhaFiltroBoolean(
+                      'Evitável',
+                      _filtroEvitavel,
+                      (v) => setState(() => _filtroEvitavel = v),
+                    ),
+                    const SizedBox(height: 8),
+                    _linhaFiltroBoolean(
+                      'Fixo',
+                      _filtroFixo,
+                      (v) => setState(() => _filtroFixo = v),
+                    ),
+                    const SizedBox(height: 8),
+                    _linhaFiltroBoolean(
+                      'Recorrente',
+                      _filtroRecorrente,
+                      (v) => setState(() => _filtroRecorrente = v),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // ── CARDS DE RESUMO ────────────────────────────────────────────
             Row(
@@ -1285,6 +1383,86 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                                 Colors.orange,
                                 'Inesperados',
                                 _formatarValor(_totalInesperados),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── GASTOS EVITÁVEIS VS INEVITÁVEIS ───────────────────────────
+            const Text(
+              'Gastos Evitáveis vs Inevitáveis',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _totalEvitaveis == 0 && _totalInevitaveis == 0
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'Nenhum gasto no período',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          SizedBox(
+                            height: 180,
+                            child: PieChart(
+                              PieChartData(
+                                sections: [
+                                  if (_totalEvitaveis > 0)
+                                    PieChartSectionData(
+                                      value: _totalEvitaveis,
+                                      color: Colors.red,
+                                      title:
+                                          '${(_totalEvitaveis / _totalGastos * 100).toStringAsFixed(1)}%',
+                                      titleStyle: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      radius: 70,
+                                    ),
+                                  if (_totalInevitaveis > 0)
+                                    PieChartSectionData(
+                                      value: _totalInevitaveis,
+                                      color: Colors.green,
+                                      title:
+                                          '${(_totalInevitaveis / _totalGastos * 100).toStringAsFixed(1)}%',
+                                      titleStyle: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      radius: 70,
+                                    ),
+                                ],
+                                sectionsSpace: 2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _legenda(
+                                Colors.red,
+                                'Evitáveis',
+                                _formatarValor(_totalEvitaveis),
+                              ),
+                              const SizedBox(width: 24),
+                              _legenda(
+                                Colors.green,
+                                'Inevitáveis',
+                                _formatarValor(_totalInevitaveis),
                               ),
                             ],
                           ),

@@ -125,6 +125,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
       .where((g) => !g.gastoEsperado)
       .fold(0, (s, g) => s + g.valor);
 
+  double get _totalEvitaveis => _gastosMesAtual
+      .where((g) => g.gastoEvitavel)
+      .fold(0, (s, g) => s + g.valor);
+
   String get _categoriaMaisGasta {
     if (_gastosMesAtual.isEmpty) return 'Nenhum gasto';
     final mapa = <String, double>{};
@@ -190,7 +194,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -313,6 +322,21 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   ? '${(_totalInesperados / _totalMesAtual * 100).toStringAsFixed(1)}% dos seus gastos não estavam previstos.'
                   : '',
               destaque: _totalInesperados > 0,
+            ),
+            const SizedBox(height: 12),
+
+            // Gastos evitáveis
+            _cardAlerta(
+              icone: Icons.block,
+              cor: Colors.deepOrange,
+              titulo: 'Gastos evitáveis',
+              conteudo: _totalEvitaveis == 0
+                  ? 'Nenhum gasto evitável registrado este mês. Ótimo!'
+                  : 'Você teve ${_formatarValor(_totalEvitaveis)} em gastos que poderiam ter sido evitados.',
+              subtexto: _totalEvitaveis > 0 && _totalMesAtual > 0
+                  ? '${(_totalEvitaveis / _totalMesAtual * 100).toStringAsFixed(1)}% dos seus gastos eram evitáveis.'
+                  : '',
+              destaque: _totalEvitaveis > 0,
             ),
             const SizedBox(height: 20),
 

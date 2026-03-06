@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:workmanager/workmanager.dart';
 import 'gasto.dart';
 import 'receita.dart';
 import 'forma_pagamento.dart';
@@ -19,6 +20,8 @@ import 'fade_route.dart';
 import 'app_settings.dart';
 import 'lock_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'background_task.dart';
+import 'notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +43,8 @@ void main() async {
     await Hive.deleteBoxFromDisk('categorias');
     await Hive.openBox<Categoria>('categorias');
   }
+  await Workmanager().initialize(callbackDispatcher);
+  await NotificationService.initialize();
   final brightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
   await carregarTema(brightness);
@@ -709,57 +714,112 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ..._ultimos3Gastos.map((item) {
                                   final g = item['item'] as Gasto;
                                   final boxIndex = item['index'] as int;
-                                  return GestureDetector(
-                                    onTap: () => _abrirAdicionarGasto(
-                                      gasto: g,
-                                      index: boxIndex,
-                                    ),
-                                    child: Container(
+                                  return Dismissible(
+                                    key: Key('gasto_${g.id}'),
+                                    direction: DismissDirection.endToStart,
+                                    background: Container(
+                                      alignment: Alignment.centerRight,
+                                      padding: const EdgeInsets.only(right: 16),
                                       margin: const EdgeInsets.only(bottom: 6),
-                                      padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        border: const Border(
-                                          left: BorderSide(
-                                            color: Colors.red,
-                                            width: 3,
-                                          ),
-                                        ),
-                                        color: Theme.of(context).cardColor,
+                                        color: Colors.red,
                                         borderRadius: BorderRadius.circular(6),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Colors.black12,
-                                            blurRadius: 2,
-                                          ),
-                                        ],
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            g.categoria,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
+                                      child: const Icon(
+                                        Icons.delete,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    confirmDismiss: (_) async {
+                                      return await showDialog<bool>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text('Excluir gasto'),
+                                          content: Text(
+                                            'Deseja excluir "${g.categoria}" de R\$ ${_formatarValor(g.valor)}?',
                                           ),
-                                          Text(
-                                            'R\$ ${_formatarValor(g.valor)}',
-                                            style: const TextStyle(
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx, false),
+                                              child: const Text('Cancelar'),
+                                            ),
+                                            ElevatedButton(
+                                              style:
+                                                  ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.red,
+                                                    foregroundColor:
+                                                        Colors.white,
+                                                  ),
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx, true),
+                                              child: const Text('Excluir'),
+                                            ),
+                                          ],
+                                        ),
+                                      ) ??
+                                          false;
+                                    },
+                                    onDismissed: (_) {
+                                      _gastosBox.deleteAt(boxIndex);
+                                      setState(() {});
+                                    },
+                                    child: GestureDetector(
+                                      onTap: () => _abrirAdicionarGasto(
+                                        gasto: g,
+                                        index: boxIndex,
+                                      ),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(
+                                          bottom: 6,
+                                        ),
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          border: const Border(
+                                            left: BorderSide(
                                               color: Colors.red,
-                                              fontSize: 12,
+                                              width: 3,
                                             ),
                                           ),
-                                          Text(
-                                            _formatarData(g.data),
-                                            style: const TextStyle(
-                                              color: Colors.grey,
-                                              fontSize: 10,
+                                          color: Theme.of(context).cardColor,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              color: Colors.black12,
+                                              blurRadius: 2,
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              g.categoria,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              'R\$ ${_formatarValor(g.valor)}',
+                                              style: const TextStyle(
+                                                color: Colors.red,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            Text(
+                                              _formatarData(g.data),
+                                              style: const TextStyle(
+                                                color: Colors.grey,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   );
@@ -795,57 +855,112 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ..._ultimas3Receitas.map((item) {
                                   final r = item['item'] as Receita;
                                   final boxIndex = item['index'] as int;
-                                  return GestureDetector(
-                                    onTap: () => _abrirAdicionarReceita(
-                                      receita: r,
-                                      index: boxIndex,
-                                    ),
-                                    child: Container(
+                                  return Dismissible(
+                                    key: Key('receita_${r.id}'),
+                                    direction: DismissDirection.endToStart,
+                                    background: Container(
+                                      alignment: Alignment.centerRight,
+                                      padding: const EdgeInsets.only(right: 16),
                                       margin: const EdgeInsets.only(bottom: 6),
-                                      padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        border: const Border(
-                                          left: BorderSide(
-                                            color: Colors.green,
-                                            width: 3,
-                                          ),
-                                        ),
-                                        color: Theme.of(context).cardColor,
+                                        color: Colors.red,
                                         borderRadius: BorderRadius.circular(6),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Colors.black12,
-                                            blurRadius: 2,
-                                          ),
-                                        ],
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            r.categoria,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
+                                      child: const Icon(
+                                        Icons.delete,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    confirmDismiss: (_) async {
+                                      return await showDialog<bool>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text('Excluir receita'),
+                                          content: Text(
+                                            'Deseja excluir "${r.categoria}" de R\$ ${_formatarValor(r.valor)}?',
                                           ),
-                                          Text(
-                                            'R\$ ${_formatarValor(r.valor)}',
-                                            style: const TextStyle(
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx, false),
+                                              child: const Text('Cancelar'),
+                                            ),
+                                            ElevatedButton(
+                                              style:
+                                                  ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.red,
+                                                    foregroundColor:
+                                                        Colors.white,
+                                                  ),
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx, true),
+                                              child: const Text('Excluir'),
+                                            ),
+                                          ],
+                                        ),
+                                      ) ??
+                                          false;
+                                    },
+                                    onDismissed: (_) {
+                                      _receitasBox.deleteAt(boxIndex);
+                                      setState(() {});
+                                    },
+                                    child: GestureDetector(
+                                      onTap: () => _abrirAdicionarReceita(
+                                        receita: r,
+                                        index: boxIndex,
+                                      ),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(
+                                          bottom: 6,
+                                        ),
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          border: const Border(
+                                            left: BorderSide(
                                               color: Colors.green,
-                                              fontSize: 12,
+                                              width: 3,
                                             ),
                                           ),
-                                          Text(
-                                            _formatarData(r.data),
-                                            style: const TextStyle(
-                                              color: Colors.grey,
-                                              fontSize: 10,
+                                          color: Theme.of(context).cardColor,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              color: Colors.black12,
+                                              blurRadius: 2,
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              r.categoria,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              'R\$ ${_formatarValor(r.valor)}',
+                                              style: const TextStyle(
+                                                color: Colors.green,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            Text(
+                                              _formatarData(r.data),
+                                              style: const TextStyle(
+                                                color: Colors.grey,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   );
@@ -891,6 +1006,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   late int _numeroParcelas;
   late bool _recorrente;
   late bool _gastoEsperado;
+  late bool _gastoEvitavel;
 
   bool _formaPagamentoOrfa = false;
   bool _pessoaOrfa = false;
@@ -941,6 +1057,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _numeroParcelas = g?.numeroParcelas ?? 2;
     _recorrente = g?.recorrente ?? false;
     _gastoEsperado = g?.gastoEsperado ?? true;
+    _gastoEvitavel = g?.gastoEvitavel ?? false;
 
     final formas = _formasPagamentoBox.values.toList();
     if (g != null) {
@@ -1059,6 +1176,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             estabelecimento: _estabelecimentoController.text,
             recorrente: _recorrente,
             gastoEsperado: _gastoEsperado,
+            gastoEvitavel: _gastoEvitavel,
             grupoId: grupoId,
             numeroParcela: i + 1,
           ),
@@ -1093,6 +1211,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         estabelecimento: _estabelecimentoController.text,
         recorrente: _recorrente,
         gastoEsperado: _gastoEsperado,
+        gastoEvitavel: _gastoEvitavel,
         grupoId: gastoOriginal.grupoId,
         numeroParcela: gastoOriginal.numeroParcela,
       );
@@ -1142,6 +1261,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   estabelecimento: _estabelecimentoController.text,
                   recorrente: _recorrente,
                   gastoEsperado: _gastoEsperado,
+                  gastoEvitavel: _gastoEvitavel,
                   grupoId: p.grupoId,
                   numeroParcela: p.numeroParcela,
                 ),
@@ -1181,6 +1301,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       estabelecimento: _estabelecimentoController.text,
       recorrente: _recorrente,
       gastoEsperado: _gastoEsperado,
+      gastoEvitavel: _gastoEvitavel,
     );
 
     if (_tipoGasto == 'Fixo' && _recorrente && !isEdicao) {
@@ -1357,7 +1478,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1522,6 +1645,36 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                             value: _gastoEsperado,
                             onChanged: (v) =>
                                 setState(() => _gastoEsperado = v),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Gasto Evitável',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Poderia ter sido evitado',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: _gastoEvitavel,
+                            onChanged: (v) =>
+                                setState(() => _gastoEvitavel = v),
                           ),
                         ],
                       ),
@@ -2075,7 +2228,9 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).padding.bottom +
+                24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
