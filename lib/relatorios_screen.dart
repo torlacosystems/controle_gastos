@@ -21,7 +21,7 @@ class RelatoriosScreen extends StatefulWidget {
   State<RelatoriosScreen> createState() => _RelatoriosScreenState();
 }
 
-class _RelatoriosScreenState extends State<RelatoriosScreen> {
+class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerProviderStateMixin {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
   late Box<Orcamento> _orcamentosBox;
@@ -42,11 +42,19 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   bool? _filtroFixo;
   bool? _filtroRecorrente;
 
+  // Filtros da aba Receitas (independentes dos filtros de gastos)
+  String _receitaPeriodoSelecionado = '30d';
+  late DateTime _receitaDataInicio;
+  late DateTime _receitaDataFim;
+  String? _receitaPessoaSelecionada;
+  String? _receitaCategoriaSelecionada;
+
   // Controle de linhas do gráfico
   bool _mostrarGastos = true;
   bool _mostrarReceitas = true;
   bool _mostrarSaldo = true;
   bool _mostrarAcumulado = false;
+  late TabController _tabController;
 
   final List<String> _nomesMeses = [
     'Jan',
@@ -83,7 +91,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() { if (mounted) setState(() {}); });
     _aplicarPeriodo('30d');
+    _aplicarPeriodoReceita('30d');
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _aplicarPeriodo(String key) {
@@ -122,6 +139,49 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         case 'todos':
           _dataInicio = DateTime(2000);
           _dataFim = DateTime(2100);
+          break;
+        case 'Personalizado':
+          break;
+      }
+    });
+  }
+
+  void _aplicarPeriodoReceita(String key) {
+    final agora = DateTime.now();
+    setState(() {
+      _receitaPeriodoSelecionado = key;
+      switch (key) {
+        case 'hoje':
+          _receitaDataInicio = DateTime(agora.year, agora.month, agora.day);
+          _receitaDataFim = agora;
+          break;
+        case '7d':
+          _receitaDataInicio = agora.subtract(const Duration(days: 7));
+          _receitaDataFim = agora;
+          break;
+        case '15d':
+          _receitaDataInicio = agora.subtract(const Duration(days: 15));
+          _receitaDataFim = agora;
+          break;
+        case '30d':
+          _receitaDataInicio = agora.subtract(const Duration(days: 30));
+          _receitaDataFim = agora;
+          break;
+        case '3m':
+          _receitaDataInicio = agora.subtract(const Duration(days: 90));
+          _receitaDataFim = agora;
+          break;
+        case '6m':
+          _receitaDataInicio = agora.subtract(const Duration(days: 180));
+          _receitaDataFim = agora;
+          break;
+        case '12m':
+          _receitaDataInicio = agora.subtract(const Duration(days: 365));
+          _receitaDataFim = agora;
+          break;
+        case 'todos':
+          _receitaDataInicio = DateTime(2000);
+          _receitaDataFim = DateTime(2100);
           break;
         case 'Personalizado':
           break;
@@ -171,10 +231,12 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
 
   List<Receita> get _receitasFiltradas {
     return _receitasBox.values.where((r) {
-      if (r.data.isBefore(_dataInicio.subtract(const Duration(days: 1))))
+      if (r.data.isBefore(_receitaDataInicio.subtract(const Duration(days: 1))))
         return false;
-      if (r.data.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
-      if (_pessoaSelecionada != null && r.pessoa != _pessoaSelecionada)
+      if (r.data.isAfter(_receitaDataFim.add(const Duration(days: 1)))) return false;
+      if (_receitaPessoaSelecionada != null && r.pessoa != _receitaPessoaSelecionada)
+        return false;
+      if (_receitaCategoriaSelecionada != null && r.categoria != _receitaCategoriaSelecionada)
         return false;
       return true;
     }).toList();
@@ -215,6 +277,23 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     }
     return mapa;
   }
+
+  Map<String, double> get _receitasPorCategoria {
+    final Map<String, double> mapa = {};
+    for (final r in _receitasFiltradas) {
+      mapa[r.categoria] = (mapa[r.categoria] ?? 0) + r.valor;
+    }
+    return mapa;
+  }
+
+  double get _totalFixasReceita =>
+      _receitasFiltradas.where((r) => r.tipoReceita == 'Fixo').fold(0, (s, r) => s + r.valor);
+  double get _totalVariaveisReceita =>
+      _receitasFiltradas.where((r) => r.tipoReceita == 'Variável').fold(0, (s, r) => s + r.valor);
+  double get _totalRecorrentesReceita =>
+      _receitasFiltradas.where((r) => r.recorrente).fold(0, (s, r) => s + r.valor);
+  double get _totalNaoRecorrentesReceita =>
+      _receitasFiltradas.where((r) => !r.recorrente).fold(0, (s, r) => s + r.valor);
 
   // ── Histórico mensal ──────────────────────────────────────────────────────
 
@@ -658,6 +737,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          indicatorColor: Colors.white,
+          tabs: const [
+            Tab(icon: Icon(Icons.trending_down, size: 18), text: 'Gastos'),
+            Tab(icon: Icon(Icons.trending_up, size: 18), text: 'Receitas'),
+          ],
+        ),
         actions: [
           if (temFiltroAtivo)
             IconButton(
@@ -685,7 +774,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _tabController.index == 0
+          ? SingleChildScrollView(
         padding: EdgeInsets.only(
           left: 16,
           right: 16,
@@ -1622,112 +1712,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── GASTO VS LIMITE POR CATEGORIA (BAR CHART) ─────────────────
-            if (orcamentos.isNotEmpty) ...[
-              const Text(
-                'Gasto vs Limite por Categoria',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        height: 220,
-                        child: BarChart(
-                          BarChartData(
-                            barGroups: orcamentos.asMap().entries.map((entry) {
-                              final i = entry.key;
-                              final orc = entry.value;
-                              final gasto = _gastoMesPorCategoria(orc.categoria);
-                              final percentual = orc.limite > 0 ? gasto / orc.limite : 0.0;
-                              return BarChartGroupData(
-                                x: i,
-                                barRods: [
-                                  BarChartRodData(
-                                    toY: gasto,
-                                    color: _corProgresso(percentual),
-                                    width: 14,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(4),
-                                    ),
-                                  ),
-                                  BarChartRodData(
-                                    toY: orc.limite,
-                                    color: Colors.grey[300]!,
-                                    width: 14,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(4),
-                                    ),
-                                  ),
-                                ],
-                                barsSpace: 4,
-                              );
-                            }).toList(),
-                            titlesData: FlTitlesData(
-                              leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  reservedSize: 55,
-                                  getTitlesWidget: (value, meta) => Text(
-                                    'R\$${value.toInt()}',
-                                    style: const TextStyle(fontSize: 9),
-                                  ),
-                                ),
-                              ),
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  reservedSize: 36,
-                                  getTitlesWidget: (value, meta) {
-                                    final i = value.toInt();
-                                    if (i < 0 || i >= orcamentos.length) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    final cat = orcamentos[i].categoria;
-                                    final short = cat.length > 7 ? '${cat.substring(0, 6)}.' : cat;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Text(
-                                        short,
-                                        style: const TextStyle(fontSize: 9),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              topTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
-                              ),
-                              rightTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
-                              ),
-                            ),
-                            gridData: const FlGridData(show: true),
-                            borderData: FlBorderData(show: false),
-                            groupsSpace: 16,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          _legenda(Colors.green, 'Gasto (mês atual)', ''),
-                          _legenda(Colors.grey[300]!, 'Limite', ''),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
             // ── ORÇAMENTO POR CATEGORIA ────────────────────────────────────
             if (orcamentos.isNotEmpty) ...[
               const Text(
@@ -1829,6 +1813,377 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ],
           ],
         ),
+      )
+          : _buildReceitasTab(context),
+    );
+  }
+
+  Widget _buildReceitasTab(BuildContext context) {
+    final todasPessoas = _todasPessoas;
+    final todasCategorias = _receitasBox.values.map((r) => r.categoria).toSet().toList()..sort();
+    final receitasPorCat = _receitasPorCategoria;
+    final categorias = receitasPorCat.keys.toList();
+    final total = _totalReceitas;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── FILTRO DE PERÍODO ──────────────────────────────────────────
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Período',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _periodos.map((p) {
+                      final sel = _receitaPeriodoSelecionado == p['key'];
+                      return _chipFiltro(
+                        p['label']!,
+                        sel,
+                        () => _aplicarPeriodoReceita(p['key']!),
+                      );
+                    }).toList(),
+                  ),
+                  if (_receitaPeriodoSelecionado != 'Personalizado' &&
+                      _receitaPeriodoSelecionado != 'todos') ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_formatarData(_receitaDataInicio)} até ${_formatarData(_receitaDataFim)}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── FILTRO POR PESSOA ──────────────────────────────────────────
+          if (todasPessoas.isNotEmpty) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Pessoa',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _chipFiltro(
+                          'Todas',
+                          _receitaPessoaSelecionada == null,
+                          () => setState(() => _receitaPessoaSelecionada = null),
+                        ),
+                        ...todasPessoas.map(
+                          (p) => _chipFiltro(
+                            p,
+                            _receitaPessoaSelecionada == p,
+                            () => setState(
+                              () => _receitaPessoaSelecionada =
+                                  _receitaPessoaSelecionada == p ? null : p,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // ── FILTRO POR CATEGORIA ───────────────────────────────────────
+          if (todasCategorias.isNotEmpty) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Categoria',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _chipFiltro(
+                          'Todas',
+                          _receitaCategoriaSelecionada == null,
+                          () => setState(() => _receitaCategoriaSelecionada = null),
+                        ),
+                        ...todasCategorias.map(
+                          (cat) => _chipFiltro(
+                            cat,
+                            _receitaCategoriaSelecionada == cat,
+                            () => setState(
+                              () => _receitaCategoriaSelecionada =
+                                  _receitaCategoriaSelecionada == cat ? null : cat,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // ── CARDS DE RESUMO ──────────────────────────────────────────
+          Row(
+            children: [
+              _cardResumo('Total de Receitas', total, Colors.green),
+              const SizedBox(width: 8),
+              _cardResumo(
+                'Transações',
+                _receitasFiltradas.length.toDouble(),
+                Colors.blue,
+                isCount: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── RECEITAS POR CATEGORIA ────────────────────────────────────
+          const Text(
+            'Receitas por Categoria',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: categorias.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Nenhuma receita no período',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        SizedBox(
+                          height: 200,
+                          child: PieChart(
+                            PieChartData(
+                              sections: categorias.asMap().entries.map((entry) {
+                                final i = entry.key;
+                                final cat = entry.value;
+                                final valor = receitasPorCat[cat]!;
+                                final pct = total > 0 ? valor / total * 100 : 0;
+                                return PieChartSectionData(
+                                  value: valor,
+                                  color: _coresCategorias[i % _coresCategorias.length],
+                                  title: '${pct.toStringAsFixed(1)}%',
+                                  titleStyle: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  radius: 80,
+                                );
+                              }).toList(),
+                              sectionsSpace: 2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          children: categorias.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final cat = entry.value;
+                            return _legenda(
+                              _coresCategorias[i % _coresCategorias.length],
+                              cat,
+                              _formatarValor(receitasPorCat[cat]!),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── FIXA VS VARIÁVEL ──────────────────────────────────────────
+          const Text(
+            'Fixa vs Variável',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _totalFixasReceita == 0 && _totalVariaveisReceita == 0
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Nenhuma receita no período',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        SizedBox(
+                          height: 180,
+                          child: PieChart(
+                            PieChartData(
+                              sections: [
+                                if (_totalFixasReceita > 0)
+                                  PieChartSectionData(
+                                    value: _totalFixasReceita,
+                                    color: Colors.blue,
+                                    title: total > 0
+                                        ? '${(_totalFixasReceita / total * 100).toStringAsFixed(1)}%'
+                                        : '',
+                                    titleStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    radius: 70,
+                                  ),
+                                if (_totalVariaveisReceita > 0)
+                                  PieChartSectionData(
+                                    value: _totalVariaveisReceita,
+                                    color: Colors.teal,
+                                    title: total > 0
+                                        ? '${(_totalVariaveisReceita / total * 100).toStringAsFixed(1)}%'
+                                        : '',
+                                    titleStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    radius: 70,
+                                  ),
+                              ],
+                              sectionsSpace: 2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _legenda(Colors.blue, 'Fixa', _formatarValor(_totalFixasReceita)),
+                            const SizedBox(width: 24),
+                            _legenda(Colors.teal, 'Variável', _formatarValor(_totalVariaveisReceita)),
+                          ],
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── RECORRÊNCIA ───────────────────────────────────────────────
+          const Text(
+            'Recorrência',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _totalRecorrentesReceita == 0 && _totalNaoRecorrentesReceita == 0
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Nenhuma receita no período',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        SizedBox(
+                          height: 180,
+                          child: PieChart(
+                            PieChartData(
+                              sections: [
+                                if (_totalRecorrentesReceita > 0)
+                                  PieChartSectionData(
+                                    value: _totalRecorrentesReceita,
+                                    color: Colors.green,
+                                    title: total > 0
+                                        ? '${(_totalRecorrentesReceita / total * 100).toStringAsFixed(1)}%'
+                                        : '',
+                                    titleStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    radius: 70,
+                                  ),
+                                if (_totalNaoRecorrentesReceita > 0)
+                                  PieChartSectionData(
+                                    value: _totalNaoRecorrentesReceita,
+                                    color: Colors.orange,
+                                    title: total > 0
+                                        ? '${(_totalNaoRecorrentesReceita / total * 100).toStringAsFixed(1)}%'
+                                        : '',
+                                    titleStyle: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    radius: 70,
+                                  ),
+                              ],
+                              sectionsSpace: 2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _legenda(Colors.green, 'Recorrente', _formatarValor(_totalRecorrentesReceita)),
+                            const SizedBox(width: 24),
+                            _legenda(Colors.orange, 'Não recorrente', _formatarValor(_totalNaoRecorrentesReceita)),
+                          ],
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
