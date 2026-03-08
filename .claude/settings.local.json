@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "Bash(flutter analyze lib/relatorios_screen.dart)"
+      "Bash(flutter analyze lib/relatorios_screen.dart)",
+      "Bash(flutter pub get)",
+      "Bash(flutter analyze lib/subscription_service.dart lib/paywall_screen.dart lib/main.dart lib/configuracoes_screen.dart)",
+      "Bash(flutter build apk --debug)",
+      "Bash(adb devices)",
+      "Bash(adb logcat -c)",
+      "Bash(adb logcat -s flutter -s AndroidRuntime -s AlarmManager -s NotificationService)",
+      "Bash(adb logcat -d -v time)",
+      "Bash(flutter run --no-pub)",
+      "Bash(taskkill /F /FI \"WINDOWTITLE eq flutter*\")",
+      "Bash(taskkill /F /IM dart.exe)",
+      "Bash(ls /c/TorlacoSystems/controle_gastos/lib/*.dart)",
+      "Bash(xargs grep -l \"novo\\\\|form\\\\|adicionar\")",
+      "Bash(flutter analyze lib/main.dart)",
+      "Bash(flutter analyze lib/main.dart lib/configuracoes_sistema_screen.dart)",
+      "Bash(flutter analyze lib/configuracoes_sistema_screen.dart lib/subscription_service.dart)",
+      "Bash(flutter analyze lib/configuracoes_sistema_screen.dart)",
+      "Bash(flutter analyze lib/splash_screen.dart lib/configuracoes_sistema_screen.dart lib/onboarding_screen.dart)",
+      "Bash(flutter analyze lib/main.dart lib/paywall_screen.dart)",
+      "Bash(flutter analyze lib/paywall_screen.dart)"
     ]
   }
 }

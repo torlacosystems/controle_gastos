@@ -33,7 +33,7 @@ class AuthService {
   static Future<bool> autenticar() async {
     try {
       return await _auth.authenticate(
-        localizedReason: 'Autentique-se para acessar o Controle de Gastos',
+        localizedReason: 'Autentique-se para acessar o Controlaí',
         options: const AuthenticationOptions(
           biometricOnly:
               false, // permite PIN/padrão do dispositivo como fallback

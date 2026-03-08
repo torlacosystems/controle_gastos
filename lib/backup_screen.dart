@@ -112,8 +112,8 @@ class _BackupScreenState extends State<BackupScreen> {
 
       await Share.shareXFiles(
         [XFile(arquivo.path)],
-        subject: 'Backup Controle de Gastos',
-        text: 'Backup dos dados do app Controle de Gastos.',
+        subject: 'Backup Controlaí',
+        text: 'Backup dos dados do app Controlaí.',
       );
     } catch (e) {
       if (mounted) {

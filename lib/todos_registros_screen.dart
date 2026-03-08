@@ -416,80 +416,89 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     final meses = _mesesDisponiveis;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.of(context).padding.bottom + 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Filtrar por mês',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Icon(
-                Icons.calendar_today,
-                color: _mesFiltro == null
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.grey,
-              ),
-              title: const Text('Todos os registros'),
-              selected: _mesFiltro == null,
-              selectedTileColor: Theme.of(
-                context,
-              ).colorScheme.primary.withOpacity(0.08),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              onTap: () {
-                setState(() {
-                  _mesFiltro = null;
-                  _anoFiltro = null;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(),
-            ...meses.map((m) {
-              final selecionado =
-                  _mesFiltro == m['mes'] && _anoFiltro == m['ano'];
-              return ListTile(
-                leading: Icon(
-                  Icons.calendar_month,
-                  color: selecionado
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
+      builder: (context) {
+        final bottomPadding = MediaQuery.of(context).padding.bottom;
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          builder: (context, scrollController) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Filtrar por mês',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      leading: Icon(
+                        Icons.calendar_today,
+                        color: _mesFiltro == null
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey,
+                      ),
+                      title: const Text('Todos os registros'),
+                      selected: _mesFiltro == null,
+                      selectedTileColor:
+                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      onTap: () {
+                        setState(() {
+                          _mesFiltro = null;
+                          _anoFiltro = null;
+                        });
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const Divider(height: 8),
+                  ],
                 ),
-                title: Text('${_nomesMeses[m['mes']! - 1]} ${m['ano']}'),
-                selected: selecionado,
-                selectedTileColor: Theme.of(
-                  context,
-                ).colorScheme.primary.withOpacity(0.08),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding + 16),
+                  children: meses.map((m) {
+                    final selecionado =
+                        _mesFiltro == m['mes'] && _anoFiltro == m['ano'];
+                    return ListTile(
+                      leading: Icon(
+                        Icons.calendar_month,
+                        color: selecionado
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey,
+                      ),
+                      title: Text('${_nomesMeses[m['mes']! - 1]} ${m['ano']}'),
+                      selected: selecionado,
+                      selectedTileColor:
+                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      onTap: () {
+                        setState(() {
+                          _mesFiltro = m['mes'];
+                          _anoFiltro = m['ano'];
+                        });
+                        Navigator.pop(context);
+                      },
+                    );
+                  }).toList(),
                 ),
-                onTap: () {
-                  setState(() {
-                    _mesFiltro = m['mes'];
-                    _anoFiltro = m['ano'];
-                  });
-                  Navigator.pop(context);
-                },
-              );
-            }),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -908,7 +917,10 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
   Widget _chipTipo(String label, String key, Color cor) {
     final selecionado = _tipoFiltro == key;
     return GestureDetector(
-      onTap: () => setState(() => _tipoFiltro = key),
+      onTap: () => setState(() {
+        _tipoFiltro = key;
+        if (key == 'receita') _filtroParcelado = false;
+      }),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(

@@ -6,6 +6,9 @@ import 'orcamento.dart';
 import 'gasto.dart';
 import 'receita.dart';
 import 'categoria.dart';
+import 'subscription_service.dart';
+import 'paywall_screen.dart';
+import 'fade_route.dart';
 
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
@@ -1679,7 +1682,16 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
       floatingActionButton: _tabController.index == 2
           ? FloatingActionButton.extended(
               heroTag: 'nova_categoria',
-              onPressed: _adicionarNovaCategoria,
+              onPressed: () {
+                if (!SubscriptionService.instance.isPremium) {
+                  Navigator.push(
+                    context,
+                    FadeRoute(page: const PaywallScreen()),
+                  );
+                  return;
+                }
+                _adicionarNovaCategoria();
+              },
               icon: const Icon(Icons.add_circle_outline),
               label: const Text('Nova Categoria'),
               backgroundColor: Theme.of(context).colorScheme.secondary,
@@ -1690,6 +1702,15 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                 if (_tabController.index == 0) {
                   _adicionarOuEditarFormaPagamento();
                 } else {
+                  // Tab Pessoas: bloqueia adição se free e já existe 1 pessoa
+                  if (!SubscriptionService.instance.isPremium &&
+                      _pessoasBox.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      FadeRoute(page: const PaywallScreen()),
+                    );
+                    return;
+                  }
                   _adicionarOuEditarPessoa();
                 }
               },

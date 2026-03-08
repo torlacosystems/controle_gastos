@@ -49,11 +49,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   String? _receitaPessoaSelecionada;
   String? _receitaCategoriaSelecionada;
 
-  // Controle de linhas do gráfico
+  // Controle de linhas do gráfico (aba Gastos)
   bool _mostrarGastos = true;
   bool _mostrarReceitas = true;
   bool _mostrarSaldo = true;
   bool _mostrarAcumulado = false;
+
+  // Controle de linhas do gráfico (aba Receitas)
+  int _receitaHistoricoMeses = 6;
+  bool _mostrarReceitasHist = true;
+  bool _mostrarReceitasAcumulado = false;
   late TabController _tabController;
 
   final List<String> _nomesMeses = [
@@ -245,7 +250,14 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   double get _totalGastos => _gastosFiltrados.fold(0, (s, g) => s + g.valor);
   double get _totalReceitas =>
       _receitasFiltradas.fold(0, (s, r) => s + r.valor);
-  double get _saldo => _totalReceitas - _totalGastos;
+  // Receitas filtradas pelo período e filtros de gastos (usadas nos cards da aba Gastos)
+  double get _totalReceitasPeriodoGastos => _receitasBox.values.where((r) {
+        if (r.data.isBefore(_dataInicio.subtract(const Duration(days: 1)))) return false;
+        if (r.data.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
+        if (_pessoaSelecionada != null && r.pessoa != _pessoaSelecionada) return false;
+        return true;
+      }).fold(0, (s, r) => s + r.valor);
+  double get _saldoPeriodoGastos => _totalReceitasPeriodoGastos - _totalGastos;
 
   double get _totalEsperados => _gastosFiltrados
       .where((g) => g.gastoEsperado)
@@ -352,16 +364,45 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     }).toList();
   }
 
-  double _gastoMesPorCategoria(String categoria) {
+  List<DateTime> _gerarMesesHistoricoReceitas() {
     final agora = DateTime.now();
-    return _gastosBox.values
-        .where(
-          (g) =>
-              g.categoria == categoria &&
-              g.data.month == agora.month &&
-              g.data.year == agora.year,
-        )
-        .fold(0, (s, g) => s + g.valor);
+    final metade = _receitaHistoricoMeses ~/ 2;
+    final List<DateTime> meses = [];
+    for (int i = -metade; i <= metade; i++) {
+      meses.add(DateTime(agora.year, agora.month + i));
+    }
+    return meses;
+  }
+
+  double _receitasPorMesHistorico(DateTime mes) => _receitasBox.values
+      .where((r) {
+        if (r.data.month != mes.month || r.data.year != mes.year) return false;
+        if (_receitaPessoaSelecionada != null && r.pessoa != _receitaPessoaSelecionada) return false;
+        if (_receitaCategoriaSelecionada != null && r.categoria != _receitaCategoriaSelecionada) return false;
+        return true;
+      })
+      .fold(0, (s, r) => s + r.valor);
+
+  List<double> _calcularAcumuladoReceitas(List<DateTime> meses) {
+    double acumulado = 0;
+    return meses.map((mes) {
+      acumulado += _receitasPorMesHistorico(mes);
+      return acumulado;
+    }).toList();
+  }
+
+  double _gastosNoPeriodoPorCategoria(String categoria) =>
+      _gastosFiltrados.where((g) => g.categoria == categoria).fold(0, (s, g) => s + g.valor);
+
+  double _limiteAjustado(double limiteBase) {
+    if (_periodoSelecionado == 'todos' && _gastosFiltrados.isNotEmpty) {
+      final primeiro = _gastosFiltrados.map((g) => g.data).reduce((a, b) => a.isBefore(b) ? a : b);
+      final ultimo = _gastosFiltrados.map((g) => g.data).reduce((a, b) => a.isAfter(b) ? a : b);
+      final meses = (ultimo.year - primeiro.year) * 12 + (ultimo.month - primeiro.month) + 1;
+      return limiteBase * meses;
+    }
+    final dias = _dataFim.difference(_dataInicio).inDays + 1;
+    return limiteBase * dias / 30;
   }
 
   Color _corProgresso(double percentual) {
@@ -434,9 +475,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
             children: [
               _pdfCard('Gastos', _formatarValor(_totalGastos)),
               pw.SizedBox(width: 8),
-              _pdfCard('Receitas', _formatarValor(_totalReceitas)),
+              _pdfCard('Receitas', _formatarValor(_totalReceitasPeriodoGastos)),
               pw.SizedBox(width: 8),
-              _pdfCard('Saldo', _formatarValor(_saldo)),
+              _pdfCard('Saldo', _formatarValor(_saldoPeriodoGastos)),
               pw.SizedBox(width: 8),
               _pdfCard(
                 'Transacoes',
@@ -657,6 +698,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   Widget _toggleLinha(Color cor, String label, bool ativo, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1097,7 +1139,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
               children: [
                 _cardResumo('Gastos', _totalGastos, Colors.red),
                 const SizedBox(width: 8),
-                _cardResumo('Receitas', _totalReceitas, Colors.green),
+                _cardResumo('Receitas', _totalReceitasPeriodoGastos, Colors.green),
               ],
             ),
             const SizedBox(height: 8),
@@ -1105,8 +1147,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
               children: [
                 _cardResumo(
                   'Saldo',
-                  _saldo,
-                  _saldo >= 0 ? Colors.green : Colors.red,
+                  _saldoPeriodoGastos,
+                  _saldoPeriodoGastos >= 0 ? Colors.green : Colors.red,
                 ),
                 const SizedBox(width: 8),
                 _cardResumo(
@@ -1720,8 +1762,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
               ),
               const SizedBox(height: 12),
               ...orcamentos.map((orc) {
-                final gasto = _gastoMesPorCategoria(orc.categoria);
-                final percentual = orc.limite > 0 ? (gasto / orc.limite) : 0.0;
+                final gasto = _gastosNoPeriodoPorCategoria(orc.categoria);
+                final limite = _limiteAjustado(orc.limite);
+                final percentual = limite > 0 ? (gasto / limite) : 0.0;
                 final cor = _corProgresso(percentual);
                 final ultrapassou = percentual >= 1.0;
                 return Card(
@@ -1784,7 +1827,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                               style: TextStyle(fontSize: 12, color: cor),
                             ),
                             Text(
-                              'Limite: ${_formatarValor(orc.limite)}',
+                              'Limite: ${_formatarValor(limite)}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey,
@@ -1796,7 +1839,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              '⚠ Ultrapassado em ${_formatarValor(gasto - orc.limite)}',
+                              '⚠ Ultrapassado em ${_formatarValor(gasto - limite)}',
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: Colors.red,
@@ -1968,6 +2011,183 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
               ),
             ],
           ),
+          const SizedBox(height: 24),
+
+          // ── HISTÓRICO MENSAL DE RECEITAS ───────────────────────────────
+          Builder(builder: (context) {
+            final agora = DateTime.now();
+            final mesesReceitas = _gerarMesesHistoricoReceitas();
+            final acumuladosReceitas = _calcularAcumuladoReceitas(mesesReceitas);
+            final maxYR = [
+              if (_mostrarReceitasHist)
+                ...mesesReceitas.map(_receitasPorMesHistorico),
+              if (_mostrarReceitasAcumulado) ...acumuladosReceitas,
+              0.0,
+            ].reduce((a, b) => a > b ? a : b) * 1.2;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Histórico Mensal',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Row(
+                      children: [3, 6, 12].map((m) {
+                        final sel = _receitaHistoricoMeses == m;
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: GestureDetector(
+                            onTap: () => setState(() => _receitaHistoricoMeses = m),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: sel ? Theme.of(context).colorScheme.primary : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                '${m}m',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: sel ? Colors.white : Colors.grey[700],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 220,
+                          child: LineChart(
+                            LineChartData(
+                              minY: 0,
+                              maxY: maxYR > 0 ? maxYR : 1000,
+                              lineBarsData: [
+                                if (_mostrarReceitasHist)
+                                  LineChartBarData(
+                                    spots: mesesReceitas.asMap().entries.map((e) =>
+                                        FlSpot(e.key.toDouble(), _receitasPorMesHistorico(e.value))).toList(),
+                                    isCurved: true,
+                                    color: Colors.green,
+                                    barWidth: 3,
+                                    dotData: FlDotData(
+                                      getDotPainter: (spot, percent, bar, index) {
+                                        final mes = mesesReceitas[index];
+                                        final atual = mes.month == agora.month && mes.year == agora.year;
+                                        return FlDotCirclePainter(
+                                          radius: atual ? 6 : 3,
+                                          color: Colors.green,
+                                          strokeWidth: atual ? 2 : 0,
+                                          strokeColor: Colors.white,
+                                        );
+                                      },
+                                    ),
+                                    belowBarData: BarAreaData(show: true, color: Colors.green.withValues(alpha: 0.08)),
+                                  ),
+                                if (_mostrarReceitasAcumulado)
+                                  LineChartBarData(
+                                    spots: acumuladosReceitas.asMap().entries.map((e) =>
+                                        FlSpot(e.key.toDouble(), e.value)).toList(),
+                                    isCurved: true,
+                                    color: Colors.purple,
+                                    barWidth: 3,
+                                    dashArray: [3, 3],
+                                    dotData: FlDotData(
+                                      getDotPainter: (spot, percent, bar, index) {
+                                        final mes = mesesReceitas[index];
+                                        final atual = mes.month == agora.month && mes.year == agora.year;
+                                        return FlDotCirclePainter(
+                                          radius: atual ? 6 : 3,
+                                          color: Colors.purple,
+                                          strokeWidth: atual ? 2 : 0,
+                                          strokeColor: Colors.white,
+                                        );
+                                      },
+                                    ),
+                                    belowBarData: BarAreaData(show: true, color: Colors.purple.withValues(alpha: 0.05)),
+                                  ),
+                              ],
+                              titlesData: FlTitlesData(
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    interval: 1,
+                                    getTitlesWidget: (value, meta) {
+                                      final i = value.toInt();
+                                      if (i < 0 || i >= mesesReceitas.length) return const Text('');
+                                      final mes = mesesReceitas[i];
+                                      final atual = mes.month == agora.month && mes.year == agora.year;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          _nomesMeses[mes.month - 1],
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: atual ? FontWeight.bold : FontWeight.normal,
+                                            color: atual ? Theme.of(context).colorScheme.primary : Colors.grey,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 55,
+                                    getTitlesWidget: (value, meta) => Text(
+                                      'R\$${value.toInt()}',
+                                      style: const TextStyle(fontSize: 9),
+                                    ),
+                                  ),
+                                ),
+                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              ),
+                              gridData: const FlGridData(show: true),
+                              borderData: FlBorderData(show: false),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            _toggleLinha(Colors.green, 'Receitas', _mostrarReceitasHist,
+                                () => setState(() => _mostrarReceitasHist = !_mostrarReceitasHist)),
+                            _toggleLinha(Colors.purple, 'Acumulado', _mostrarReceitasAcumulado,
+                                () => setState(() => _mostrarReceitasAcumulado = !_mostrarReceitasAcumulado)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Toque nas legendas para mostrar/ocultar • Mês atual destacado',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
           const SizedBox(height: 24),
 
           // ── RECEITAS POR CATEGORIA ────────────────────────────────────

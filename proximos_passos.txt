@@ -1,11 +1,4 @@
-Onboarding (tela de boas-vindas na primeira abertura)
-Ícone e nome do app personalizados no AndroidManifest
-
-acertar tamanho dos botões em orçamentos - ok 
-implementar notificação para lembrar ao usuário
-alinhar as telas aos botões embaixo do android
-outros sempre ser o ultimo - ok
-erro na string de exclusão de categoria nova - ok
-erro no símbolo de pets na main
-possibilidade de editar o limite pra categoria nova -ok
-rever comportamento ao excluir categoria nova = o que fazer com os registros - ok
+pedir pra criar vários registros para testar importação de backup
+rodar todas as exportações
+validar uma tela estatisticas
+adicionar o filtro todos em insights

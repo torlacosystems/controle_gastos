@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:workmanager/workmanager.dart';
 import 'gasto.dart';
 import 'receita.dart';
 import 'forma_pagamento.dart';
@@ -20,8 +20,8 @@ import 'fade_route.dart';
 import 'app_settings.dart';
 import 'lock_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'background_task.dart';
-import 'notification_service.dart';
+import 'subscription_service.dart';
+import 'paywall_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,8 +43,7 @@ void main() async {
     await Hive.deleteBoxFromDisk('categorias');
     await Hive.openBox<Categoria>('categorias');
   }
-  await Workmanager().initialize(callbackDispatcher);
-  await NotificationService.initialize();
+  await SubscriptionService.instance.initialize();
   final brightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
   await carregarTema(brightness);
@@ -60,7 +59,7 @@ class MyApp extends StatelessWidget {
       valueListenable: themeModeNotifier,
       builder: (context, themeMode, _) {
         return MaterialApp(
-          title: 'Controle de Gastos',
+          title: 'Controlaí',
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
@@ -119,6 +118,8 @@ class _HomeScreenState extends State<HomeScreen> {
     'Dezembro',
   ];
 
+  static final _widgetChannel = MethodChannel('com.example.controle_gastos/widget');
+
   @override
   void initState() {
     super.initState();
@@ -126,6 +127,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _receitasBox = Hive.box<Receita>('receitas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _widgetChannel.setMethodCallHandler((call) async {
+      if (call.method == 'novo_gasto') {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _abrirAdicionarGasto());
+      }
+    });
   }
 
   @override
@@ -282,14 +288,29 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _abrirRelatorios() async {
+    if (!SubscriptionService.instance.isPremium) {
+      await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
+      setState(() {});
+      return;
+    }
     await Navigator.push(context, FadeRoute(page: const RelatoriosScreen()));
   }
 
   void _abrirInsights() async {
+    if (!SubscriptionService.instance.isPremium) {
+      await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
+      setState(() {});
+      return;
+    }
     await Navigator.push(context, FadeRoute(page: const InsightsScreen()));
   }
 
   void _abrirBackup() async {
+    if (!SubscriptionService.instance.isPremium) {
+      await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
+      setState(() {});
+      return;
+    }
     await Navigator.push(context, FadeRoute(page: const BackupScreen()));
     setState(() {});
   }
@@ -374,6 +395,126 @@ class _HomeScreenState extends State<HomeScreen> {
     return itens.take(5).toList();
   }
 
+  Widget _bannerAssinatura() {
+    final service = SubscriptionService.instance;
+    if (service.isSubscriptionActive) return const SizedBox.shrink();
+
+    if (service.isTrialActive && service.trialDaysRemaining <= 3) {
+      final dias = service.trialDaysRemaining;
+      return GestureDetector(
+        onTap: () async {
+          await Navigator.push(
+            context,
+            FadeRoute(page: const PaywallScreen()),
+          );
+          setState(() {});
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: Colors.amber[700],
+          child: Row(
+            children: [
+              const Icon(Icons.workspace_premium, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Período de teste: $dias dia${dias == 1 ? '' : 's'} restante${dias == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Text(
+                'Assinar',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Trial ainda ativo com mais de 3 dias — banner informativo neutro
+    if (service.isTrialActive) {
+      final dias = service.trialDaysRemaining;
+      return GestureDetector(
+        onTap: () async {
+          await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
+          setState(() {});
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: Theme.of(context).colorScheme.primary,
+          child: Row(
+            children: [
+              const Icon(Icons.workspace_premium, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Você tem $dias dia${dias == 1 ? '' : 's'} de acesso gratuito',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Text(
+                'Ver planos',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Trial expirado, não assinante
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
+        setState(() {});
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: Colors.red[700],
+        child: const Row(
+          children: [
+            Icon(Icons.lock, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Período de teste expirado — toque para assinar o Premium',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _botaoNavegacao(IconData icone, String label, VoidCallback onPressed) {
     return InkWell(
       onTap: onPressed,
@@ -452,6 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          _bannerAssinatura(),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),

@@ -1,0 +1,353 @@
+{
+  "versao": 1,
+  "exportado_em": "2026-03-08T09:00:00.000",
+  "gastos": [
+    {
+      "id": "g001",
+      "descricao": "Supermercado Extra",
+      "valor": 387.45,
+      "categoria": "Alimentação",
+      "data": "2026-03-01T10:30:00.000",
+      "formaPagamento": "Nubank Débito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Extra",
+      "recorrente": false,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g002",
+      "descricao": "Conta de luz",
+      "valor": 210.80,
+      "categoria": "Moradia",
+      "data": "2026-03-03T08:00:00.000",
+      "formaPagamento": "Nubank Débito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "CPFL",
+      "recorrente": true,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g003",
+      "descricao": "Jantar restaurante",
+      "valor": 145.00,
+      "categoria": "Alimentação",
+      "data": "2026-03-05T20:00:00.000",
+      "formaPagamento": "Nubank Crédito",
+      "pessoa": "Ana",
+      "tipoGasto": "Lazer",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Restaurante Bela Vista",
+      "recorrente": false,
+      "gastoEsperado": false
+    },
+    {
+      "id": "g004",
+      "descricao": "iPhone 15 Pro",
+      "valor": 6999.00,
+      "categoria": "Tecnologia",
+      "data": "2026-02-10T14:00:00.000",
+      "formaPagamento": "Nubank Crédito",
+      "pessoa": "Eu",
+      "tipoGasto": "Supérfluo",
+      "parcelado": true,
+      "numeroParcelas": 12,
+      "estabelecimento": "Apple Store",
+      "recorrente": false,
+      "gastoEsperado": false
+    },
+    {
+      "id": "g005",
+      "descricao": "Academia",
+      "valor": 99.90,
+      "categoria": "Saúde",
+      "data": "2026-03-01T07:00:00.000",
+      "formaPagamento": "Nubank Débito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Smart Fit",
+      "recorrente": true,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g006",
+      "descricao": "Gasolina",
+      "valor": 250.00,
+      "categoria": "Transporte",
+      "data": "2026-03-06T17:30:00.000",
+      "formaPagamento": "Inter Débito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Posto Shell",
+      "recorrente": false,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g007",
+      "descricao": "Netflix",
+      "valor": 55.90,
+      "categoria": "Lazer",
+      "data": "2026-03-02T00:00:00.000",
+      "formaPagamento": "Nubank Crédito",
+      "pessoa": "Eu",
+      "tipoGasto": "Supérfluo",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Netflix",
+      "recorrente": true,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g008",
+      "descricao": "Farmácia",
+      "valor": 78.50,
+      "categoria": "Saúde",
+      "data": "2026-03-04T11:00:00.000",
+      "formaPagamento": "Nubank Débito",
+      "pessoa": "Ana",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Drogasil",
+      "recorrente": false,
+      "gastoEsperado": false
+    },
+    {
+      "id": "g009",
+      "descricao": "Aluguel",
+      "valor": 1800.00,
+      "categoria": "Moradia",
+      "data": "2026-03-05T09:00:00.000",
+      "formaPagamento": "Inter Débito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Imobiliária",
+      "recorrente": true,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g010",
+      "descricao": "Curso online Flutter",
+      "valor": 197.00,
+      "categoria": "Educação",
+      "data": "2026-02-20T15:00:00.000",
+      "formaPagamento": "Nubank Crédito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Udemy",
+      "recorrente": false,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g011",
+      "descricao": "Tênis Nike",
+      "valor": 449.90,
+      "categoria": "Vestuário",
+      "data": "2026-02-25T16:00:00.000",
+      "formaPagamento": "Nubank Crédito",
+      "pessoa": "Eu",
+      "tipoGasto": "Supérfluo",
+      "parcelado": true,
+      "numeroParcelas": 3,
+      "estabelecimento": "Nike Store",
+      "recorrente": false,
+      "gastoEsperado": false
+    },
+    {
+      "id": "g012",
+      "descricao": "Internet fibra",
+      "valor": 119.90,
+      "categoria": "Moradia",
+      "data": "2026-03-07T00:00:00.000",
+      "formaPagamento": "Inter Débito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Vivo",
+      "recorrente": true,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g013",
+      "descricao": "Cinema",
+      "valor": 62.00,
+      "categoria": "Lazer",
+      "data": "2026-03-07T19:00:00.000",
+      "formaPagamento": "Nubank Crédito",
+      "pessoa": "Ana",
+      "tipoGasto": "Lazer",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Cinemark",
+      "recorrente": false,
+      "gastoEsperado": false
+    },
+    {
+      "id": "g014",
+      "descricao": "Plano de saúde",
+      "valor": 380.00,
+      "categoria": "Saúde",
+      "data": "2026-03-01T00:00:00.000",
+      "formaPagamento": "Inter Débito",
+      "pessoa": "Eu",
+      "tipoGasto": "Essencial",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "Unimed",
+      "recorrente": true,
+      "gastoEsperado": true
+    },
+    {
+      "id": "g015",
+      "descricao": "iFood semana",
+      "valor": 188.70,
+      "categoria": "Alimentação",
+      "data": "2026-03-06T12:30:00.000",
+      "formaPagamento": "Nubank Crédito",
+      "pessoa": "Eu",
+      "tipoGasto": "Supérfluo",
+      "parcelado": false,
+      "numeroParcelas": 1,
+      "estabelecimento": "iFood",
+      "recorrente": false,
+      "gastoEsperado": false
+    }
+  ],
+  "receitas": [
+    {
+      "id": "r001",
+      "descricao": "Salário março",
+      "valor": 6500.00,
+      "categoria": "Salário",
+      "data": "2026-03-05T00:00:00.000",
+      "pessoa": "Eu",
+      "recorrente": true,
+      "tipoReceita": "Fixo"
+    },
+    {
+      "id": "r002",
+      "descricao": "Freelance site",
+      "valor": 1200.00,
+      "categoria": "Freelance",
+      "data": "2026-03-03T00:00:00.000",
+      "pessoa": "Eu",
+      "recorrente": false,
+      "tipoReceita": "Extra"
+    },
+    {
+      "id": "r003",
+      "descricao": "Salário Ana",
+      "valor": 4200.00,
+      "categoria": "Salário",
+      "data": "2026-03-05T00:00:00.000",
+      "pessoa": "Ana",
+      "recorrente": true,
+      "tipoReceita": "Fixo"
+    },
+    {
+      "id": "r004",
+      "descricao": "Dividendos ações",
+      "valor": 320.50,
+      "categoria": "Investimentos",
+      "data": "2026-03-01T00:00:00.000",
+      "pessoa": "Eu",
+      "recorrente": false,
+      "tipoReceita": "Extra"
+    },
+    {
+      "id": "r005",
+      "descricao": "Aluguel sala comercial",
+      "valor": 950.00,
+      "categoria": "Aluguel",
+      "data": "2026-03-10T00:00:00.000",
+      "pessoa": "Eu",
+      "recorrente": true,
+      "tipoReceita": "Fixo"
+    }
+  ],
+  "formas_pagamento": [
+    {
+      "id": "fp001",
+      "descricao": "Nubank Débito",
+      "tipo": "Débito",
+      "banco": "Nubank"
+    },
+    {
+      "id": "fp002",
+      "descricao": "Nubank Crédito",
+      "tipo": "Crédito",
+      "banco": "Nubank"
+    },
+    {
+      "id": "fp003",
+      "descricao": "Inter Débito",
+      "tipo": "Débito",
+      "banco": "Inter"
+    },
+    {
+      "id": "fp004",
+      "descricao": "Dinheiro",
+      "tipo": "Dinheiro",
+      "banco": ""
+    }
+  ],
+  "pessoas": [
+    {
+      "id": "p001",
+      "nome": "Eu",
+      "parentesco": "Eu mesmo"
+    },
+    {
+      "id": "p002",
+      "nome": "Ana",
+      "parentesco": "Cônjuge"
+    },
+    {
+      "id": "p003",
+      "nome": "João",
+      "parentesco": "Filho"
+    }
+  ],
+  "orcamentos": [
+    {
+      "id": "o001",
+      "categoria": "Alimentação",
+      "limite": 600.00
+    },
+    {
+      "id": "o002",
+      "categoria": "Moradia",
+      "limite": 2200.00
+    },
+    {
+      "id": "o003",
+      "categoria": "Transporte",
+      "limite": 400.00
+    },
+    {
+      "id": "o004",
+      "categoria": "Saúde",
+      "limite": 500.00
+    },
+    {
+      "id": "o005",
+      "categoria": "Lazer",
+      "limite": 300.00
+    }
+  ]
+}
