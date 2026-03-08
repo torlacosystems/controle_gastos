@@ -292,6 +292,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     ).showSnackBar(const SnackBar(content: Text('Registros excluídos')));
   }
 
+  // ── CSV ───────────────────────────────────────────────────────────────────
+
   String _gerarCsv() {
     final buffer = StringBuffer();
     buffer.writeln(
@@ -313,33 +315,53 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     return buffer.toString();
   }
 
-  Future<void> _exportarCsv() async {
+  Future<File> _salvarCsvArquivo() async {
+    final csv = _gerarCsv();
+    final dir = await getApplicationDocumentsDirectory();
+    final arquivo = File('${dir.path}/registros_granix.csv');
+    await arquivo.writeAsString(csv);
+    return arquivo;
+  }
+
+  Future<void> _downloadCsv() async {
     try {
       final csv = _gerarCsv();
-      final dir = await getApplicationDocumentsDirectory();
-      final arquivo = File('${dir.path}/registros.csv');
+      Directory? dir;
+      try { dir = await getDownloadsDirectory(); } catch (_) {}
+      dir ??= await getApplicationDocumentsDirectory();
+      final nome = 'registros_granix_${DateTime.now().millisecondsSinceEpoch}.csv';
+      final arquivo = File('${dir.path}/$nome');
       await arquivo.writeAsString(csv);
-      await Share.shareXFiles([
-        XFile(arquivo.path),
-      ], text: 'Registros exportados');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('CSV salvo em: ${arquivo.path}'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao exportar: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
     }
   }
 
-  Future<void> _exportarPorEmail() async {
+  Future<void> _compartilharCsv() async {
     try {
-      final csv = _gerarCsv();
-      final dir = await getApplicationDocumentsDirectory();
-      final arquivo = File('${dir.path}/registros.csv');
-      await arquivo.writeAsString(csv);
+      final arquivo = await _salvarCsvArquivo();
+      await Share.shareXFiles([XFile(arquivo.path)], text: 'Registros — Granix');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao compartilhar: $e')));
+    }
+  }
+
+  Future<void> _enviarCsvEmail() async {
+    try {
+      final arquivo = await _salvarCsvArquivo();
       try {
         final email = Email(
-          body:
-              'Segue em anexo o arquivo CSV com todos os registros financeiros.',
-          subject: 'Exportação de registros financeiros',
+          body: 'Segue em anexo os registros financeiros.',
+          subject: 'Registros — Granix',
           attachmentPaths: [arquivo.path],
           isHTML: false,
         );
@@ -347,15 +369,13 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       } catch (_) {
         await Share.shareXFiles(
           [XFile(arquivo.path)],
-          subject: 'Exportação de registros financeiros',
-          text:
-              'Segue em anexo o arquivo CSV com todos os registros financeiros.',
+          subject: 'Registros — Granix',
+          text: 'Segue em anexo os registros financeiros.',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao exportar: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao enviar: $e')));
     }
   }
 
@@ -594,29 +614,38 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
-              onSelected: (value) {
-                if (value == 'csv') _exportarCsv();
-                if (value == 'email') _exportarPorEmail();
+              tooltip: 'Exportar CSV',
+              onSelected: (v) {
+                if (v == 'download') _downloadCsv();
+                if (v == 'share') _compartilharCsv();
+                if (v == 'email') _enviarCsvEmail();
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'csv',
-                  child: Row(
-                    children: [
-                      Icon(Icons.download, size: 20),
-                      SizedBox(width: 8),
-                      Text('Exportar CSV'),
-                    ],
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'download',
+                  child: ListTile(
+                    leading: Icon(Icons.download),
+                    title: Text('Baixar CSV'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
+                  value: 'share',
+                  child: ListTile(
+                    leading: Icon(Icons.share),
+                    title: Text('Compartilhar CSV'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+                PopupMenuItem(
                   value: 'email',
-                  child: Row(
-                    children: [
-                      Icon(Icons.email, size: 20),
-                      SizedBox(width: 8),
-                      Text('Enviar por e-mail'),
-                    ],
+                  child: ListTile(
+                    leading: Icon(Icons.email),
+                    title: Text('Enviar por e-mail'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
                   ),
                 ),
               ],
@@ -649,7 +678,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withValues(alpha: 0.1),
               child: Row(
                 children: [
                   const Icon(Icons.search, size: 16, color: Colors.orange),
@@ -680,7 +709,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: primary.withOpacity(0.1),
+              color: primary.withValues(alpha: 0.1),
               child: Row(
                 children: [
                   Icon(Icons.filter_list, size: 16, color: primary),
@@ -760,7 +789,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: selecionado ? primary.withOpacity(0.1) : null,
+                          color: selecionado ? primary.withValues(alpha: 0.1) : null,
                           border: Border(
                             left: BorderSide(
                               color: isGasto ? Colors.red : Colors.green,

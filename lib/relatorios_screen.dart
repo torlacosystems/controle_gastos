@@ -3,7 +3,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:flutter_email_sender/flutter_email_sender.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -439,12 +438,36 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
 
   // ── PDF ───────────────────────────────────────────────────────────────────
 
+  static const int _kMaxLinhasPdf = 500;
+
   Future<pw.Document> _gerarPdf() async {
     final doc = pw.Document();
-    final periodoTexto = _periodoSelecionado == 'todos'
-        ? 'Todos os registros'
-        : '${_formatarData(_dataInicio)} ate ${_formatarData(_dataFim)}';
+    String periodoTexto;
+    if (_periodoSelecionado == 'todos') {
+      final todosGastosBox = Hive.box<Gasto>('gastos');
+      final todasReceitasBox = Hive.box<Receita>('receitas');
+      final todasDatas = [
+        ...todosGastosBox.values.map((g) => g.data),
+        ...todasReceitasBox.values.map((r) => r.data),
+      ];
+      if (todasDatas.isEmpty) {
+        periodoTexto = '${_formatarData(_dataInicio)} ate ${_formatarData(_dataFim)}';
+      } else {
+        final primeiro = todasDatas.reduce((a, b) => a.isBefore(b) ? a : b);
+        final ultimo = todasDatas.reduce((a, b) => a.isAfter(b) ? a : b);
+        periodoTexto = '${_formatarData(primeiro)} ate ${_formatarData(ultimo)}';
+      }
+    } else {
+      periodoTexto = '${_formatarData(_dataInicio)} ate ${_formatarData(_dataFim)}';
+    }
     final gastosPorCat = _gastosPorCategoria;
+
+    final todosGastos = _gastosFiltrados;
+    final todasReceitas = _receitasFiltradas;
+    final gastosTruncados = todosGastos.length > _kMaxLinhasPdf;
+    final receitasTruncadas = todasReceitas.length > _kMaxLinhasPdf;
+    final gastosParaPdf = gastosTruncados ? todosGastos.sublist(0, _kMaxLinhasPdf) : todosGastos;
+    final receitasParaPdf = receitasTruncadas ? todasReceitas.sublist(0, _kMaxLinhasPdf) : todasReceitas;
 
     doc.addPage(
       pw.MultiPage(
@@ -452,7 +475,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
         margin: const pw.EdgeInsets.all(32),
         build: (context) => [
           pw.Text(
-            'Relatorio Financeiro',
+            'Relatorio Financeiro — Granix',
             style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 4),
@@ -481,7 +504,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
               pw.SizedBox(width: 8),
               _pdfCard(
                 'Transacoes',
-                '${_gastosFiltrados.length + _receitasFiltradas.length}',
+                '${todosGastos.length + todasReceitas.length}',
               ),
             ],
           ),
@@ -492,76 +515,70 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
               style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 8),
-            pw.Table.fromTextArray(
+            pw.TableHelper.fromTextArray(
               headers: ['Categoria', 'Total'],
               data: gastosPorCat.entries
                   .map((e) => [e.key, _formatarValor(e.value)])
                   .toList(),
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey200,
-              ),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
               border: pw.TableBorder.all(color: PdfColors.grey300),
               cellAlignment: pw.Alignment.centerLeft,
             ),
             pw.SizedBox(height: 20),
           ],
           pw.Text(
-            'Gastos',
+            'Gastos${gastosTruncados ? ' (primeiros $_kMaxLinhasPdf de ${todosGastos.length})' : ''}',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
+          if (gastosTruncados)
+            pw.Text(
+              'Use filtros de periodo/pessoa para exportar um intervalo menor.',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+            ),
           pw.SizedBox(height: 8),
-          _gastosFiltrados.isEmpty
-              ? pw.Text(
-                  'Nenhum gasto no periodo.',
-                  style: const pw.TextStyle(color: PdfColors.grey),
-                )
-              : pw.Table.fromTextArray(
+          gastosParaPdf.isEmpty
+              ? pw.Text('Nenhum gasto no periodo.', style: const pw.TextStyle(color: PdfColors.grey))
+              : pw.TableHelper.fromTextArray(
                   headers: ['Data', 'Categoria', 'Descricao', 'Valor'],
-                  data: _gastosFiltrados
-                      .map(
-                        (g) => [
-                          _formatarData(g.data),
-                          g.categoria,
-                          g.descricao.isEmpty ? '-' : g.descricao,
-                          _formatarValor(g.valor),
-                        ],
-                      )
+                  data: gastosParaPdf
+                      .map((g) => [
+                            _formatarData(g.data),
+                            g.categoria,
+                            g.descricao.isEmpty ? '-' : g.descricao,
+                            _formatarValor(g.valor),
+                          ])
                       .toList(),
                   headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                  headerDecoration: const pw.BoxDecoration(
-                    color: PdfColors.grey200,
-                  ),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   cellAlignment: pw.Alignment.centerLeft,
                 ),
           pw.SizedBox(height: 20),
           pw.Text(
-            'Receitas',
+            'Receitas${receitasTruncadas ? ' (primeiras $_kMaxLinhasPdf de ${todasReceitas.length})' : ''}',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
+          if (receitasTruncadas)
+            pw.Text(
+              'Use filtros de periodo/pessoa para exportar um intervalo menor.',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+            ),
           pw.SizedBox(height: 8),
-          _receitasFiltradas.isEmpty
-              ? pw.Text(
-                  'Nenhuma receita no periodo.',
-                  style: const pw.TextStyle(color: PdfColors.grey),
-                )
-              : pw.Table.fromTextArray(
+          receitasParaPdf.isEmpty
+              ? pw.Text('Nenhuma receita no periodo.', style: const pw.TextStyle(color: PdfColors.grey))
+              : pw.TableHelper.fromTextArray(
                   headers: ['Data', 'Categoria', 'Descricao', 'Valor'],
-                  data: _receitasFiltradas
-                      .map(
-                        (r) => [
-                          _formatarData(r.data),
-                          r.categoria,
-                          r.descricao.isEmpty ? '-' : r.descricao,
-                          _formatarValor(r.valor),
-                        ],
-                      )
+                  data: receitasParaPdf
+                      .map((r) => [
+                            _formatarData(r.data),
+                            r.categoria,
+                            r.descricao.isEmpty ? '-' : r.descricao,
+                            _formatarValor(r.valor),
+                          ])
                       .toList(),
                   headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                  headerDecoration: const pw.BoxDecoration(
-                    color: PdfColors.grey200,
-                  ),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   border: pw.TableBorder.all(color: PdfColors.grey300),
                   cellAlignment: pw.Alignment.centerLeft,
                 ),
@@ -597,22 +614,76 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     );
   }
 
-  Future<void> _exportarPdf() async {
+  Future<void> _mostrarLoadingPdf() {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Gerando PDF...'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadPdf() async {
+    _mostrarLoadingPdf();
     try {
+      await Future.microtask(() {});
       final doc = await _gerarPdf();
-      await Printing.sharePdf(
-        bytes: await doc.save(),
-        filename: 'relatorio_financeiro.pdf',
+      final bytes = await doc.save();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      // Tenta pasta Downloads; fallback para documentos do app
+      Directory? dir;
+      try {
+        dir = await getDownloadsDirectory();
+      } catch (_) {}
+      dir ??= await getApplicationDocumentsDirectory();
+      final nome = 'relatorio_granix_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final arquivo = File('${dir.path}/$nome');
+      await arquivo.writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF salvo em: ${arquivo.path}'), duration: const Duration(seconds: 4)),
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao gerar PDF: $e')));
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar PDF: $e')));
+    }
+  }
+
+  Future<void> _compartilharPdf() async {
+    _mostrarLoadingPdf();
+    try {
+      await Future.microtask(() {});
+      final doc = await _gerarPdf();
+      final bytes = await doc.save();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      final dir = await getApplicationDocumentsDirectory();
+      final arquivo = File('${dir.path}/relatorio_granix.pdf');
+      await arquivo.writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(arquivo.path)],
+        subject: 'Relatório Financeiro — Granix',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao compartilhar PDF: $e')));
     }
   }
 
   Future<void> _enviarPdfEmail() async {
+    _mostrarLoadingPdf();
     try {
+      await Future.microtask(() {});
       final doc = await _gerarPdf();
       final bytes = await doc.save();
       final dir = await getApplicationDocumentsDirectory();
@@ -626,7 +697,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
           isHTML: false,
         );
         await FlutterEmailSender.send(email);
+        if (mounted) Navigator.of(context).pop();
       } catch (_) {
+        if (mounted) Navigator.of(context).pop();
         await Share.shareXFiles(
           [XFile(arquivo.path)],
           subject: 'Relatório Financeiro',
@@ -634,9 +707,9 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao enviar PDF: $e')));
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao enviar PDF: $e')));
     }
   }
 
@@ -652,46 +725,24 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     Colors.pink,
   ];
 
-  Widget _chipFiltro(String label, bool selecionado, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selecionado
-              ? Theme.of(context).colorScheme.primary
-              : Colors.grey[200],
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: selecionado ? Colors.white : Colors.grey[700],
-          ),
-        ),
+  Widget _dropFiltro<T>({
+    required String label,
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return DropdownButtonFormField<T>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(fontSize: 12),
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        isDense: true,
       ),
-    );
-  }
-
-  Widget _linhaFiltroBoolean(
-    String label,
-    bool? valor,
-    void Function(bool?) onChange,
-  ) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 90,
-          child: Text(label, style: const TextStyle(fontSize: 13)),
-        ),
-        _chipFiltro('Todos', valor == null, () => onChange(null)),
-        const SizedBox(width: 8),
-        _chipFiltro('Sim', valor == true, () => onChange(valor == true ? null : true)),
-        const SizedBox(width: 8),
-        _chipFiltro('Não', valor == false, () => onChange(valor == false ? null : false)),
-      ],
+      items: items,
+      onChanged: onChanged,
     );
   }
 
@@ -804,15 +855,43 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                 _filtroRecorrente = null;
               }),
             ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
             tooltip: 'Exportar PDF',
-            onPressed: _exportarPdf,
-          ),
-          IconButton(
-            icon: const Icon(Icons.email),
-            tooltip: 'Enviar PDF por e-mail',
-            onPressed: _enviarPdfEmail,
+            onSelected: (v) {
+              if (v == 'download') _downloadPdf();
+              if (v == 'share') _compartilharPdf();
+              if (v == 'email') _enviarPdfEmail();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'download',
+                child: ListTile(
+                  leading: Icon(Icons.download),
+                  title: Text('Baixar PDF'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'share',
+                child: ListTile(
+                  leading: Icon(Icons.share),
+                  title: Text('Compartilhar PDF'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'email',
+                child: ListTile(
+                  leading: Icon(Icons.email),
+                  title: Text('Enviar por e-mail'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -827,306 +906,184 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── FILTRO DE PERÍODO ──────────────────────────────────────────
+            // ── FILTROS ────────────────────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Período',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _periodos.map((p) {
-                        final sel = _periodoSelecionado == p['key'];
-                        return _chipFiltro(
-                          p['label']!,
-                          sel,
-                          () => _aplicarPeriodo(p['key']!),
-                        );
-                      }).toList(),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _dropFiltro<String>(
+                            label: 'Período',
+                            value: _periodoSelecionado,
+                            items: _periodos.map((p) => DropdownMenuItem(
+                              value: p['key']!,
+                              child: Text(p['label']!, style: const TextStyle(fontSize: 13)),
+                            )).toList(),
+                            onChanged: (v) {
+                              if (v == 'Personalizado') setState(() => _periodoSelecionado = 'Personalizado');
+                              else if (v != null) _aplicarPeriodo(v);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _dropFiltro<String>(
+                            label: 'Pessoa',
+                            value: _pessoaSelecionada,
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('Todas', style: TextStyle(fontSize: 13))),
+                              ...todasPessoas.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 13)))),
+                            ],
+                            onChanged: (v) => setState(() => _pessoaSelecionada = v),
+                          ),
+                        ),
+                      ],
                     ),
                     if (_periodoSelecionado == 'Personalizado') ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
                             child: GestureDetector(
                               onTap: _selecionarDataInicio,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'De',
+                                  labelStyle: TextStyle(fontSize: 12),
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  isDense: true,
                                 ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today,
-                                      size: 16,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _formatarData(_dataInicio),
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ],
-                                ),
+                                child: Text(_formatarData(_dataInicio), style: const TextStyle(fontSize: 13)),
                               ),
                             ),
                           ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              'até',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: GestureDetector(
                               onTap: _selecionarDataFim,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Até',
+                                  labelStyle: TextStyle(fontSize: 12),
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  isDense: true,
                                 ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today,
-                                      size: 16,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _formatarData(_dataFim),
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ],
-                                ),
+                                child: Text(_formatarData(_dataFim), style: const TextStyle(fontSize: 13)),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                    if (_periodoSelecionado != 'Personalizado' &&
-                        _periodoSelecionado != 'todos') ...[
-                      const SizedBox(height: 8),
+                    ] else if (_periodoSelecionado != 'todos') ...[
+                      const SizedBox(height: 4),
                       Text(
                         '${_formatarData(_dataInicio)} até ${_formatarData(_dataFim)}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                       ),
                     ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // ── FILTRO POR PESSOA ──────────────────────────────────────────
-            if (todasPessoas.isNotEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Pessoa',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                    if (_formasPagamentoBox.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
                         children: [
-                          _chipFiltro(
-                            'Todas',
-                            _pessoaSelecionada == null,
-                            () => setState(() => _pessoaSelecionada = null),
+                          Expanded(
+                            child: _dropFiltro<String>(
+                              label: 'Tipo pagamento',
+                              value: _tipoFormaPagamento,
+                              items: [
+                                const DropdownMenuItem(value: null, child: Text('Todos', style: TextStyle(fontSize: 13))),
+                                ...[
+                                  'Crédito', 'Débito', 'VA/VR'
+                                ].where((t) => _formasPagamentoBox.values.any((f) => f.tipo == t))
+                                  .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))),
+                              ],
+                              onChanged: (v) => setState(() {
+                                _tipoFormaPagamento = v;
+                                _formaPagamentoSelecionada = null;
+                              }),
+                            ),
                           ),
-                          ...todasPessoas.map(
-                            (p) => _chipFiltro(
-                              p,
-                              _pessoaSelecionada == p,
-                              () => setState(
-                                () => _pessoaSelecionada =
-                                    _pessoaSelecionada == p ? null : p,
-                              ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _dropFiltro<String>(
+                              label: 'Cartão / Conta',
+                              value: _formaPagamentoSelecionada,
+                              items: [
+                                const DropdownMenuItem(value: null, child: Text('Todos', style: TextStyle(fontSize: 13))),
+                                ..._formasPagamentoBox.values
+                                  .where((f) => _tipoFormaPagamento == null || f.tipo == _tipoFormaPagamento)
+                                  .map((f) => DropdownMenuItem(value: f.descricao, child: Text(f.descricao, style: const TextStyle(fontSize: 13)))),
+                              ],
+                              onChanged: (v) => setState(() => _formaPagamentoSelecionada = v),
                             ),
                           ),
                         ],
                       ),
                     ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // ── FILTRO POR FORMA DE PAGAMENTO ──────────────────────────────
-            if (_formasPagamentoBox.isNotEmpty) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Forma de Pagamento',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Nível 1 — tipo
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _chipFiltro(
-                            'Todos',
-                            _tipoFormaPagamento == null,
-                            () => setState(() {
-                              _tipoFormaPagamento = null;
-                              _formaPagamentoSelecionada = null;
-                            }),
-                          ),
-                          ...['Crédito', 'Débito', 'VA/VR']
-                              .where(
-                                (tipo) => _formasPagamentoBox.values.any(
-                                  (f) => f.tipo == tipo,
-                                ),
-                              )
-                              .map(
-                                (tipo) => _chipFiltro(
-                                  tipo,
-                                  _tipoFormaPagamento == tipo,
-                                  () => setState(() {
-                                    _tipoFormaPagamento =
-                                        _tipoFormaPagamento == tipo
-                                        ? null
-                                        : tipo;
-                                    _formaPagamentoSelecionada = null;
-                                  }),
-                                ),
-                              ),
-                        ],
-                      ),
-
-                      // Nível 2 — forma específica
-                      if (_tipoFormaPagamento != null) ...[
-                        const SizedBox(height: 10),
-                        const Divider(height: 1),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Cartão / Conta ($_tipoFormaPagamento)',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _dropFiltro<bool>(
+                            label: 'Esperado',
+                            value: _filtroEsperado,
+                            items: const [
+                              DropdownMenuItem(value: null, child: Text('Todos', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: true, child: Text('Sim', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: false, child: Text('Não', style: TextStyle(fontSize: 13))),
+                            ],
+                            onChanged: (v) => setState(() => _filtroEsperado = v),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _chipFiltro(
-                              'Todas',
-                              _formaPagamentoSelecionada == null,
-                              () => setState(
-                                () => _formaPagamentoSelecionada = null,
-                              ),
-                            ),
-                            ..._formasPagamentoBox.values
-                                .where((f) => f.tipo == _tipoFormaPagamento)
-                                .map(
-                                  (f) => _chipFiltro(
-                                    f.descricao,
-                                    _formaPagamentoSelecionada == f.descricao,
-                                    () => setState(
-                                      () => _formaPagamentoSelecionada =
-                                          _formaPagamentoSelecionada ==
-                                              f.descricao
-                                          ? null
-                                          : f.descricao,
-                                    ),
-                                  ),
-                                ),
-                          ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _dropFiltro<bool>(
+                            label: 'Evitável',
+                            value: _filtroEvitavel,
+                            items: const [
+                              DropdownMenuItem(value: null, child: Text('Todos', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: true, child: Text('Sim', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: false, child: Text('Não', style: TextStyle(fontSize: 13))),
+                            ],
+                            onChanged: (v) => setState(() => _filtroEvitavel = v),
+                          ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // ── FILTRO POR CARACTERÍSTICAS ─────────────────────────────────
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Características',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _linhaFiltroBoolean(
-                      'Esperado',
-                      _filtroEsperado,
-                      (v) => setState(() => _filtroEsperado = v),
                     ),
                     const SizedBox(height: 8),
-                    _linhaFiltroBoolean(
-                      'Evitável',
-                      _filtroEvitavel,
-                      (v) => setState(() => _filtroEvitavel = v),
-                    ),
-                    const SizedBox(height: 8),
-                    _linhaFiltroBoolean(
-                      'Fixo',
-                      _filtroFixo,
-                      (v) => setState(() => _filtroFixo = v),
-                    ),
-                    const SizedBox(height: 8),
-                    _linhaFiltroBoolean(
-                      'Recorrente',
-                      _filtroRecorrente,
-                      (v) => setState(() => _filtroRecorrente = v),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _dropFiltro<bool>(
+                            label: 'Fixo',
+                            value: _filtroFixo,
+                            items: const [
+                              DropdownMenuItem(value: null, child: Text('Todos', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: true, child: Text('Sim', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: false, child: Text('Não', style: TextStyle(fontSize: 13))),
+                            ],
+                            onChanged: (v) => setState(() => _filtroFixo = v),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _dropFiltro<bool>(
+                            label: 'Recorrente',
+                            value: _filtroRecorrente,
+                            items: const [
+                              DropdownMenuItem(value: null, child: Text('Todos', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: true, child: Text('Sim', style: TextStyle(fontSize: 13))),
+                              DropdownMenuItem(value: false, child: Text('Não', style: TextStyle(fontSize: 13))),
+                            ],
+                            onChanged: (v) => setState(() => _filtroRecorrente = v),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1247,7 +1204,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                                 ),
                                 belowBarData: BarAreaData(
                                   show: true,
-                                  color: Colors.red.withOpacity(0.08),
+                                  color: Colors.red.withValues(alpha: 0.08),
                                 ),
                               ),
                             if (_mostrarReceitas)
@@ -1281,7 +1238,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                                 ),
                                 belowBarData: BarAreaData(
                                   show: true,
-                                  color: Colors.green.withOpacity(0.08),
+                                  color: Colors.green.withValues(alpha: 0.08),
                                 ),
                               ),
                             if (_mostrarSaldo)
@@ -1316,7 +1273,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                                 ),
                                 belowBarData: BarAreaData(
                                   show: true,
-                                  color: Colors.blue.withOpacity(0.05),
+                                  color: Colors.blue.withValues(alpha: 0.05),
                                 ),
                               ),
                             if (_mostrarAcumulado)
@@ -1348,7 +1305,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                                 ),
                                 belowBarData: BarAreaData(
                                   show: true,
-                                  color: Colors.purple.withOpacity(0.05),
+                                  color: Colors.purple.withValues(alpha: 0.05),
                                 ),
                               ),
                           ],
@@ -1878,36 +1835,115 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── FILTRO DE PERÍODO ──────────────────────────────────────────
+          // ── FILTROS ────────────────────────────────────────────────────
           Card(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Período',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _dropFiltro<String>(
+                          label: 'Período',
+                          value: _receitaPeriodoSelecionado,
+                          items: _periodos.map((p) => DropdownMenuItem(
+                            value: p['key']!,
+                            child: Text(p['label']!, style: const TextStyle(fontSize: 13)),
+                          )).toList(),
+                          onChanged: (v) {
+                            if (v == 'Personalizado') setState(() => _receitaPeriodoSelecionado = 'Personalizado');
+                            else if (v != null) _aplicarPeriodoReceita(v);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _dropFiltro<String>(
+                          label: 'Pessoa',
+                          value: _receitaPessoaSelecionada,
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('Todas', style: TextStyle(fontSize: 13))),
+                            ...todasPessoas.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 13)))),
+                          ],
+                          onChanged: (v) => setState(() => _receitaPessoaSelecionada = v),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _periodos.map((p) {
-                      final sel = _receitaPeriodoSelecionado == p['key'];
-                      return _chipFiltro(
-                        p['label']!,
-                        sel,
-                        () => _aplicarPeriodoReceita(p['key']!),
-                      );
-                    }).toList(),
-                  ),
-                  if (_receitaPeriodoSelecionado != 'Personalizado' &&
-                      _receitaPeriodoSelecionado != 'todos') ...[
+                  if (_receitaPeriodoSelecionado == 'Personalizado') ...[
                     const SizedBox(height: 8),
-                    Text(
-                      '${_formatarData(_receitaDataInicio)} até ${_formatarData(_receitaDataFim)}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _receitaDataInicio,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) setState(() => _receitaDataInicio = picked);
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'De',
+                                labelStyle: TextStyle(fontSize: 12),
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                isDense: true,
+                              ),
+                              child: Text(_formatarData(_receitaDataInicio), style: const TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _receitaDataFim,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) setState(() => _receitaDataFim = picked);
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Até',
+                                labelStyle: TextStyle(fontSize: 12),
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                isDense: true,
+                              ),
+                              child: Text(_formatarData(_receitaDataFim), style: const TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else if (_receitaPeriodoSelecionado != 'todos') ...[
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${_formatarData(_receitaDataInicio)} até ${_formatarData(_receitaDataFim)}',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                    ),
+                  ],
+                  if (todasCategorias.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _dropFiltro<String>(
+                      label: 'Categoria',
+                      value: _receitaCategoriaSelecionada,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Todas', style: TextStyle(fontSize: 13))),
+                        ...todasCategorias.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, style: const TextStyle(fontSize: 13)))),
+                      ],
+                      onChanged: (v) => setState(() => _receitaCategoriaSelecionada = v),
                     ),
                   ],
                 ],
@@ -1915,88 +1951,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
             ),
           ),
           const SizedBox(height: 12),
-
-          // ── FILTRO POR PESSOA ──────────────────────────────────────────
-          if (todasPessoas.isNotEmpty) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Pessoa',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _chipFiltro(
-                          'Todas',
-                          _receitaPessoaSelecionada == null,
-                          () => setState(() => _receitaPessoaSelecionada = null),
-                        ),
-                        ...todasPessoas.map(
-                          (p) => _chipFiltro(
-                            p,
-                            _receitaPessoaSelecionada == p,
-                            () => setState(
-                              () => _receitaPessoaSelecionada =
-                                  _receitaPessoaSelecionada == p ? null : p,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // ── FILTRO POR CATEGORIA ───────────────────────────────────────
-          if (todasCategorias.isNotEmpty) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Categoria',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _chipFiltro(
-                          'Todas',
-                          _receitaCategoriaSelecionada == null,
-                          () => setState(() => _receitaCategoriaSelecionada = null),
-                        ),
-                        ...todasCategorias.map(
-                          (cat) => _chipFiltro(
-                            cat,
-                            _receitaCategoriaSelecionada == cat,
-                            () => setState(
-                              () => _receitaCategoriaSelecionada =
-                                  _receitaCategoriaSelecionada == cat ? null : cat,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
 
           // ── CARDS DE RESUMO ──────────────────────────────────────────
           Row(

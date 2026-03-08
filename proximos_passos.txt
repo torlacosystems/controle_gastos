@@ -1,4 +1,3 @@
-pedir pra criar vários registros para testar importação de backup
 rodar todas as exportações
 validar uma tela estatisticas
 adicionar o filtro todos em insights

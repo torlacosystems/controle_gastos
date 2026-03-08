@@ -5,6 +5,18 @@ final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(
   ThemeMode.system,
 );
 
+const _kRendaMensal = 'renda_mensal_familiar';
+
+Future<double?> carregarRendaMensal() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.containsKey(_kRendaMensal) ? prefs.getDouble(_kRendaMensal) : null;
+}
+
+Future<void> salvarRendaMensal(double valor) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setDouble(_kRendaMensal, valor);
+}
+
 const _kTemaUsuario = 'tema_usuario'; // escolha do usuário: 'dark' | 'light'
 const _kTemaCelularNaEscolha =
     'tema_celular_na_escolha'; // tema do celular quando o usuário escolheu

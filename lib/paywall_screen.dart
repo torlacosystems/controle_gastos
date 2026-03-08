@@ -89,7 +89,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
               Text(
                 emTrial && diasRestantes <= 3
                     ? 'Seu período de teste\nestá acabando!'
-                    : 'Desbloqueie o\nControlaí Premium',
+                    : 'Desbloqueie o\nGranix Premium',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 24,

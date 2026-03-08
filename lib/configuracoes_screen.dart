@@ -9,6 +9,7 @@ import 'categoria.dart';
 import 'subscription_service.dart';
 import 'paywall_screen.dart';
 import 'fade_route.dart';
+import 'app_settings.dart';
 
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
@@ -26,6 +27,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
   late Box<Categoria> _categoriasBox;
+  double? _rendaMensal;
 
   final List<String> _grausParentesco = [
     'Eu Mesmo',
@@ -71,6 +73,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
     _categoriasBox = Hive.box<Categoria>('categorias');
+    carregarRendaMensal().then((v) {
+      if (mounted) setState(() => _rendaMensal = v);
+    });
   }
 
   void _mostrarSnackbarSucesso(String mensagem) {
@@ -248,205 +253,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     return true;
   }
 
-  // ── Exclusão de Orçamento ─────────────────────────────────────────────────
-
-  Future<bool?> _confirmarExclusaoOrcamento(
-    BuildContext context,
-    String categoria,
-  ) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Orçamento'),
-        content: Text(
-          'Tem certeza que deseja excluir o orçamento de "$categoria"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Modal Orçamento ───────────────────────────────────────────────────────
-
-  void _adicionarOuEditarOrcamento({Orcamento? orcamento, int? index}) {
-    String categoriaSelecionada =
-        orcamento?.categoria ?? _categoriasGasto.first['nome'];
-    final limiteController = TextEditingController(
-      text: orcamento != null
-          ? orcamento.limite.toStringAsFixed(2).replaceAll('.', ',')
-          : '',
-    );
-    final isEdicao = orcamento != null;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).padding.bottom +
-                24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isEdicao ? 'Editar Orçamento' : 'Novo Orçamento',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Categoria',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: categoriaSelecionada,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: _categoriasGasto.map((cat) {
-                  return DropdownMenuItem<String>(
-                    value: cat['nome'] as String,
-                    child: Row(
-                      children: [
-                        Icon(
-                          cat['icone'] as IconData,
-                          size: 18,
-                          color: Colors.grey[700],
-                        ),
-                        const SizedBox(width: 8),
-                        Text(cat['nome'] as String),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (v) =>
-                    setModalState(() => categoriaSelecionada = v!),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Limite mensal (R\$)',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: limiteController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  hintText: '0,00',
-                  border: OutlineInputBorder(),
-                  prefixText: 'R\$ ',
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final texto = limiteController.text
-                        .replaceAll('.', '')
-                        .replaceAll(',', '.');
-                    final limite = double.tryParse(texto);
-                    if (limite == null || limite <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Informe um limite válido'),
-                        ),
-                      );
-                      return;
-                    }
-                    final duplicado = _orcamentosBox.values
-                        .toList()
-                        .asMap()
-                        .entries
-                        .any((e) {
-                          if (index != null && e.key == index) return false;
-                          return e.value.categoria == categoriaSelecionada;
-                        });
-                    if (duplicado) {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Orçamento duplicado'),
-                          content: Text(
-                            'Já existe um orçamento para "$categoriaSelecionada".',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text('OK'),
-                            ),
-                          ],
-                        ),
-                      );
-                      return;
-                    }
-                    final novoOrcamento = Orcamento(
-                      id:
-                          orcamento?.id ??
-                          DateTime.now().millisecondsSinceEpoch.toString(),
-                      categoria: categoriaSelecionada,
-                      limite: limite,
-                    );
-                    if (orcamento == null) {
-                      await _orcamentosBox.add(novoOrcamento);
-                    } else {
-                      await _orcamentosBox.putAt(index!, novoOrcamento);
-                    }
-                    setState(() {});
-                    Navigator.pop(context);
-                    _mostrarSnackbarSucesso(
-                      isEdicao
-                          ? 'Orçamento atualizado com sucesso!'
-                          : 'Orçamento salvo com sucesso!',
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    isEdicao ? 'Atualizar' : 'Salvar',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ── Modal Forma de Pagamento ──────────────────────────────────────────────
 
@@ -631,12 +437,172 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
+  // ── Editar renda mensal ───────────────────────────────────────────────────
+
+  void _editarRendaMensal() {
+    final ctrl = TextEditingController(
+      text: _rendaMensal != null
+          ? _rendaMensal!.toStringAsFixed(2).replaceAll('.', ',')
+          : '',
+    );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom +
+              MediaQuery.of(context).padding.bottom +
+              24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Renda mensal familiar',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Usada para calcular gasto diário vs renda diária nos insights.',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Valor (R\$)',
+                hintText: '0,00',
+                prefixText: 'R\$ ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final texto = ctrl.text.trim().replaceAll(',', '.');
+                  final valor = double.tryParse(texto);
+                  if (valor == null || valor <= 0) return;
+                  await salvarRendaMensal(valor);
+                  if (!context.mounted) return;
+                  setState(() => _rendaMensal = valor);
+                  Navigator.pop(context);
+                  _mostrarSnackbarSucesso('Renda mensal atualizada!');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Salvar',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Editar nome do usuário principal ─────────────────────────────────────
+
+  void _editarNomePrincipal(Pessoa pessoa) {
+    final nomeController = TextEditingController(text: pessoa.nome);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom +
+              MediaQuery.of(context).padding.bottom +
+              24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Editar meu nome',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nomeController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Nome',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final nome = nomeController.text.trim();
+                  if (nome.isEmpty) return;
+                  final atualizada = Pessoa(
+                    id: 'usuario_principal',
+                    nome: nome,
+                    parentesco: 'Eu Mesmo',
+                  );
+                  await _pessoasBox.put('usuario_principal', atualizada);
+                  if (!context.mounted) return;
+                  setState(() {});
+                  Navigator.pop(context);
+                  _mostrarSnackbarSucesso('Nome atualizado com sucesso!');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Salvar',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Modal Pessoa ──────────────────────────────────────────────────────────
 
   void _adicionarOuEditarPessoa({Pessoa? pessoa, int? index}) {
     final nomeController = TextEditingController(text: pessoa?.nome ?? '');
-    String parentescoSelecionado = pessoa?.parentesco ?? 'Eu Mesmo';
-    if (!_grausParentesco.contains(parentescoSelecionado)) {
+    // "Eu Mesmo" é reservado ao usuário principal; não aparece ao cadastrar família
+    final grausDisponiveis = _grausParentesco
+        .where((g) => g != 'Eu Mesmo')
+        .toList();
+    String parentescoSelecionado = pessoa?.parentesco ?? grausDisponiveis.first;
+    if (!grausDisponiveis.contains(parentescoSelecionado)) {
       parentescoSelecionado = 'Outro';
     }
     final isEdicao = pessoa != null;
@@ -685,9 +651,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: parentescoSelecionado,
+                initialValue: parentescoSelecionado,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: _grausParentesco
+                items: grausDisponiveis
                     .map(
                       (grau) =>
                           DropdownMenuItem(value: grau, child: Text(grau)),
@@ -1363,8 +1329,13 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   @override
   Widget build(BuildContext context) {
     final formas = _formasPagamentoBox.values.toList();
-    final pessoas = _pessoasBox.values.toList();
-    final orcamentos = _orcamentosBox.values.toList();
+    final pessoasPrincipal = _pessoasBox.values
+        .where((p) => p.id == 'usuario_principal')
+        .toList();
+    final pessoasFamilia = _pessoasBox.values
+        .where((p) => p.id != 'usuario_principal')
+        .toList();
+    final pessoas = [...pessoasPrincipal, ...pessoasFamilia];
 
     return Scaffold(
       appBar: AppBar(
@@ -1449,7 +1420,42 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                 ),
 
           // ── ABA PESSOAS ────────────────────────────────────────────────
-          pessoas.isEmpty
+          Column(
+            children: [
+              // Card renda mensal
+              InkWell(
+                onTap: _editarRendaMensal,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        child: Icon(Icons.attach_money, color: Theme.of(context).colorScheme.primary),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Renda mensal familiar', style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text(
+                              _rendaMensal != null
+                                  ? 'R\$ ${_rendaMensal!.toStringAsFixed(2).replaceAll('.', ',')}'
+                                  : 'Não informada — toque para adicionar',
+                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.edit, size: 18, color: Colors.grey),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(),
+              Expanded(
+                child: pessoasFamilia.isEmpty && pessoasPrincipal.isEmpty
               ? const Center(
                   child: Text(
                     'Nenhuma pessoa cadastrada.\nToque em + para adicionar.',
@@ -1464,6 +1470,34 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   itemCount: pessoas.length,
                   itemBuilder: (context, index) {
                     final pessoa = pessoas[index];
+                    final isPrincipal = pessoa.id == 'usuario_principal';
+
+                    if (isPrincipal) {
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          child: const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                          ),
+                        ),
+                        title: Text(
+                          pessoa.nome,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(pessoa.parentesco),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _editarNomePrincipal(pessoa),
+                        ),
+                      );
+                    }
+
+                    final idxReal = _pessoasBox.values
+                        .toList()
+                        .indexWhere((p) => p.id == pessoa.id);
                     return Dismissible(
                       key: Key(pessoa.id),
                       direction: DismissDirection.endToStart,
@@ -1479,7 +1513,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                           pessoa,
                         );
                         if (!confirmar) return false;
-                        await _pessoasBox.deleteAt(index);
+                        if (idxReal >= 0) await _pessoasBox.deleteAt(idxReal);
                         setState(() {});
                         return false;
                       },
@@ -1502,13 +1536,16 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                           icon: const Icon(Icons.edit),
                           onPressed: () => _adicionarOuEditarPessoa(
                             pessoa: pessoa,
-                            index: index,
+                            index: idxReal,
                           ),
                         ),
                       ),
                     );
                   },
                 ),
+              ),
+            ],
+          ),
 
           // ── ABA ORÇAMENTOS ─────────────────────────────────────────────
           Builder(

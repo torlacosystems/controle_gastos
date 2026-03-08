@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'main.dart';
+import 'setup_wizard_screen.dart';
 import 'fade_route.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -17,7 +17,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _paginas = [
     _PaginaData(
       icone: Icons.account_balance_wallet_outlined,
-      titulo: 'Bem-vindo ao Controlaí',
+      titulo: 'Bem-vindo ao Granix',
       descricao:
           'Seu assistente inteligente para controle de gastos pessoais. Simples, rápido e completo.',
     ),
@@ -62,7 +62,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_completo', true);
     if (mounted) {
-      Navigator.pushReplacement(context, FadeRoute(page: const HomeScreen()));
+      Navigator.pushReplacement(context, FadeRoute(page: const SetupWizardScreen()));
     }
   }
 

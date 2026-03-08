@@ -3,6 +3,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'gasto.dart';
 import 'receita.dart';
+import 'forma_pagamento.dart';
+import 'app_settings.dart';
 
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
@@ -14,7 +16,9 @@ class InsightsScreen extends StatefulWidget {
 class _InsightsScreenState extends State<InsightsScreen> {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
+  late Box<FormaPagamento> _formasPagamentoBox;
   double _metaEconomia = 0;
+  double? _rendaMensal;
   final TextEditingController _metaController = TextEditingController();
 
   // Filtro de período
@@ -30,6 +34,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
     {'label': '3 meses', 'key': '3m'},
     {'label': '6 meses', 'key': '6m'},
     {'label': '12 meses', 'key': '12m'},
+    {'label': 'Todos', 'key': 'todos'},
     {'label': 'Personalizado', 'key': 'Personalizado'},
   ];
 
@@ -52,8 +57,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
     super.initState();
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
+    _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _aplicarPeriodo('30d');
     _carregarMeta();
+    carregarRendaMensal().then((v) {
+      if (mounted && v != null) setState(() => _rendaMensal = v);
+    });
   }
 
   void _aplicarPeriodo(String key) {
@@ -82,6 +91,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
         case '12m':
           _dataInicio = agora.subtract(const Duration(days: 365));
           _dataFim = agora;
+        case 'todos':
+          _dataInicio = DateTime(2000);
+          _dataFim = DateTime(2100);
         default:
           _dataInicio = agora.subtract(const Duration(days: 30));
           _dataFim = agora;
@@ -140,7 +152,24 @@ class _InsightsScreenState extends State<InsightsScreen> {
   List<Gasto> get _gastosPeriodo =>
       _gastosBox.values.where((g) => _noperiodo(g.data)).toList();
 
+  // Número de meses efetivos do período.
+  // Quando "todos": conta do primeiro ao último lançamento (igual ao orçamento por categoria).
+  // Nos demais: dias / 30 arredondado, mínimo 1.
+  int get _mesesEfetivos {
+    if (_periodoSelecionado == 'todos' && _gastosPeriodo.isNotEmpty) {
+      final primeiro = _gastosPeriodo.map((g) => g.data).reduce((a, b) => a.isBefore(b) ? a : b);
+      final ultimo  = _gastosPeriodo.map((g) => g.data).reduce((a, b) => a.isAfter(b)  ? a : b);
+      final m = (ultimo.year - primeiro.year) * 12 + (ultimo.month - primeiro.month) + 1;
+      return m < 1 ? 1 : m;
+    }
+    final dias = _dataFim.difference(_dataInicio).inDays + 1;
+    final m = (dias / 30.0).round();
+    return m < 1 ? 1 : m;
+  }
+
   List<Gasto> get _gastosPeriodoAnterior {
+    // "Todos" não tem período anterior comparável.
+    if (_periodoSelecionado == 'todos') return [];
     final dias = _dataFim.difference(_dataInicio).inDays + 1;
     final antFim = _dataInicio.subtract(const Duration(days: 1));
     final antInicio = antFim.subtract(Duration(days: dias - 1));
@@ -167,6 +196,22 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   double get _totalEvitaveis =>
       _gastosPeriodo.where((g) => g.gastoEvitavel).fold(0, (s, g) => s + g.valor);
+
+  Set<String> get _descricoesCredito {
+    return _formasPagamentoBox.values
+        .where((f) => f.tipo == 'Crédito')
+        .map((f) => f.descricao)
+        .toSet();
+  }
+
+  List<Gasto> get _gastosCartaoCredito =>
+      _gastosPeriodo.where((g) => _descricoesCredito.contains(g.formaPagamento)).toList();
+
+  double get _totalCartaoCredito =>
+      _gastosCartaoCredito.fold(0, (s, g) => s + g.valor);
+
+  double get _totalEvitaveisCartao =>
+      _gastosCartaoCredito.where((g) => g.gastoEvitavel).fold(0, (s, g) => s + g.valor);
 
   String get _categoriaMaisGasta {
     if (_gastosPeriodo.isEmpty) return 'Nenhum gasto';
@@ -197,8 +242,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
     return _diasSemana[diaMaior - 1];
   }
 
-  double get _mediaGastosDiarios {
+  // Quando "todos" ou período >= 30 dias: média mensal. Caso contrário: média diária.
+  bool get _usarMediaMensal =>
+      _periodoSelecionado == 'todos' || _dataFim.difference(_dataInicio).inDays >= 30;
+
+  double get _mediaGastos {
     if (_gastosPeriodo.isEmpty) return 0;
+    if (_usarMediaMensal) return _totalPeriodo / _mesesEfetivos;
     final dias = _dataFim.difference(_dataInicio).inDays + 1;
     return _totalPeriodo / dias;
   }
@@ -235,6 +285,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
         return 'Últimos 6 meses';
       case '12m':
         return 'Últimos 12 meses';
+      case 'todos':
+        if (_gastosBox.isEmpty) return 'Sem registros';
+        final datas = _gastosBox.values.map((g) => g.data).toList();
+        final primeiro = datas.reduce((a, b) => a.isBefore(b) ? a : b);
+        final ultimo = datas.reduce((a, b) => a.isAfter(b) ? a : b);
+        return '${_formatarData(primeiro)} – ${_formatarData(ultimo)}';
       default:
         return '${_formatarData(_dataInicio)} – ${_formatarData(_dataFim)}';
     }
@@ -264,77 +320,71 @@ class _InsightsScreenState extends State<InsightsScreen> {
             // ── FILTRO DE PERÍODO ────────────────────────────────────────
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Período',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _periodos.map((p) {
-                        final sel = _periodoSelecionado == p['key'];
-                        return GestureDetector(
-                          onTap: () {
-                            if (p['key'] == 'Personalizado') {
-                              setState(() => _periodoSelecionado = 'Personalizado');
-                            } else {
-                              _aplicarPeriodo(p['key']!);
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: sel
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              p['label']!,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: sel ? Colors.white : Colors.grey[700],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                    DropdownButtonFormField<String>(
+                      initialValue: _periodoSelecionado,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Período',
+                        labelStyle: TextStyle(fontSize: 12),
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        isDense: true,
+                      ),
+                      items: _periodos.map((p) => DropdownMenuItem(
+                        value: p['key']!,
+                        child: Text(p['label']!, style: const TextStyle(fontSize: 13)),
+                      )).toList(),
+                      onChanged: (v) {
+                        if (v == 'Personalizado') setState(() => _periodoSelecionado = 'Personalizado');
+                        else if (v != null) _aplicarPeriodo(v);
+                      },
                     ),
                     if (_periodoSelecionado == 'Personalizado') ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => _selecionarData(inicio: true),
-                              icon: const Icon(Icons.calendar_today, size: 16),
-                              label: Text(_formatarData(_dataInicio), style: const TextStyle(fontSize: 13)),
+                            child: GestureDetector(
+                              onTap: () => _selecionarData(inicio: true),
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'De',
+                                  labelStyle: TextStyle(fontSize: 12),
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  isDense: true,
+                                ),
+                                child: Text(_formatarData(_dataInicio), style: const TextStyle(fontSize: 13)),
+                              ),
                             ),
                           ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('até'),
-                          ),
+                          const SizedBox(width: 8),
                           Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => _selecionarData(inicio: false),
-                              icon: const Icon(Icons.calendar_today, size: 16),
-                              label: Text(_formatarData(_dataFim), style: const TextStyle(fontSize: 13)),
+                            child: GestureDetector(
+                              onTap: () => _selecionarData(inicio: false),
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Até',
+                                  labelStyle: TextStyle(fontSize: 12),
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  isDense: true,
+                                ),
+                                child: Text(_formatarData(_dataFim), style: const TextStyle(fontSize: 13)),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ] else ...[
-                      const SizedBox(height: 6),
+                    ] else if (_periodoSelecionado != 'todos') ...[
+                      const SizedBox(height: 4),
                       Text(
                         '${_formatarData(_dataInicio)} até ${_formatarData(_dataFim)}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                       ),
                     ],
                   ],
@@ -354,7 +404,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               child: Column(
                 children: [
                   Text(
-                    'Insights — $_labelPeriodo',
+                    _periodoSelecionado == 'todos' ? 'Insights' : 'Insights — $_labelPeriodo',
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
@@ -435,13 +485,36 @@ class _InsightsScreenState extends State<InsightsScreen> {
             _cardAlerta(
               icone: Icons.warning_amber,
               cor: Colors.orange,
-              titulo: 'Média diária de gastos',
-              conteudo: 'Sua média diária no período é ${_formatarValor(_mediaGastosDiarios)}.',
-              subtexto: _mediaGastosDiarios > 50
-                  ? 'Atenção: média acima de R\$ 50,00 por dia.'
-                  : 'Sua média diária está controlada.',
-              destaque: _mediaGastosDiarios > 50,
+              titulo: _usarMediaMensal ? 'Média mensal de gastos' : 'Média diária de gastos',
+              conteudo: 'Sua média ${_usarMediaMensal ? 'mensal' : 'diária'} no período é ${_formatarValor(_mediaGastos)}.',
+              subtexto: _usarMediaMensal
+                  ? (_mediaGastos > 1500 ? 'Atenção: média acima de R\$ 1.500,00 por mês.' : 'Sua média mensal está controlada.')
+                  : (_mediaGastos > 50 ? 'Atenção: média acima de R\$ 50,00 por dia.' : 'Sua média diária está controlada.'),
+              destaque: _usarMediaMensal ? _mediaGastos > 1500 : _mediaGastos > 50,
             ),
+            if (_rendaMensal != null && _rendaMensal! > 0) ...[
+              const SizedBox(height: 12),
+              Builder(builder: (context) {
+                final rendaDiaria = _rendaMensal! / 30;
+                final gastoDiario = _usarMediaMensal
+                    ? _mediaGastos / 30
+                    : _mediaGastos;
+                final pct = rendaDiaria > 0 ? (gastoDiario / rendaDiaria * 100) : 0.0;
+                final ok = gastoDiario <= rendaDiaria;
+                return _cardAlerta(
+                  icone: ok ? Icons.trending_down : Icons.trending_up,
+                  cor: ok ? Colors.green : Colors.red,
+                  titulo: 'Gasto diário vs renda diária',
+                  conteudo:
+                      'Gasto médio diário: R\$ ${_formatarValor(gastoDiario)}  •  '
+                      'Renda diária: R\$ ${_formatarValor(rendaDiaria)}',
+                  subtexto: ok
+                      ? 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária. Parabéns!'
+                      : 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária — acima do ideal.',
+                  destaque: !ok,
+                );
+              }),
+            ],
             const SizedBox(height: 12),
 
             _cardAlerta(
@@ -470,6 +543,46 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   : '',
               destaque: _totalEvitaveis > 0,
             ),
+            const SizedBox(height: 20),
+
+            // ── CARTÃO DE CRÉDITO ─────────────────────────────────────────
+            _secaoTitulo('💳 Cartão de Crédito'),
+            const SizedBox(height: 12),
+
+            Builder(builder: (context) {
+              final totalCredito = _totalCartaoCredito;
+              final pct = _totalPeriodo > 0 ? totalCredito / _totalPeriodo * 100 : 0.0;
+              final alerta = pct > 60;
+              return _cardInsightComBarra(
+                icone: Icons.credit_card,
+                cor: Colors.indigo,
+                titulo: 'Compras no cartão de crédito',
+                conteudo: _gastosCartaoCredito.isEmpty
+                    ? 'Nenhuma compra no crédito no período.'
+                    : '${_formatarValor(totalCredito)} (${pct.toStringAsFixed(1)}% do total gasto).',
+                percentual: pct.clamp(0, 100) / 100,
+                corBarra: alerta ? Colors.red : pct > 40 ? Colors.orange : Colors.indigo,
+              );
+            }),
+            const SizedBox(height: 12),
+
+            Builder(builder: (context) {
+              final evitaveisCredito = _totalEvitaveisCartao;
+              final totalCredito = _totalCartaoCredito;
+              final pct = totalCredito > 0 ? evitaveisCredito / totalCredito * 100 : 0.0;
+              return _cardAlerta(
+                icone: Icons.credit_card_off,
+                cor: Colors.red,
+                titulo: 'Gastos evitáveis no cartão',
+                conteudo: evitaveisCredito == 0
+                    ? 'Nenhum gasto evitável no crédito. Ótimo!'
+                    : '${_formatarValor(evitaveisCredito)} em gastos evitáveis foram cobrados no cartão de crédito.',
+                subtexto: evitaveisCredito > 0
+                    ? '${pct.toStringAsFixed(1)}% das compras no crédito eram evitáveis — considere pagar à vista ou evitar esses gastos.'
+                    : '',
+                destaque: evitaveisCredito > 0,
+              );
+            }),
             const SizedBox(height: 20),
 
             // ── META DE ECONOMIA ─────────────────────────────────────────

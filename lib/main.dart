@@ -7,14 +7,12 @@ import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
 import 'categoria.dart';
-import 'configuracoes_screen.dart';
 import 'configuracoes_sistema_screen.dart';
 import 'todos_registros_screen.dart';
 import 'splash_screen.dart';
 import 'relatorios_screen.dart';
 import 'insights_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'backup_screen.dart';
 import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
 import 'app_settings.dart';
@@ -59,7 +57,7 @@ class MyApp extends StatelessWidget {
       valueListenable: themeModeNotifier,
       builder: (context, themeMode, _) {
         return MaterialApp(
-          title: 'Controlaí',
+          title: 'Granix',
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
@@ -100,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late Box<Receita> _receitasBox;
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
+  double? _rendaMensal;
 
   final TextEditingController _buscaHomeController = TextEditingController();
 
@@ -127,6 +126,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _receitasBox = Hive.box<Receita>('receitas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    carregarRendaMensal().then((v) {
+      if (mounted && v != null) setState(() => _rendaMensal = v);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final service = SubscriptionService.instance;
+      if (!service.isTrialActive && !service.isSubscriptionActive) {
+        Navigator.push(context, FadeRoute(page: const PaywallScreen()))
+            .then((_) { if (mounted) setState(() {}); });
+      }
+    });
     _widgetChannel.setMethodCallHandler((call) async {
       if (call.method == 'novo_gasto') {
         WidgetsBinding.instance.addPostFrameCallback((_) => _abrirAdicionarGasto());
@@ -161,37 +170,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _formatarData(DateTime data) =>
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
-
-  IconData _iconeCategoria(String categoria) {
-    switch (categoria) {
-      case 'Alimentação':
-        return Icons.restaurant;
-      case 'Mercado':
-        return Icons.shopping_cart;
-      case 'Transporte':
-        return Icons.directions_car;
-      case 'Saúde':
-        return Icons.health_and_safety;
-      case 'Lazer':
-        return Icons.movie;
-      case 'Moradia':
-        return Icons.home;
-      case 'Educação':
-        return Icons.school;
-      case 'Salário':
-        return Icons.work;
-      case 'Freelance':
-        return Icons.computer;
-      case 'Investimento':
-        return Icons.trending_up;
-      case 'Presente':
-        return Icons.card_giftcard;
-      case 'Benefício':
-        return Icons.volunteer_activism;
-      default:
-        return Icons.category;
-    }
-  }
 
   bool get _cadastroCompleto =>
       _formasPagamentoBox.isNotEmpty && _pessoasBox.isNotEmpty;
@@ -265,11 +243,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _abrirConfiguracoes() async {
-    await Navigator.push(context, FadeRoute(page: const ConfiguracoesScreen()));
-    setState(() {});
-  }
-
   void _abrirConfiguracoesSistema() async {
     await Navigator.push(
       context,
@@ -305,15 +278,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await Navigator.push(context, FadeRoute(page: const InsightsScreen()));
   }
 
-  void _abrirBackup() async {
-    if (!SubscriptionService.instance.isPremium) {
-      await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
-      setState(() {});
-      return;
-    }
-    await Navigator.push(context, FadeRoute(page: const BackupScreen()));
-    setState(() {});
-  }
 
   Map<String, double> get _graficoData {
     final agora = DateTime.now();
@@ -364,157 +328,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return lista.take(3).toList();
   }
 
-  List<Map<String, dynamic>> get _itensMisturados {
-    final agora = DateTime.now();
-    final List<Map<String, dynamic>> itens = [];
-    for (int i = 0; i < _gastosBox.length; i++) {
-      final g = _gastosBox.getAt(i);
-      if (g != null &&
-          g.data.month == agora.month &&
-          g.data.year == agora.year) {
-        itens.add({'tipo': 'gasto', 'item': g, 'index': i});
-      }
-    }
-    for (int i = 0; i < _receitasBox.length; i++) {
-      final r = _receitasBox.getAt(i);
-      if (r != null &&
-          r.data.month == agora.month &&
-          r.data.year == agora.year) {
-        itens.add({'tipo': 'receita', 'item': r, 'index': i});
-      }
-    }
-    itens.sort((a, b) {
-      final DateTime dataA = a['tipo'] == 'gasto'
-          ? (a['item'] as Gasto).data
-          : (a['item'] as Receita).data;
-      final DateTime dataB = b['tipo'] == 'gasto'
-          ? (b['item'] as Gasto).data
-          : (b['item'] as Receita).data;
-      return dataB.compareTo(dataA);
-    });
-    return itens.take(5).toList();
-  }
-
-  Widget _bannerAssinatura() {
-    final service = SubscriptionService.instance;
-    if (service.isSubscriptionActive) return const SizedBox.shrink();
-
-    if (service.isTrialActive && service.trialDaysRemaining <= 3) {
-      final dias = service.trialDaysRemaining;
-      return GestureDetector(
-        onTap: () async {
-          await Navigator.push(
-            context,
-            FadeRoute(page: const PaywallScreen()),
-          );
-          setState(() {});
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          color: Colors.amber[700],
-          child: Row(
-            children: [
-              const Icon(Icons.workspace_premium, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Período de teste: $dias dia${dias == 1 ? '' : 's'} restante${dias == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Text(
-                'Assinar',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  decoration: TextDecoration.underline,
-                  decorationColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Trial ainda ativo com mais de 3 dias — banner informativo neutro
-    if (service.isTrialActive) {
-      final dias = service.trialDaysRemaining;
-      return GestureDetector(
-        onTap: () async {
-          await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
-          setState(() {});
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          color: Theme.of(context).colorScheme.primary,
-          child: Row(
-            children: [
-              const Icon(Icons.workspace_premium, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Você tem $dias dia${dias == 1 ? '' : 's'} de acesso gratuito',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Text(
-                'Ver planos',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  decoration: TextDecoration.underline,
-                  decorationColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Trial expirado, não assinante
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(context, FadeRoute(page: const PaywallScreen()));
-        setState(() {});
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        color: Colors.red[700],
-        child: const Row(
-          children: [
-            Icon(Icons.lock, color: Colors.white, size: 18),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Período de teste expirado — toque para assinar o Premium',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _botaoNavegacao(IconData icone, String label, VoidCallback onPressed) {
     return InkWell(
       onTap: onPressed,
@@ -539,8 +352,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final itens = _itensMisturados;
-
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -566,11 +377,6 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _botaoNavegacao(
-              Icons.tune,
-              'Cadastro Inicial',
-              _abrirConfiguracoes,
-            ),
-            _botaoNavegacao(
               Icons.add_circle,
               'Novo Gasto',
               () => _abrirAdicionarGasto(),
@@ -587,13 +393,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             _botaoNavegacao(Icons.bar_chart, 'Relatórios', _abrirRelatorios),
             _botaoNavegacao(Icons.lightbulb, 'Insights', _abrirInsights),
-            _botaoNavegacao(Icons.backup, 'Backup', _abrirBackup),
           ],
         ),
       ),
       body: Column(
         children: [
-          _bannerAssinatura(),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -654,6 +458,52 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+          if (_rendaMensal != null && _rendaMensal! > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Builder(builder: (context) {
+                final agora = DateTime.now();
+                final diasNoMes = DateUtils.getDaysInMonth(agora.year, agora.month);
+                final gastoDiario = _totalGastosMes / agora.day;
+                final rendaDiaria = _rendaMensal! / diasNoMes;
+                final ok = gastoDiario <= rendaDiaria;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: ok
+                        ? Colors.green.withValues(alpha: 0.12)
+                        : Colors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: ok
+                          ? Colors.green.withValues(alpha: 0.3)
+                          : Colors.red.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        ok ? Icons.trending_down : Icons.trending_up,
+                        color: ok ? Colors.green[700] : Colors.red[700],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Gasto diário médio: R\$ ${_formatarValor(gastoDiario)}  •  '
+                          'Renda diária: R\$ ${_formatarValor(rendaDiaria)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ok ? Colors.green[800] : Colors.red[800],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: TextField(
@@ -1836,7 +1686,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   'A forma de pagamento "${widget.gasto?.formaPagamento}" foi removida. Selecione uma nova.',
                 ),
               DropdownButtonFormField<FormaPagamento>(
-                value: _formaPagamentoSelecionada,
+                initialValue: _formaPagamentoSelecionada,
                 hint: const Text('Selecione a forma de pagamento'),
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
@@ -1968,7 +1818,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   'A pessoa "${widget.gasto?.pessoa}" foi removida. Selecione uma nova.',
                 ),
               DropdownButtonFormField<Pessoa>(
-                value: _pessoaSelecionada,
+                initialValue: _pessoaSelecionada,
                 hint: const Text('Selecione a pessoa'),
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
@@ -2525,7 +2375,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                   'A pessoa "${widget.receita?.pessoa}" foi removida. Selecione uma nova.',
                 ),
               DropdownButtonFormField<Pessoa>(
-                value: _pessoaSelecionada,
+                initialValue: _pessoaSelecionada,
                 hint: const Text('Selecione a pessoa'),
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),

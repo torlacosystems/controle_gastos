@@ -124,11 +124,21 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 children: [
                   Text(
-                    'Controlaí',
+                    'Granix',
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
                       color: cor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Controle de Gastos',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: cor.withValues(alpha: 0.8),
+                      letterSpacing: 1.2,
                     ),
                   ),
                   const SizedBox(height: 8),

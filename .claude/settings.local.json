@@ -20,7 +20,12 @@
       "Bash(flutter analyze lib/configuracoes_sistema_screen.dart)",
       "Bash(flutter analyze lib/splash_screen.dart lib/configuracoes_sistema_screen.dart lib/onboarding_screen.dart)",
       "Bash(flutter analyze lib/main.dart lib/paywall_screen.dart)",
-      "Bash(flutter analyze lib/paywall_screen.dart)"
+      "Bash(flutter analyze lib/paywall_screen.dart)",
+      "Bash(flutter analyze lib/relatorios_screen.dart lib/insights_screen.dart)",
+      "Bash(flutter analyze --no-pub)",
+      "Bash(flutter analyze)",
+      "Bash(flutter analyze lib/configuracoes_screen.dart)",
+      "Bash(flutter analyze lib/insights_screen.dart)"
     ]
   }
 }

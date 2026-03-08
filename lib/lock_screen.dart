@@ -78,9 +78,17 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Controlaí',
+                    'Granix',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Controle de Gastos',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey,
+                      letterSpacing: 1.1,
                     ),
                   ),
                   const SizedBox(height: 8),
