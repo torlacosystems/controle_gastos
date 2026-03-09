@@ -28,9 +28,11 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
   bool _gastoEsperado = true;
   bool _gastoEvitavel = false;
 
-  // Linhas de itens: cada linha tem controllers + estado confirmado
+  // Linhas de itens: cada linha tem controllers + estado confirmado + id único
   final List<Map<String, TextEditingController>> _linhas = [];
   final List<bool> _confirmadas = [];
+  final List<int> _linhasIds = [];
+  int _nextId = 0;
 
   static const List<String> _categoriasFixas = [
     'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Lazer',
@@ -75,15 +77,19 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
         'valor': TextEditingController(),
       });
       _confirmadas.add(false);
+      _linhasIds.add(_nextId++);
     });
   }
 
-  void _removerLinha(int i) {
+  void _removerLinhaById(int id) {
+    final i = _linhasIds.indexOf(id);
+    if (i == -1) return;
     _linhas[i]['desc']!.dispose();
     _linhas[i]['valor']!.dispose();
     setState(() {
       _linhas.removeAt(i);
       _confirmadas.removeAt(i);
+      _linhasIds.removeAt(i);
     });
   }
 
@@ -420,13 +426,15 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
                 final confirmado = _confirmadas[i];
                 final l = _linhas[i];
 
+                final linhaId = _linhasIds[i];
+
                 if (confirmado) {
                   // ── Item confirmado: exibe como tile com swipe para excluir ──
                   final v = double.tryParse(
                           l['valor']!.text.replaceAll(',', '.')) ??
                       0;
                   return Dismissible(
-                    key: Key('linha_$i\_${l['desc']!.text}'),
+                    key: Key('linha_$linhaId'),
                     direction: DismissDirection.endToStart,
                     background: Container(
                       alignment: Alignment.centerRight,
@@ -437,7 +445,27 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
                       ),
                       child: const Icon(Icons.delete, color: Colors.white),
                     ),
-                    onDismissed: (_) => _removerLinha(i),
+                    confirmDismiss: (_) => showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Excluir item?'),
+                        content: Text(
+                            'Deseja remover "${l['desc']!.text}" da lista?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: TextButton.styleFrom(
+                                foregroundColor: Colors.red),
+                            child: const Text('Excluir'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    onDismissed: (_) => _removerLinhaById(linhaId),
                     child: Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
@@ -521,7 +549,9 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: OutlinedButton.icon(
-              onPressed: _adicionarLinha,
+              onPressed: _confirmadas.isNotEmpty && !_confirmadas.last
+                  ? null
+                  : _adicionarLinha,
               icon: const Icon(Icons.add),
               label: const Text('Adicionar item'),
               style: OutlinedButton.styleFrom(
