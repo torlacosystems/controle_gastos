@@ -25,13 +25,14 @@ class ReceitaAdapter extends TypeAdapter<Receita> {
       pessoa: fields[5] as String,
       recorrente: fields[6] as bool,
       tipoReceita: fields[7] as String,
+      detalhado: fields[8] == null ? true : fields[8] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, Receita obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class ReceitaAdapter extends TypeAdapter<Receita> {
       ..writeByte(6)
       ..write(obj.recorrente)
       ..writeByte(7)
-      ..write(obj.tipoReceita);
+      ..write(obj.tipoReceita)
+      ..writeByte(8)
+      ..write(obj.detalhado);
   }
 
   @override

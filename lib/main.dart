@@ -10,6 +10,7 @@ import 'categoria.dart';
 import 'configuracoes_sistema_screen.dart';
 import 'todos_registros_screen.dart';
 import 'meus_gastos_screen.dart';
+import 'minhas_receitas_screen.dart';
 import 'splash_screen.dart';
 import 'relatorios_screen.dart';
 import 'insights_screen.dart';
@@ -411,6 +412,159 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
+  void _abrirMinhasReceitas() async {
+    await Navigator.push(
+        context, FadeRoute(page: const MinhasReceitasScreen()));
+    setState(() {});
+  }
+
+  void _abrirQuickAddReceita() {
+    final valorCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom +
+                MediaQuery.of(ctx).padding.bottom +
+                16,
+            top: 24,
+            left: 24,
+            right: 24,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Nova Receita Rápida',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: valorCtrl,
+                  autofocus: true,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Valor R\$',
+                    prefixText: 'R\$ ',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Informe o valor';
+                    final d = double.tryParse(v.replaceAll(',', '.'));
+                    if (d == null || d <= 0) return 'Valor inválido';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Descrição',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[700],
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        onPressed: () {
+                          if (!formKey.currentState!.validate()) return;
+                          final valor = double.parse(
+                              valorCtrl.text.replaceAll(',', '.'));
+                          final r = Receita(
+                            id: DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString(),
+                            descricao: descCtrl.text,
+                            valor: valor,
+                            categoria: 'Outros',
+                            data: DateTime.now(),
+                            pessoa: '',
+                            recorrente: false,
+                            tipoReceita: 'Variável',
+                            detalhado: false,
+                          );
+                          _receitasBox.add(r);
+                          Navigator.pop(ctx);
+                          setState(() {});
+                        },
+                        child: const Text(
+                          'Salvar e Detalhar Depois',
+                          style: TextStyle(fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[700],
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        onPressed: () async {
+                          if (!formKey.currentState!.validate()) return;
+                          final valor = double.parse(
+                              valorCtrl.text.replaceAll(',', '.'));
+                          final rTemp = Receita(
+                            id: DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString(),
+                            descricao: descCtrl.text,
+                            valor: valor,
+                            categoria: 'Outros',
+                            data: DateTime.now(),
+                            pessoa: '',
+                            recorrente: false,
+                            tipoReceita: 'Variável',
+                            detalhado: false,
+                          );
+                          _receitasBox.add(rTemp);
+                          final boxIndex = _receitasBox.length - 1;
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          await _abrirAdicionarReceita(
+                              receita: rTemp, index: boxIndex);
+                        },
+                        child: const Text(
+                          'Detalhar Agora',
+                          style: TextStyle(fontSize: 11),
+                          maxLines: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _abrirTodosRegistros({String termoBusca = ''}) async {
     await Navigator.push(
       context,
@@ -544,7 +698,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _botaoNavegacao(
               Icons.attach_money,
               'Minhas Receitas',
-              () => _abrirAdicionarReceita(),
+              _abrirMinhasReceitas,
             ),
             _botaoNavegacao(
               Icons.list_alt,
@@ -1149,7 +1303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 8),
                   FloatingActionButton.small(
                     heroTag: 'fab_receita',
-                    onPressed: _abrirAdicionarReceita,
+                    onPressed: _abrirQuickAddReceita,
                     backgroundColor: Colors.green[600],
                     foregroundColor: Colors.white,
                     tooltip: 'Nova Receita',
@@ -2179,7 +2333,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     _tipoReceita = r?.tipoReceita ?? 'Fixo';
 
     final pessoas = _pessoasBox.values.toList();
-    if (r != null) {
+    if (r != null && r.pessoa.isNotEmpty) {
       final existe = pessoas.any((p) => p.nome == r.pessoa);
       if (existe) {
         _pessoaSelecionada = pessoas.firstWhere((p) => p.nome == r.pessoa);
@@ -2293,6 +2447,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       pessoa: _pessoaSelecionada!.nome,
       recorrente: _recorrente,
       tipoReceita: _tipoReceita,
+      detalhado: true,
     );
 
     if (_tipoReceita == 'Fixo' && _recorrente && !isEdicao) {
@@ -2377,6 +2532,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
               pessoa: novaReceita.pessoa,
               recorrente: true,
               tipoReceita: novaReceita.tipoReceita,
+              detalhado: true,
             ),
           );
         }

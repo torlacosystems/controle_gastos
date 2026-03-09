@@ -28,6 +28,9 @@ class Receita extends HiveObject {
   @HiveField(7)
   late String tipoReceita;
 
+  @HiveField(8)
+  bool detalhado;
+
   Receita({
     required this.id,
     required this.descricao,
@@ -37,5 +40,6 @@ class Receita extends HiveObject {
     required this.pessoa,
     required this.recorrente,
     required this.tipoReceita,
+    this.detalhado = true,
   });
 }

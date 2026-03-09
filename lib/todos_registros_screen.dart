@@ -381,33 +381,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     }
   }
 
-  Future<void> _excluirItem(Map<String, dynamic> item) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Excluir ${item['tipo'] == 'gasto' ? 'Gasto' : 'Receita'}'),
-        content: const Text('Tem certeza que deseja excluir este registro?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
-    );
-    if (confirmar != true) return;
-    if (item['tipo'] == 'gasto') {
-      await _gastosBox.deleteAt(item['index'] as int);
-    } else {
-      await _receitasBox.deleteAt(item['index'] as int);
-    }
-    setState(() {});
-  }
 
   Future<void> _editarGasto(Map<String, dynamic> item) async {
     final boxIndex = item['index'] as int;
@@ -788,10 +761,52 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                       final String descricao = isGasto
                           ? (item['item'] as Gasto).descricao
                           : (item['item'] as Receita).descricao;
-                      final bool naoDetalhado =
-                          isGasto && !(item['item'] as Gasto).detalhado;
+                      final bool naoDetalhado = isGasto
+                          ? !(item['item'] as Gasto).detalhado
+                          : !(item['item'] as Receita).detalhado;
 
-                      return Container(
+                      return Dismissible(
+                        key: Key('reg_$id'),
+                        direction: _modoSelecao
+                            ? DismissDirection.none
+                            : DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 16),
+                          color: Colors.red,
+                          child:
+                              const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (_) => showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Text(
+                                'Excluir ${isGasto ? 'Gasto' : 'Receita'}'),
+                            content: const Text(
+                                'Tem certeza que deseja excluir este registro?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancelar'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red),
+                                child: const Text('Excluir'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        onDismissed: (_) async {
+                          if (isGasto) {
+                            await _gastosBox.deleteAt(item['index'] as int);
+                          } else {
+                            await _receitasBox.deleteAt(item['index'] as int);
+                          }
+                          setState(() {});
+                        },
+                        child: Container(
                         decoration: BoxDecoration(
                           color: selecionado ? primary.withValues(alpha: 0.1) : null,
                           border: Border(
@@ -905,14 +920,6 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                                         }
                                       },
                                     ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete,
-                                        size: 18,
-                                        color: Colors.red,
-                                      ),
-                                      onPressed: () => _excluirItem(item),
-                                    ),
                                   ],
                                 ),
                           onTap: _modoSelecao ? () => _toggleSelecao(id) : null,
@@ -923,6 +930,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                             });
                           },
                         ),
+                      ),
                       );
                     },
                   ),
@@ -937,7 +945,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     return GestureDetector(
       onTap: () => setState(() {
         _filtroParcelado = !_filtroParcelado;
-        if (_filtroParcelado && _tipoFiltro == 'receita') {
+        if (_filtroParcelado) {
           _tipoFiltro = 'gasto';
         }
       }),
@@ -976,7 +984,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     return GestureDetector(
       onTap: () => setState(() {
         _tipoFiltro = key;
-        if (key == 'receita') _filtroParcelado = false;
+        if (key == 'receita' || key == 'todos') _filtroParcelado = false;
       }),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
