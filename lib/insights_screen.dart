@@ -49,6 +49,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
     'Saúde': 'Mantenha hábitos preventivos para evitar gastos maiores no futuro.',
     'Moradia': 'Revise contratos de serviços como internet e energia para encontrar planos melhores.',
     'Educação': 'Explore cursos gratuitos online como complemento aos pagos.',
+    'Assinaturas': 'Revise suas assinaturas ativas. Cancele as que não usa — pequenos valores mensais somam muito ao longo do ano.',
     'Outros': 'Revise esses gastos — muitos podem ser evitados ou reduzidos.',
   };
 

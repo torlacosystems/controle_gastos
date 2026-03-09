@@ -53,6 +53,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     {'nome': 'Lazer', 'icone': Icons.movie},
     {'nome': 'Moradia', 'icone': Icons.home},
     {'nome': 'Educação', 'icone': Icons.school},
+    {'nome': 'Assinaturas', 'icone': Icons.subscriptions},
     {'nome': 'Outros', 'icone': Icons.category},
   ];
 
@@ -1423,35 +1424,23 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           Column(
             children: [
               // Card renda mensal
-              InkWell(
-                onTap: _editarRendaMensal,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                        child: Icon(Icons.attach_money, color: Theme.of(context).colorScheme.primary),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Renda mensal familiar', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(
-                              _rendaMensal != null
-                                  ? 'R\$ ${_rendaMensal!.toStringAsFixed(2).replaceAll('.', ',')}'
-                                  : 'Não informada — toque para adicionar',
-                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.edit, size: 18, color: Colors.grey),
-                    ],
-                  ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  child: Icon(Icons.attach_money, color: Theme.of(context).colorScheme.primary),
                 ),
+                title: const Text('Renda mensal familiar', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  _rendaMensal != null
+                      ? 'R\$ ${_rendaMensal!.toStringAsFixed(2).replaceAll('.', ',')}'
+                      : 'Não informada — toque para adicionar',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: _editarRendaMensal,
+                ),
+                onTap: _editarRendaMensal,
               ),
               const Divider(),
               Expanded(

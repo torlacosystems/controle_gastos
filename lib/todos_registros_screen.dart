@@ -102,6 +102,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         return Icons.volunteer_activism;
       case 'Mercado':
         return Icons.shopping_cart;
+      case 'Assinaturas':
+        return Icons.subscriptions;
       default:
         // Busca em categorias personalizadas
         final custom = _categoriasBox.values.cast<Categoria?>().firstWhere(
@@ -786,6 +788,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                       final String descricao = isGasto
                           ? (item['item'] as Gasto).descricao
                           : (item['item'] as Receita).descricao;
+                      final bool naoDetalhado =
+                          isGasto && !(item['item'] as Gasto).detalhado;
 
                       return Container(
                         decoration: BoxDecoration(
@@ -812,9 +816,33 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                                     color: isGasto ? Colors.red : Colors.green,
                                   ),
                                 ),
-                          title: Text(
-                            categoria,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  categoria,
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              if (naoDetalhado)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange[100],
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.orange),
+                                  ),
+                                  child: const Text(
+                                    'Não Detalhado',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           subtitle: Text(
                             () {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
+import 'orcamento.dart';
 import 'app_settings.dart';
 import 'main.dart';
 import 'fade_route.dart';
@@ -15,7 +16,7 @@ class SetupWizardScreen extends StatefulWidget {
 
 class _SetupWizardScreenState extends State<SetupWizardScreen>
     with SingleTickerProviderStateMixin {
-  int _step = 0; // 0=intro, 1=nome+renda, 2=formas, 3=pessoas, 4=pronto
+  int _step = 0; // 0=intro, 1=nome+renda, 2=formas, 3=orcamentos, 4=pronto
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
@@ -23,35 +24,41 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   final _nomeUsuarioCtrl = TextEditingController();
   final _rendaMensalCtrl = TextEditingController();
 
-  // Formas de pagamento
+  // Step 2 – formas de pagamento
   late Box<FormaPagamento> _formasBox;
   final _descricaoCtrl = TextEditingController();
   final _bancoCtrl = TextEditingController();
   String _tipoSelecionado = 'Débito';
   final List<FormaPagamento> _formasAdicionadas = [];
 
-  // Pessoas
+  // Step 3 – orçamentos por categoria
+  late Box<Orcamento> _orcamentosBox;
   late Box<Pessoa> _pessoasBox;
-  final _nomeCtrl = TextEditingController();
-  final _parentescoCtrl = TextEditingController();
-  final List<Pessoa> _pessoasAdicionadas = [];
+  final Map<String, TextEditingController> _limiteCtrl = {};
 
   static const _tipos = ['Débito', 'Crédito', 'VA/VR'];
 
-  static const _parentescos = [
-    'Eu mesmo',
-    'Cônjuge',
-    'Filho(a)',
-    'Pai/Mãe',
-    'Irmão/Irmã',
-    'Outro',
+  static const List<Map<String, dynamic>> _categorias = [
+    {'nome': 'Alimentação',  'icone': Icons.restaurant},
+    {'nome': 'Mercado',      'icone': Icons.shopping_cart},
+    {'nome': 'Transporte',   'icone': Icons.directions_car},
+    {'nome': 'Saúde',        'icone': Icons.health_and_safety},
+    {'nome': 'Lazer',        'icone': Icons.movie},
+    {'nome': 'Moradia',      'icone': Icons.home},
+    {'nome': 'Educação',            'icone': Icons.school},
+    {'nome': 'Assinaturas', 'icone': Icons.subscriptions},
+    {'nome': 'Outros',              'icone': Icons.category},
   ];
 
   @override
   void initState() {
     super.initState();
     _formasBox = Hive.box<FormaPagamento>('formas_pagamento');
+    _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    for (final cat in _categorias) {
+      _limiteCtrl[cat['nome'] as String] = TextEditingController();
+    }
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -67,8 +74,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     _rendaMensalCtrl.dispose();
     _descricaoCtrl.dispose();
     _bancoCtrl.dispose();
-    _nomeCtrl.dispose();
-    _parentescoCtrl.dispose();
+    for (final c in _limiteCtrl.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -94,45 +102,50 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     setState(() {});
   }
 
-  void _adicionarPessoa() {
-    final nome = _nomeCtrl.text.trim();
-    if (nome.isEmpty) return;
-    final pessoa = Pessoa(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      nome: nome,
-      parentesco: _parentescoCtrl.text.trim().isEmpty
-          ? 'Eu mesmo'
-          : _parentescoCtrl.text.trim(),
-    );
-    _pessoasAdicionadas.add(pessoa);
-    _nomeCtrl.clear();
-    _parentescoCtrl.clear();
-    setState(() {});
-  }
-
   Future<void> _concluir() async {
-    // Salva o usuário principal como Pessoa com parentesco "Eu mesmo"
+    // Salva o usuário principal como Pessoa com parentesco "Eu Mesmo"
     final nomeUsuario = _nomeUsuarioCtrl.text.trim();
     if (nomeUsuario.isNotEmpty) {
-      final pessoaUsuario = Pessoa(
-        id: 'usuario_principal',
-        nome: nomeUsuario,
-        parentesco: 'Eu Mesmo',
+      await _pessoasBox.put(
+        'usuario_principal',
+        Pessoa(
+          id: 'usuario_principal',
+          nome: nomeUsuario,
+          parentesco: 'Eu Mesmo',
+        ),
       );
-      await _pessoasBox.put('usuario_principal', pessoaUsuario);
     }
+
     // Salva a renda mensal
     final rendaTexto = _rendaMensalCtrl.text.trim().replaceAll(',', '.');
     final renda = double.tryParse(rendaTexto);
     if (renda != null && renda > 0) {
       await salvarRendaMensal(renda);
     }
+
+    // Salva formas de pagamento
     if (_formasAdicionadas.isNotEmpty) {
       await _formasBox.addAll(_formasAdicionadas);
     }
-    if (_pessoasAdicionadas.isNotEmpty) {
-      await _pessoasBox.addAll(_pessoasAdicionadas);
+
+    // Salva orçamentos por categoria
+    for (final cat in _categorias) {
+      final nome = cat['nome'] as String;
+      final texto = _limiteCtrl[nome]!.text.trim().replaceAll(',', '.');
+      final limite = double.tryParse(texto);
+      if (limite != null && limite > 0) {
+        final jaExiste = _orcamentosBox.values
+            .any((o) => o.categoria == nome);
+        if (!jaExiste) {
+          await _orcamentosBox.add(Orcamento(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            categoria: nome,
+            limite: limite,
+          ));
+        }
+      }
     }
+
     if (!mounted) return;
     Navigator.pushReplacement(context, FadeRoute(page: const HomeScreen()));
   }
@@ -199,7 +212,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
       case 2:
         return _buildFormasPagamento(cor);
       case 3:
-        return _buildPessoas(cor);
+        return _buildOrcamentos(cor);
       case 4:
         return _buildPronto(cor);
       default:
@@ -232,7 +245,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'Em menos de 2 minutos você vai cadastrar suas formas de pagamento e as pessoas da sua família. Isso é necessário para registrar gastos.',
+            'Em poucos minutos você vai definir seu perfil, formas de pagamento e limites de orçamento por categoria.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.6),
           ),
@@ -243,8 +256,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           _itemInfo(cor, Icons.credit_card_outlined, 'Formas de pagamento',
               'Cartões, contas e carteiras'),
           const SizedBox(height: 14),
-          _itemInfo(cor, Icons.people_outlined, 'Pessoas',
-              'Você e sua família'),
+          _itemInfo(cor, Icons.account_balance_wallet_outlined, 'Orçamento por categoria',
+              'Defina limites mensais de gasto'),
           const SizedBox(height: 48),
           SizedBox(
             width: double.infinity,
@@ -370,7 +383,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'A renda será usada para calcular sua média de gasto diário vs renda diária nos insights.',
+                            'Seu nome vai para o cadastro de pessoas como "Eu Mesmo". A renda é usada nos insights de gasto diário.',
                             style: TextStyle(fontSize: 11, color: Colors.grey[700]),
                           ),
                         ),
@@ -440,7 +453,6 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           ),
           const SizedBox(height: 24),
 
-          // Lista das adicionadas
           if (_formasAdicionadas.isNotEmpty) ...[
             const Text('Adicionadas:',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
@@ -470,7 +482,6 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             const SizedBox(height: 16),
           ],
 
-          // Formulário
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -545,7 +556,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             height: 50,
             child: FilledButton(
               onPressed: () => _irPara(3),
-              child: const Text('Próximo: Pessoas',
+              child: const Text('Próximo: Orçamentos',
                   style: TextStyle(fontSize: 15)),
             ),
           ),
@@ -562,9 +573,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     );
   }
 
-  // ── STEP 2: Pessoas ───────────────────────────────────────────────────────
+  // ── STEP 3: Orçamentos por categoria ─────────────────────────────────────
 
-  Widget _buildPessoas(Color cor) {
+  Widget _buildOrcamentos(Color cor) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
@@ -579,111 +590,79 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                   color: cor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.people_outlined, color: cor, size: 26),
+                child: Icon(Icons.account_balance_wallet_outlined, color: cor, size: 26),
               ),
               const SizedBox(width: 14),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Pessoas',
+                    Text('Orçamento Mensal',
                         style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text('Você e sua família',
+                    Text('Defina limites de gasto por categoria',
                         style: TextStyle(fontSize: 12, color: Colors.grey)),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-
-          if (_pessoasAdicionadas.isNotEmpty) ...[
-            const Text('Adicionadas:',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            ..._pessoasAdicionadas.asMap().entries.map((e) => Card(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  child: ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      backgroundColor: cor.withValues(alpha: 0.15),
-                      radius: 16,
-                      child: Text(
-                        e.value.nome.isNotEmpty
-                            ? e.value.nome[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                            color: cor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13),
-                      ),
-                    ),
-                    title: Text(e.value.nome,
-                        style: const TextStyle(fontSize: 13)),
-                    subtitle: Text(e.value.parentesco,
-                        style: const TextStyle(fontSize: 11)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () =>
-                          setState(() => _pessoasAdicionadas.removeAt(e.key)),
-                    ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: cor.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: cor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Deixe em branco as categorias que não deseja controlar. Você pode ajustar depois em Configurações.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
                   ),
-                )),
-            const SizedBox(height: 16),
-          ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ..._categorias.map((cat) {
+            final nome = cat['nome'] as String;
+            final icone = cat['icone'] as IconData;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
                 children: [
-                  Text(
-                    _pessoasAdicionadas.isEmpty
-                        ? 'Adicione a primeira pessoa'
-                        : 'Adicionar outra',
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _nomeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Nome',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: cor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
                     ),
+                    child: Icon(icone, color: cor, size: 20),
                   ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    initialValue: _parentescos.first,
-                    decoration: const InputDecoration(
-                      labelText: 'Parentesco',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: _parentescos
-                        .map((p) =>
-                            DropdownMenuItem(value: p, child: Text(p)))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) _parentescoCtrl.text = v;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _adicionarPessoa,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Adicionar'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _limiteCtrl[nome],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: nome,
+                        hintText: 'Limite mensal',
+                        prefixText: 'R\$ ',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
+            );
+          }),
 
           const SizedBox(height: 24),
           SizedBox(
@@ -691,8 +670,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             height: 50,
             child: FilledButton(
               onPressed: () => _irPara(4),
-              child:
-                  const Text('Concluir', style: TextStyle(fontSize: 15)),
+              child: const Text('Concluir', style: TextStyle(fontSize: 15)),
             ),
           ),
           const SizedBox(height: 12),
@@ -708,11 +686,19 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     );
   }
 
-  // ── STEP 3: Pronto ────────────────────────────────────────────────────────
+  // ── STEP 4: Pronto ────────────────────────────────────────────────────────
 
   Widget _buildPronto(Color cor) {
-    final totalItens =
-        _formasAdicionadas.length + _pessoasAdicionadas.length;
+    final orcamentosDefinidos = _categorias
+        .where((cat) {
+          final texto = _limiteCtrl[cat['nome'] as String]!.text.trim();
+          final valor = double.tryParse(texto.replaceAll(',', '.'));
+          return valor != null && valor > 0;
+        })
+        .length;
+    final temNome = _nomeUsuarioCtrl.text.trim().isNotEmpty;
+    final temFormas = _formasAdicionadas.isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -735,33 +721,32 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            totalItens == 0
-                ? 'Você pode adicionar formas de pagamento e pessoas nas Configurações a qualquer momento.'
-                : 'Você adicionou ${_formasAdicionadas.length} forma${_formasAdicionadas.length == 1 ? '' : 's'} de pagamento e ${_pessoasAdicionadas.length} pessoa${_pessoasAdicionadas.length == 1 ? '' : 's'}. Agora é só começar!',
+            [
+              if (temNome) 'Olá, ${_nomeUsuarioCtrl.text.trim()}!',
+              if (temFormas) '${_formasAdicionadas.length} forma${_formasAdicionadas.length == 1 ? '' : 's'} de pagamento adicionada${_formasAdicionadas.length == 1 ? '' : 's'}.',
+              if (orcamentosDefinidos > 0) '$orcamentosDefinidos limite${orcamentosDefinidos == 1 ? '' : 's'} de orçamento definido${orcamentosDefinidos == 1 ? '' : 's'}.',
+              if (!temFormas && orcamentosDefinidos == 0) 'Você pode configurar formas de pagamento e orçamentos nas Configurações a qualquer momento.',
+            ].join(' '),
             textAlign: TextAlign.center,
-            style:
-                TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.6),
+            style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.6),
           ),
-          if (totalItens == 0) ...[
+          if (!temFormas) ...[
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.3)),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline,
-                      color: Colors.orange, size: 20),
+                  const Icon(Icons.info_outline, color: Colors.orange, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Sem formas de pagamento e pessoas não será possível registrar gastos.',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.orange[800]),
+                      'Sem formas de pagamento não será possível registrar gastos.',
+                      style: TextStyle(fontSize: 12, color: Colors.orange[800]),
                     ),
                   ),
                 ],
@@ -778,7 +763,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                   style: TextStyle(fontSize: 16)),
             ),
           ),
-          if (totalItens == 0) ...[
+          if (!temFormas) ...[
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => _irPara(2),

@@ -25,7 +25,10 @@
       "Bash(flutter analyze --no-pub)",
       "Bash(flutter analyze)",
       "Bash(flutter analyze lib/configuracoes_screen.dart)",
-      "Bash(flutter analyze lib/insights_screen.dart)"
+      "Bash(flutter analyze lib/insights_screen.dart)",
+      "Bash(flutter analyze lib/setup_wizard_screen.dart)",
+      "Bash(grep -n \"final.*_categorias\\\\|static.*_categorias\\\\|_categoriasGasto\\\\|_dicasPorCategoria\" /c/TorlacoSystems/controle_gastos/lib/*.dart)",
+      "Bash(dart analyze lib/main.dart)"
     ]
   }
 }

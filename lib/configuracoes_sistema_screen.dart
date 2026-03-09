@@ -11,7 +11,6 @@ import 'pessoa.dart';
 import 'orcamento.dart';
 import 'backup_screen.dart';
 import 'onboarding_screen.dart';
-import 'setup_wizard_screen.dart';
 import 'configuracoes_screen.dart';
 import 'fade_route.dart';
 import 'app_settings.dart';
@@ -465,16 +464,6 @@ class _ConfiguracoesSistemaScreenState
             onTap: () => Navigator.push(
               context,
               FadeRoute(page: const ConfiguracoesScreen()),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('Assistente de configuração'),
-            subtitle: const Text('Refazer o assistente visual inicial'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              FadeRoute(page: const SetupWizardScreen()),
             ),
           ),
           const Divider(),

@@ -462,12 +462,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     }
     final gastosPorCat = _gastosPorCategoria;
 
-    final todosGastos = _gastosFiltrados;
-    final todasReceitas = _receitasFiltradas;
+    final todosGastos = _gastosFiltrados..sort((a, b) => a.data.compareTo(b.data));
+    final todasReceitas = _receitasFiltradas..sort((a, b) => a.data.compareTo(b.data));
     final gastosTruncados = todosGastos.length > _kMaxLinhasPdf;
     final receitasTruncadas = todasReceitas.length > _kMaxLinhasPdf;
-    final gastosParaPdf = gastosTruncados ? todosGastos.sublist(0, _kMaxLinhasPdf) : todosGastos;
-    final receitasParaPdf = receitasTruncadas ? todasReceitas.sublist(0, _kMaxLinhasPdf) : todasReceitas;
+    final gastosParaPdf = gastosTruncados
+        ? todosGastos.sublist(todosGastos.length - _kMaxLinhasPdf)
+        : todosGastos;
+    final receitasParaPdf = receitasTruncadas
+        ? todasReceitas.sublist(todasReceitas.length - _kMaxLinhasPdf)
+        : todasReceitas;
 
     doc.addPage(
       pw.MultiPage(
@@ -475,7 +479,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
         margin: const pw.EdgeInsets.all(32),
         build: (context) => [
           pw.Text(
-            'Relatorio Financeiro — Granix',
+            'Relatorio Financeiro - Granix',
             style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 4),
@@ -528,7 +532,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
             pw.SizedBox(height: 20),
           ],
           pw.Text(
-            'Gastos${gastosTruncados ? ' (primeiros $_kMaxLinhasPdf de ${todosGastos.length})' : ''}',
+            'Gastos${gastosTruncados ? ' (ultimos $_kMaxLinhasPdf de ${todosGastos.length})' : ''}',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
           if (gastosTruncados)
@@ -556,7 +560,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                 ),
           pw.SizedBox(height: 20),
           pw.Text(
-            'Receitas${receitasTruncadas ? ' (primeiras $_kMaxLinhasPdf de ${todasReceitas.length})' : ''}',
+            'Receitas${receitasTruncadas ? ' (ultimas $_kMaxLinhasPdf de ${todasReceitas.length})' : ''}',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
           if (receitasTruncadas)

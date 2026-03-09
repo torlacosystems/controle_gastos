@@ -9,6 +9,7 @@ import 'orcamento.dart';
 import 'categoria.dart';
 import 'configuracoes_sistema_screen.dart';
 import 'todos_registros_screen.dart';
+import 'meus_gastos_screen.dart';
 import 'splash_screen.dart';
 import 'relatorios_screen.dart';
 import 'insights_screen.dart';
@@ -174,7 +175,161 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _cadastroCompleto =>
       _formasPagamentoBox.isNotEmpty && _pessoasBox.isNotEmpty;
 
-  void _abrirAdicionarGasto({Gasto? gasto, int? index}) async {
+  void _abrirQuickAddGasto() {
+    final valorCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom +
+                MediaQuery.of(ctx).padding.bottom +
+                16,
+            top: 24,
+            left: 24,
+            right: 24,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Novo Gasto Rápido',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: valorCtrl,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Valor R\$',
+                    prefixText: 'R\$ ',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Informe o valor';
+                    final d = double.tryParse(v.replaceAll(',', '.'));
+                    if (d == null || d <= 0) return 'Valor inválido';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Descrição',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        onPressed: () {
+                          if (!formKey.currentState!.validate()) return;
+                          final valor = double.parse(
+                              valorCtrl.text.replaceAll(',', '.'));
+                          final g = Gasto(
+                            id: DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString(),
+                            descricao: descCtrl.text,
+                            valor: valor,
+                            categoria: 'Outros',
+                            data: DateTime.now(),
+                            formaPagamento: '',
+                            pessoa: '',
+                            tipoGasto: 'Variável',
+                            parcelado: false,
+                            numeroParcelas: 1,
+                            estabelecimento: '',
+                            recorrente: false,
+                            gastoEsperado: false,
+                            detalhado: false,
+                          );
+                          _gastosBox.add(g);
+                          Navigator.pop(ctx);
+                          setState(() {});
+                        },
+                        child: const Text(
+                          'Salvar e Detalhar Depois',
+                          style: TextStyle(fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        onPressed: () async {
+                          if (!formKey.currentState!.validate()) return;
+                          final valor = double.parse(
+                              valorCtrl.text.replaceAll(',', '.'));
+                          final gTemp = Gasto(
+                            id: DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString(),
+                            descricao: descCtrl.text,
+                            valor: valor,
+                            categoria: 'Outros',
+                            data: DateTime.now(),
+                            formaPagamento: '',
+                            pessoa: '',
+                            tipoGasto: 'Variável',
+                            parcelado: false,
+                            numeroParcelas: 1,
+                            estabelecimento: '',
+                            recorrente: false,
+                            gastoEsperado: false,
+                            detalhado: false,
+                          );
+                          _gastosBox.add(gTemp);
+                          final boxIndex = _gastosBox.length - 1;
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          await _abrirAdicionarGasto(
+                              gasto: gTemp, index: boxIndex);
+                        },
+                        child: const Text(
+                          'Detalhar Agora',
+                          style: TextStyle(fontSize: 11),
+                          maxLines: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _abrirAdicionarGasto({Gasto? gasto, int? index}) async {
     if (!_cadastroCompleto) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -211,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _abrirAdicionarReceita({Receita? receita, int? index}) async {
+  Future<void> _abrirAdicionarReceita({Receita? receita, int? index}) async {
     if (!_cadastroCompleto) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -248,6 +403,11 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       FadeRoute(page: const ConfiguracoesSistemaScreen()),
     );
+    setState(() {});
+  }
+
+  void _abrirMeusGastos() async {
+    await Navigator.push(context, FadeRoute(page: const MeusGastosScreen()));
     setState(() {});
   }
 
@@ -377,13 +537,13 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _botaoNavegacao(
-              Icons.add_circle,
-              'Novo Gasto',
-              () => _abrirAdicionarGasto(),
+              Icons.receipt_long,
+              'Meus Gastos',
+              _abrirMeusGastos,
             ),
             _botaoNavegacao(
               Icons.attach_money,
-              'Nova Receita',
+              'Minhas Receitas',
               () => _abrirAdicionarReceita(),
             ),
             _botaoNavegacao(
@@ -396,10 +556,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Container(
-            width: double.infinity,
+          Column(
+            children: [
+              Container(
+                width: double.infinity,
             padding: const EdgeInsets.all(24),
             color: Theme.of(context).colorScheme.primary,
             child: Column(
@@ -967,6 +1129,36 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+            ],
+          ),
+          Align(
+            alignment: const Alignment(1.0, 0.5),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'fab_gasto',
+                    onPressed: _abrirQuickAddGasto,
+                    backgroundColor: Colors.red[600],
+                    foregroundColor: Colors.white,
+                    tooltip: 'Novo Gasto',
+                    child: const Icon(Icons.add),
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'fab_receita',
+                    onPressed: _abrirAdicionarReceita,
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                    tooltip: 'Nova Receita',
+                    child: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1016,6 +1208,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     {'nome': 'Lazer', 'icone': Icons.movie},
     {'nome': 'Moradia', 'icone': Icons.home},
     {'nome': 'Educação', 'icone': Icons.school},
+    {'nome': 'Assinaturas', 'icone': Icons.subscriptions},
     {'nome': 'Outros', 'icone': Icons.category},
   ];
 
@@ -1052,7 +1245,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _gastoEvitavel = g?.gastoEvitavel ?? false;
 
     final formas = _formasPagamentoBox.values.toList();
-    if (g != null) {
+    if (g != null && g.formaPagamento.isNotEmpty) {
       final existe = formas.any((f) => f.descricao == g.formaPagamento);
       if (existe) {
         _formaPagamentoSelecionada = formas.firstWhere(
@@ -1067,7 +1260,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     }
 
     final pessoas = _pessoasBox.values.toList();
-    if (g != null) {
+    if (g != null && g.pessoa.isNotEmpty) {
       final existe = pessoas.any((p) => p.nome == g.pessoa);
       if (existe) {
         _pessoaSelecionada = pessoas.firstWhere((p) => p.nome == g.pessoa);
@@ -1451,8 +1644,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   Widget build(BuildContext context) {
     final formas = _formasPagamentoBox.values.toList();
     final pessoas = _pessoasBox.values.toList();
-    final podeSalvar =
-        _formaPagamentoSelecionada != null && _pessoaSelecionada != null;
+    final podeSalvar = _formaPagamentoSelecionada != null &&
+        _pessoaSelecionada != null &&
+        _descricaoController.text.trim().isNotEmpty;
 
     final isEdicaoParcela = widget.gasto != null && widget.gasto!.parcelado;
 
@@ -1569,13 +1763,13 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                       Row(
                         children: [
                           _chipOpcao(
-                            'Fixo',
+                            'Valor Fixo',
                             _tipoGasto == 'Fixo',
                             () => setState(() => _tipoGasto = 'Fixo'),
                           ),
                           const SizedBox(width: 8),
                           _chipOpcao(
-                            'Variável',
+                            'Valor Variável',
                             _tipoGasto == 'Variável',
                             () => setState(() => _tipoGasto = 'Variável'),
                           ),
@@ -1893,12 +2087,13 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               const SizedBox(height: 24),
 
               const Text(
-                'Descrição (opcional)',
+                'Descrição',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _descricaoController,
+                onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   hintText: 'Ex: almoço no trabalho',
                   border: OutlineInputBorder(),
@@ -2204,7 +2399,8 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   @override
   Widget build(BuildContext context) {
     final pessoas = _pessoasBox.values.toList();
-    final podeSalvar = _pessoaSelecionada != null;
+    final podeSalvar = _pessoaSelecionada != null &&
+        _descricaoController.text.trim().isNotEmpty;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -2436,12 +2632,13 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
               const SizedBox(height: 24),
 
               const Text(
-                'Descrição (opcional)',
+                'Descrição',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _descricaoController,
+                onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   hintText: 'Ex: salário mensal',
                   border: OutlineInputBorder(),
