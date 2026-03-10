@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'gasto.dart';
 import 'receita.dart';
@@ -12,6 +13,7 @@ import 'todos_registros_screen.dart';
 import 'meus_gastos_screen.dart';
 import 'minhas_receitas_screen.dart';
 import 'splash_screen.dart';
+import 'onboarding_screen.dart';
 import 'relatorios_screen.dart';
 import 'insights_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -84,12 +86,61 @@ class MyApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeMode,
-          home: const LockScreen(child: SplashScreen()),
+          home: const LockScreen(child: _BootScreen()),
         );
       },
     );
   }
 }
+// ── BOOT ROUTER ───────────────────────────────────────────────────────────────
+/// Tela inicial mínima: detecta ação do widget antes de qualquer UI visível.
+/// - Se aberto pelo widget → vai direto para HomeScreen (sem splash)
+/// - Caso contrário → exibe a SplashScreen normalmente
+class _BootScreen extends StatefulWidget {
+  const _BootScreen();
+
+  @override
+  State<_BootScreen> createState() => _BootScreenState();
+}
+
+class _BootScreenState extends State<_BootScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _rotear());
+  }
+
+  Future<void> _rotear() async {
+    try {
+      const channel = MethodChannel('com.example.controle_gastos/widget');
+      final acao = await channel.invokeMethod<String?>('get_pending_action');
+      if (acao != null && mounted) {
+        widgetAcaoPendente = acao;
+        final prefs = await SharedPreferences.getInstance();
+        final onboardingCompleto = prefs.getBool('onboarding_completo') ?? false;
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => onboardingCompleto ? const HomeScreen() : const OnboardingScreen(),
+          ),
+        );
+        return;
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const SplashScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(backgroundColor: Colors.white);
+}
+
 // ── HOME ──────────────────────────────────────────────────────────────────────
 
 class HomeScreen extends StatefulWidget {
@@ -1323,7 +1374,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       _formaPagamentoSelecionada = formas.isNotEmpty ? formas.first : null;
     }
 
-    final pessoas = _pessoasBox.values.toList();
+    final pessoas = _pessoasBox.values.toList()
+      ..sort((a, b) {
+        if (a.parentesco == 'Eu Mesmo') return -1;
+        if (b.parentesco == 'Eu Mesmo') return 1;
+        return a.nome.compareTo(b.nome);
+      });
     if (g != null && g.pessoa.isNotEmpty) {
       final existe = pessoas.any((p) => p.nome == g.pessoa);
       if (existe) {
@@ -1707,7 +1763,12 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   @override
   Widget build(BuildContext context) {
     final formas = _formasPagamentoBox.values.toList();
-    final pessoas = _pessoasBox.values.toList();
+    final pessoas = _pessoasBox.values.toList()
+      ..sort((a, b) {
+        if (a.parentesco == 'Eu Mesmo') return -1;
+        if (b.parentesco == 'Eu Mesmo') return 1;
+        return a.nome.compareTo(b.nome);
+      });
     final podeSalvar = _formaPagamentoSelecionada != null &&
         _pessoaSelecionada != null &&
         _descricaoController.text.trim().isNotEmpty;

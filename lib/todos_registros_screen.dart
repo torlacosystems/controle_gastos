@@ -10,6 +10,8 @@ import 'main.dart';
 import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
 import 'categoria.dart';
+import 'forma_pagamento.dart';
+import 'pessoa.dart';
 
 class TodosRegistrosScreen extends StatefulWidget {
   final String termoBuscaInicial;
@@ -24,6 +26,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
   late Box<Categoria> _categoriasBox;
+  late Box<FormaPagamento> _formasPagamentoBox;
+  late Box<Pessoa> _pessoasBox;
 
   final Set<String> _selecionados = {};
   bool _modoSelecao = false;
@@ -57,6 +61,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
     _categoriasBox = Hive.box<Categoria>('categorias');
+    _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
+    _pessoasBox = Hive.box<Pessoa>('pessoas');
     if (widget.termoBuscaInicial.isNotEmpty) {
       _termoBusca = widget.termoBuscaInicial;
       _modoBusca = true;
@@ -217,6 +223,24 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       ? (item['item'] as Gasto).id
       : (item['item'] as Receita).id;
 
+  /// Returns 'gasto' if all selected are gastos, 'receita' if all receitas, null if mixed or < 2
+  String? get _tipoSelecao {
+    if (_selecionados.length < 2) return null;
+    final itens = _todosItens;
+    String? tipo;
+    for (final item in itens) {
+      if (_selecionados.contains(_itemId(item))) {
+        final t = item['tipo'] as String;
+        if (tipo == null) {
+          tipo = t;
+        } else if (tipo != t) {
+          return null;
+        }
+      }
+    }
+    return tipo;
+  }
+
   void _toggleSelecao(String id) {
     setState(() {
       if (_selecionados.contains(id)) {
@@ -292,6 +316,248 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Registros excluídos')));
+  }
+
+  Future<void> _editarEmMassa() async {
+    final tipo = _tipoSelecao;
+    if (tipo == null) return;
+
+    final formas = _formasPagamentoBox.values.map((f) => f.descricao).toList();
+    final pessoas = _pessoasBox.values.toList()
+      ..sort((a, b) {
+        if (a.parentesco == 'Eu Mesmo') return -1;
+        if (b.parentesco == 'Eu Mesmo') return 1;
+        return a.nome.compareTo(b.nome);
+      });
+    final nomesPessoas = pessoas.map((p) => p.nome).toList();
+
+    // State for the bottom sheet
+    String? novaForma;       // gastos only
+    String? novaCategoria;
+    String? novoTipo;        // tipoGasto or tipoReceita
+    String? novaPessoa;
+    bool? novoRecorrente;    // receitas only
+    final categoriasBox = _categoriasBox;
+
+    // Fixed receita categories (same as multiplas_receitas_screen)
+    final categoriasReceita = ['Salário', 'Freelance', 'Investimento', 'Aluguel', 'Presente', 'Benefício', 'Outros'];
+
+    // Gasto categories
+    final fixasSemOutros = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas'];
+    final custom = categoriasBox.values.map((c) => c.nome).toList()..sort();
+    final categoriasGasto = [...fixasSemOutros, ...custom, 'Outros'];
+
+    final categorias = tipo == 'gasto' ? categoriasGasto : categoriasReceita;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              24, 20, 24,
+              MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Editar ${_selecionados.length} ${tipo == 'gasto' ? 'gastos' : 'receitas'}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Deixe em branco os campos que não deseja alterar.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Pessoa
+                  if (nomesPessoas.isNotEmpty) ...[
+                    const Text('Pessoa', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: novaPessoa,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: '— sem alteração —',
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('— sem alteração —')),
+                        ...nomesPessoas.map((p) => DropdownMenuItem(value: p, child: Text(p))),
+                      ],
+                      onChanged: (v) => setSheet(() => novaPessoa = v),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Categoria
+                  const Text('Categoria', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: novaCategoria,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: '— sem alteração —',
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('— sem alteração —')),
+                      ...categorias.map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                    ],
+                    onChanged: (v) => setSheet(() => novaCategoria = v),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Forma de pagamento (gastos only)
+                  if (tipo == 'gasto' && formas.isNotEmpty) ...[
+                    const Text('Forma de pagamento', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: novaForma,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: '— sem alteração —',
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('— sem alteração —')),
+                        ...formas.map((f) => DropdownMenuItem(value: f, child: Text(f))),
+                      ],
+                      onChanged: (v) => setSheet(() => novaForma = v),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Tipo de gasto / tipo de receita
+                  Text(
+                    tipo == 'gasto' ? 'Tipo de gasto' : 'Tipo de receita',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: novoTipo,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: '— sem alteração —',
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('— sem alteração —')),
+                      DropdownMenuItem(value: 'Fixo', child: Text('Fixo')),
+                      DropdownMenuItem(value: 'Variável', child: Text('Variável')),
+                    ],
+                    onChanged: (v) => setSheet(() => novoTipo = v),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Recorrência (receitas only)
+                  if (tipo == 'receita') ...[
+                    const Text('Recorrência', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<bool>(
+                      value: novoRecorrente,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: '— sem alteração —',
+                        isDense: true,
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: null, child: Text('— sem alteração —')),
+                        DropdownMenuItem(value: true, child: Text('Recorrente')),
+                        DropdownMenuItem(value: false, child: Text('Não recorrente')),
+                      ],
+                      onChanged: (v) => setSheet(() => novoRecorrente = v),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: (novaCategoria == null &&
+                              novaForma == null &&
+                              novoTipo == null &&
+                              novaPessoa == null &&
+                              novoRecorrente == null)
+                          ? null
+                          : () => Navigator.pop(ctx, true),
+                      child: const Text('Aplicar alterações'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ).then((aplicar) async {
+      if (aplicar != true) return;
+
+      final itens = _todosItens;
+      for (final item in itens) {
+        if (!_selecionados.contains(_itemId(item))) continue;
+        final idx = item['index'] as int;
+
+        if (tipo == 'gasto') {
+          final g = item['item'] as Gasto;
+          final atualizado = Gasto(
+            id: g.id,
+            descricao: g.descricao,
+            valor: g.valor,
+            categoria: novaCategoria ?? g.categoria,
+            data: g.data,
+            formaPagamento: novaForma ?? g.formaPagamento,
+            pessoa: novaPessoa ?? g.pessoa,
+            tipoGasto: novoTipo ?? g.tipoGasto,
+            parcelado: g.parcelado,
+            numeroParcelas: g.numeroParcelas,
+            estabelecimento: g.estabelecimento,
+            recorrente: g.recorrente,
+            gastoEsperado: g.gastoEsperado,
+            grupoId: g.grupoId,
+            numeroParcela: g.numeroParcela,
+            gastoEvitavel: g.gastoEvitavel,
+            detalhado: g.detalhado,
+          );
+          await _gastosBox.putAt(idx, atualizado);
+        } else {
+          final r = item['item'] as Receita;
+          final atualizado = Receita(
+            id: r.id,
+            descricao: r.descricao,
+            valor: r.valor,
+            categoria: novaCategoria ?? r.categoria,
+            data: r.data,
+            pessoa: novaPessoa ?? r.pessoa,
+            recorrente: novoRecorrente ?? r.recorrente,
+            tipoReceita: novoTipo ?? r.tipoReceita,
+            detalhado: r.detalhado,
+          );
+          await _receitasBox.putAt(idx, atualizado);
+        }
+      }
+
+      setState(() {
+        _selecionados.clear();
+        _modoSelecao = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registros atualizados com sucesso.')),
+        );
+      }
+    });
   }
 
   // ── CSV ───────────────────────────────────────────────────────────────────
@@ -666,6 +932,12 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
               ),
             IconButton(icon: const Icon(Icons.close), onPressed: _fecharBusca),
           ] else if (_modoSelecao) ...[
+            if (_tipoSelecao != null)
+              IconButton(
+                icon: const Icon(Icons.edit),
+                tooltip: 'Editar em massa',
+                onPressed: _editarEmMassa,
+              ),
             IconButton(
               icon: const Icon(Icons.select_all),
               tooltip: 'Selecionar todos',

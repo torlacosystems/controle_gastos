@@ -58,7 +58,13 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
       _formaPagamento = _formasPagamentoBox.getAt(0);
     }
     if (_pessoasBox.isNotEmpty) {
-      _pessoa = _pessoasBox.getAt(0);
+      final sorted = _pessoasBox.values.toList()
+        ..sort((a, b) {
+          if (a.parentesco == 'Eu Mesmo') return -1;
+          if (b.parentesco == 'Eu Mesmo') return 1;
+          return a.nome.compareTo(b.nome);
+        });
+      _pessoa = sorted.first;
     }
     _adicionarLinha();
   }
@@ -265,7 +271,12 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     final formas = _formasPagamentoBox.values.toList();
-    final pessoas = _pessoasBox.values.toList();
+    final pessoas = _pessoasBox.values.toList()
+      ..sort((a, b) {
+        if (a.parentesco == 'Eu Mesmo') return -1;
+        if (b.parentesco == 'Eu Mesmo') return 1;
+        return a.nome.compareTo(b.nome);
+      });
     final categorias = _categorias;
 
     return Scaffold(
@@ -352,7 +363,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
                             .map((f) => DropdownMenuItem(
                                 value: f,
                                 child: Text(
-                                    [f.descricao, if (f.banco.isNotEmpty) f.banco].join(' - '),
+                                    [f.descricao, f.tipo, if (f.banco.isNotEmpty) f.banco].join(' - '),
                                     overflow: TextOverflow.ellipsis)))
                             .toList(),
                         onChanged: (v) => setState(() => _formaPagamento = v),

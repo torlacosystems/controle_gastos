@@ -31,28 +31,31 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
   Future<void> _inicializar() async {
     final ativo = await AuthService.bloqueioAtivo;
     if (!ativo) {
-      setState(() {
-        _bloqueado = false;
-        _verificando = false;
-      });
+      if (mounted) setState(() { _bloqueado = false; _verificando = false; });
       return;
     }
 
-    setState(() {
-      _bloqueado = true;
-      _verificando = false;
-    });
+    // Pede a biometria imediatamente, antes de mostrar qualquer tela
+    final sucesso = await AuthService.autenticar();
+    if (!mounted) return;
 
-    await _autenticar();
+    if (sucesso) {
+      AuthService.marcarSessaoAutenticada();
+      setState(() { _bloqueado = false; _verificando = false; });
+    } else {
+      // Falhou: mostra a tela de bloqueio com botão para tentar novamente
+      setState(() { _bloqueado = true; _verificando = false; _erro = true; });
+    }
   }
 
   Future<void> _autenticar() async {
     setState(() => _erro = false);
     final sucesso = await AuthService.autenticar();
-    if (sucesso && mounted) {
+    if (!mounted) return;
+    if (sucesso) {
       AuthService.marcarSessaoAutenticada();
       setState(() => _bloqueado = false);
-    } else if (mounted) {
+    } else {
       setState(() => _erro = true);
     }
   }

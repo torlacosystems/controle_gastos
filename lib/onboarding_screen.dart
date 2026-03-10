@@ -6,7 +6,8 @@ import 'fade_route.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  final bool somenteTutorial;
+  const OnboardingScreen({super.key, this.somenteTutorial = false});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -49,9 +50,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
-  // índice total = _paginas.length é a página do widget
-  int get _totalPaginas => _paginas.length + 1;
-  bool get _naPaginaWidget => _pagina == _paginas.length;
+  // índice total = _paginas.length é a página do widget (apenas no primeiro uso)
+  int get _totalPaginas => widget.somenteTutorial ? _paginas.length : _paginas.length + 1;
+  bool get _naPaginaWidget => !widget.somenteTutorial && _pagina == _paginas.length;
 
   void _proximo() {
     if (_pagina < _paginas.length - 1) {
@@ -60,15 +61,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else if (_pagina == _paginas.length - 1) {
-      // da última página normal vai para a página do widget
-      _controller.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      if (widget.somenteTutorial) {
+        _concluir();
+      } else {
+        _controller.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
     }
   }
 
   Future<void> _concluir() async {
+    if (widget.somenteTutorial) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_completo', true);
     if (mounted) {
@@ -78,13 +86,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _adicionarWidget() async {
     try {
-      final channel = MethodChannel('com.example.controle_gastos/widget');
-      final suportado = await channel.invokeMethod<bool>('pin_widget') ?? false;
-      if (!suportado && mounted) {
+      const channel = MethodChannel('com.example.controle_gastos/widget');
+      final jaInstalado = await channel.invokeMethod<bool>('check_widget_installed') ?? false;
+      if (jaInstalado && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Seu dispositivo não suporta adição automática de widget. Adicione manualmente pela tela inicial.'),
-            duration: Duration(seconds: 4),
+          const SnackBar(content: Text('O widget já está instalado na tela inicial.')),
+        );
+        await _concluir();
+        return;
+      }
+      final suportado = await channel.invokeMethod<bool>('pin_widget') ?? false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(suportado
+                ? 'Widget adicionado! Você pode arrastá-lo para o local desejado.'
+                : 'Seu dispositivo não suporta adição automática. Adicione manualmente pela tela inicial.'),
+            duration: const Duration(seconds: 4),
           ),
         );
       }

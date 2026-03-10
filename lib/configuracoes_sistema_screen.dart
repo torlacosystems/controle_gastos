@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'subscription_service.dart';
 import 'paywall_screen.dart';
@@ -531,13 +532,42 @@ class _ConfiguracoesSistemaScreenState
           // ── SOBRE ────────────────────────────────────────────────────────
           _cabecalhoSecao('Sobre'),
           ListTile(
+            leading: const Icon(Icons.widgets_outlined),
+            title: const Text('Adicionar widget'),
+            subtitle: const Text('Adicione o atalho de gasto/receita na tela inicial'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              try {
+                final channel = MethodChannel('com.example.controle_gastos/widget');
+                final jaInstalado = await channel.invokeMethod<bool>('check_widget_installed') ?? false;
+                if (jaInstalado && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('O widget já está instalado na tela inicial.')),
+                  );
+                  return;
+                }
+                final suportado = await channel.invokeMethod<bool>('pin_widget') ?? false;
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(suportado
+                          ? 'Widget adicionado! Você pode arrastá-lo para o local desejado.'
+                          : 'Seu dispositivo não suporta adição automática. Adicione manualmente pela tela inicial.'),
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                }
+              } catch (_) {}
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.help_outline),
             title: const Text('Ver tutorial'),
             subtitle: const Text('Revisitar as instruções de uso do app'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,
-              FadeRoute(page: const OnboardingScreen()),
+              FadeRoute(page: const OnboardingScreen(somenteTutorial: true)),
             ),
           ),
           const ListTile(

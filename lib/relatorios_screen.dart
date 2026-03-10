@@ -194,8 +194,15 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
 
   // ── Helpers de filtro ─────────────────────────────────────────────────────
 
-  List<String> get _todasPessoas =>
-      _pessoasBox.values.map((p) => p.nome).toList();
+  List<String> get _todasPessoas {
+    final lista = _pessoasBox.values.toList()
+      ..sort((a, b) {
+        if (a.parentesco == 'Eu Mesmo') return -1;
+        if (b.parentesco == 'Eu Mesmo') return 1;
+        return a.nome.compareTo(b.nome);
+      });
+    return lista.map((p) => p.nome).toList();
+  }
 
   String _tipoDeForma(String descricao) {
     final forma = _formasPagamentoBox.values.firstWhere(

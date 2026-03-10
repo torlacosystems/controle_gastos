@@ -93,9 +93,20 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     });
   }
 
+  /// Avança para o próximo step submetendo o campo em edição (se houver)
+  void _avancar(int step) {
+    if (_step == 1 && _descricaoCtrl.text.trim().isNotEmpty) _adicionarForma();
+    if (_step == 3 && _pessoaNomeCtrl.text.trim().isNotEmpty) _adicionarPessoa();
+    _irPara(step);
+  }
+
   void _adicionarForma() {
     final desc = _descricaoCtrl.text.trim();
     if (desc.isEmpty) return;
+    final jaExiste = _formasAdicionadas.any(
+      (f) => f.descricao.toLowerCase() == desc.toLowerCase(),
+    );
+    if (jaExiste) return;
     final forma = FormaPagamento(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       descricao: desc,
@@ -425,7 +436,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 50,
             child: FilledButton(
-              onPressed: () => _irPara(2),
+              onPressed: () => _avancar(2),
               child: const Text('Próximo: Orçamentos',
                   style: TextStyle(fontSize: 15)),
             ),
@@ -539,7 +550,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 50,
             child: FilledButton(
-              onPressed: () => _irPara(3),
+              onPressed: () => _avancar(3),
               child: const Text('Próximo: Pessoas', style: TextStyle(fontSize: 15)),
             ),
           ),
@@ -684,7 +695,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 50,
             child: FilledButton(
-              onPressed: () => _irPara(4),
+              onPressed: () => _avancar(4),
               child: const Text('Concluir', style: TextStyle(fontSize: 15)),
             ),
           ),
