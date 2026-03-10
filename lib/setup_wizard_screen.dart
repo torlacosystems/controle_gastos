@@ -3,7 +3,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
-import 'app_settings.dart';
 import 'main.dart';
 import 'fade_route.dart';
 
@@ -16,13 +15,12 @@ class SetupWizardScreen extends StatefulWidget {
 
 class _SetupWizardScreenState extends State<SetupWizardScreen>
     with SingleTickerProviderStateMixin {
-  int _step = 0; // 0=intro, 1=nome+renda, 2=formas, 3=orcamentos, 4=pronto
+  int _step = 0; // 0=nome, 1=formas, 2=orcamentos, 3=pessoas, 4=pronto
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
-  // Step 1 – nome do usuário e renda mensal
+  // Step 0 – nome do usuário
   final _nomeUsuarioCtrl = TextEditingController();
-  final _rendaMensalCtrl = TextEditingController();
 
   // Step 2 – formas de pagamento
   late Box<FormaPagamento> _formasBox;
@@ -35,6 +33,14 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   late Box<Orcamento> _orcamentosBox;
   late Box<Pessoa> _pessoasBox;
   final Map<String, TextEditingController> _limiteCtrl = {};
+
+  // Step 4 – pessoas
+  final _pessoaNomeCtrl = TextEditingController();
+  String _parentescoSelecionado = 'Cônjuge';
+  final List<Pessoa> _pessoasAdicionadas = [];
+  static const _parentescos = [
+    'Cônjuge', 'Filho(a)', 'Pai/Mãe', 'Irmão/Irmã', 'Amigo(a)', 'Colega', 'Outro',
+  ];
 
   static const _tipos = ['Débito', 'Crédito', 'VA/VR'];
 
@@ -71,9 +77,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   void dispose() {
     _animCtrl.dispose();
     _nomeUsuarioCtrl.dispose();
-    _rendaMensalCtrl.dispose();
     _descricaoCtrl.dispose();
     _bancoCtrl.dispose();
+    _pessoaNomeCtrl.dispose();
     for (final c in _limiteCtrl.values) {
       c.dispose();
     }
@@ -116,16 +122,14 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
       );
     }
 
-    // Salva a renda mensal
-    final rendaTexto = _rendaMensalCtrl.text.trim().replaceAll(',', '.');
-    final renda = double.tryParse(rendaTexto);
-    if (renda != null && renda > 0) {
-      await salvarRendaMensal(renda);
-    }
-
     // Salva formas de pagamento
     if (_formasAdicionadas.isNotEmpty) {
       await _formasBox.addAll(_formasAdicionadas);
+    }
+
+    // Salva pessoas adicionadas no wizard
+    for (final p in _pessoasAdicionadas) {
+      await _pessoasBox.put(p.id, p);
     }
 
     // Salva orçamentos por categoria
@@ -158,8 +162,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // ── Barra de progresso ─────────────────────────────────────
-            if (_step > 0 && _step < 4)
+            // ── Barra de progresso (steps 1, 2 e 3) ──
+            if (_step >= 1 && _step <= 3)
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                 child: Column(
@@ -206,13 +210,13 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   Widget _buildStep(Color cor) {
     switch (_step) {
       case 0:
-        return _buildIntro(cor);
+        return _buildNome(cor);
       case 1:
-        return _buildNomeRenda(cor);
-      case 2:
         return _buildFormasPagamento(cor);
-      case 3:
+      case 2:
         return _buildOrcamentos(cor);
+      case 3:
+        return _buildPessoas(cor);
       case 4:
         return _buildPronto(cor);
       default:
@@ -220,14 +224,14 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     }
   }
 
-  // ── STEP 0: Intro ─────────────────────────────────────────────────────────
+  // ── STEP 0: Nome ──────────────────────────────────────────────────────────
 
-  Widget _buildIntro(Color cor) {
-    return Padding(
+  Widget _buildNome(Color cor) {
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const SizedBox(height: 48),
           Container(
             width: 110,
             height: 110,
@@ -235,183 +239,49 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
               color: cor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.tune_rounded, size: 56, color: cor),
+            child: Icon(Icons.waving_hand_outlined, size: 56, color: cor),
           ),
           const SizedBox(height: 32),
           const Text(
-            'Vamos configurar\nseu Granix!',
+            'Olá! Como podemos\nte chamar?',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
-            'Em poucos minutos você vai definir seu perfil, formas de pagamento e limites de orçamento por categoria.',
+            'Seu nome aparecerá nos insights e relatórios, e ficará salvo como pessoa principal.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.6),
           ),
           const SizedBox(height: 40),
-          _itemInfo(cor, Icons.person_outline, 'Seu nome e renda mensal',
-              'Para personalizar insights'),
-          const SizedBox(height: 14),
-          _itemInfo(cor, Icons.credit_card_outlined, 'Formas de pagamento',
-              'Cartões, contas e carteiras'),
-          const SizedBox(height: 14),
-          _itemInfo(cor, Icons.account_balance_wallet_outlined, 'Orçamento por categoria',
-              'Defina limites mensais de gasto'),
-          const SizedBox(height: 48),
+          TextField(
+            controller: _nomeUsuarioCtrl,
+            textCapitalization: TextCapitalization.words,
+            autofocus: true,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20),
+            decoration: InputDecoration(
+              hintText: 'Seu nome',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            ),
+          ),
+          const SizedBox(height: 40),
           SizedBox(
             width: double.infinity,
             height: 52,
             child: FilledButton(
               onPressed: () => _irPara(1),
-              child: const Text('Começar configuração',
-                  style: TextStyle(fontSize: 16)),
+              child: const Text('Continuar', style: TextStyle(fontSize: 16)),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           TextButton(
             onPressed: _concluir,
             child: Text('Configurar depois',
                 style: TextStyle(color: Colors.grey[500])),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _itemInfo(Color cor, IconData icone, String titulo, String sub) {
-    return Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: cor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icone, color: cor, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(titulo,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-            Text(sub,
-                style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // ── STEP 1: Nome + Renda ──────────────────────────────────────────────────
-
-  Widget _buildNomeRenda(Color cor) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: cor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.person_outline, color: cor, size: 26),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Sobre você',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text('Nome e renda familiar mensal',
-                        style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _nomeUsuarioCtrl,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Seu nome',
-                      hintText: 'Ex: João',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _rendaMensalCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Renda familiar mensal (R\$)',
-                      hintText: 'Ex: 5000,00',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      prefixIcon: Icon(Icons.attach_money),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: cor.withValues(alpha: 0.07),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: cor),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Seu nome vai para o cadastro de pessoas como "Eu Mesmo". A renda é usada nos insights de gasto diário.',
-                            style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: FilledButton(
-              onPressed: () => _irPara(2),
-              child: const Text('Próximo: Formas de Pagamento',
-                  style: TextStyle(fontSize: 15)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: () => _irPara(2),
-              child: Text('Pular esta etapa',
-                  style: TextStyle(color: Colors.grey[500])),
-            ),
-          ),
         ],
       ),
     );
@@ -555,7 +425,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 50,
             child: FilledButton(
-              onPressed: () => _irPara(3),
+              onPressed: () => _irPara(2),
               child: const Text('Próximo: Orçamentos',
                   style: TextStyle(fontSize: 15)),
             ),
@@ -563,7 +433,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => _irPara(3),
+              onPressed: () => _irPara(2),
               child: Text('Pular esta etapa',
                   style: TextStyle(color: Colors.grey[500])),
             ),
@@ -669,6 +539,151 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 50,
             child: FilledButton(
+              onPressed: () => _irPara(3),
+              child: const Text('Próximo: Pessoas', style: TextStyle(fontSize: 15)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: TextButton(
+              onPressed: () => _irPara(3),
+              child: Text('Pular esta etapa',
+                  style: TextStyle(color: Colors.grey[500])),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── STEP 3: Pessoas ───────────────────────────────────────────────────────
+
+  void _adicionarPessoa() {
+    final nome = _pessoaNomeCtrl.text.trim();
+    if (nome.isEmpty) return;
+    setState(() {
+      _pessoasAdicionadas.add(Pessoa(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        nome: nome,
+        parentesco: _parentescoSelecionado,
+      ));
+      _pessoaNomeCtrl.clear();
+    });
+  }
+
+  Widget _buildPessoas(Color cor) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: cor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.group_outlined, color: cor, size: 26),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Pessoas',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('Com quem você costuma gastar',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          if (_pessoasAdicionadas.isNotEmpty) ...[
+            const Text('Adicionadas:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ..._pessoasAdicionadas.asMap().entries.map((e) => Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.person_outline, color: cor, size: 20),
+                    title: Text(e.value.nome,
+                        style: const TextStyle(fontSize: 13)),
+                    subtitle: Text(e.value.parentesco,
+                        style: const TextStyle(fontSize: 11)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () =>
+                          setState(() => _pessoasAdicionadas.removeAt(e.key)),
+                    ),
+                  ),
+                )),
+            const SizedBox(height: 16),
+          ],
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _pessoasAdicionadas.isEmpty
+                        ? 'Adicione alguém com quem costuma gastar'
+                        : 'Adicionar outra pessoa',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _pessoaNomeCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _parentescoSelecionado,
+                    decoration: const InputDecoration(
+                      labelText: 'Parentesco / Relação',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: _parentescos
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => _parentescoSelecionado = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _adicionarPessoa,
+                      icon: const Icon(Icons.person_add_outlined, size: 18),
+                      label: const Text('Adicionar'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
               onPressed: () => _irPara(4),
               child: const Text('Concluir', style: TextStyle(fontSize: 15)),
             ),
@@ -676,8 +691,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => _irPara(2),
-              child: Text('Voltar',
+              onPressed: () => _irPara(4),
+              child: Text('Pular esta etapa',
                   style: TextStyle(color: Colors.grey[500])),
             ),
           ),
@@ -698,6 +713,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
         .length;
     final temNome = _nomeUsuarioCtrl.text.trim().isNotEmpty;
     final temFormas = _formasAdicionadas.isNotEmpty;
+    final temPessoas = _pessoasAdicionadas.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -725,6 +741,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
               if (temNome) 'Olá, ${_nomeUsuarioCtrl.text.trim()}!',
               if (temFormas) '${_formasAdicionadas.length} forma${_formasAdicionadas.length == 1 ? '' : 's'} de pagamento adicionada${_formasAdicionadas.length == 1 ? '' : 's'}.',
               if (orcamentosDefinidos > 0) '$orcamentosDefinidos limite${orcamentosDefinidos == 1 ? '' : 's'} de orçamento definido${orcamentosDefinidos == 1 ? '' : 's'}.',
+              if (temPessoas) '${_pessoasAdicionadas.length} pessoa${_pessoasAdicionadas.length == 1 ? '' : 's'} adicionada${_pessoasAdicionadas.length == 1 ? '' : 's'}.',
               if (!temFormas && orcamentosDefinidos == 0) 'Você pode configurar formas de pagamento e orçamentos nas Configurações a qualquer momento.',
             ].join(' '),
             textAlign: TextAlign.center,
@@ -763,13 +780,11 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                   style: TextStyle(fontSize: 16)),
             ),
           ),
-          if (!temFormas) ...[
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => _irPara(2),
-              child: const Text('Voltar e configurar'),
-            ),
-          ],
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => _irPara(3),
+            child: Text('Voltar', style: TextStyle(color: Colors.grey[500])),
+          ),
         ],
       ),
     );

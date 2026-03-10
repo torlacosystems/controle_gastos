@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'receita.dart';
-import 'pessoa.dart';
-import 'categoria.dart';
 
 class MultiplasReceitasScreen extends StatefulWidget {
   const MultiplasReceitasScreen({super.key});
@@ -15,13 +13,10 @@ class MultiplasReceitasScreen extends StatefulWidget {
 class _MultiplasReceitasScreenState
     extends State<MultiplasReceitasScreen> {
   late Box<Receita> _receitasBox;
-  late Box<Pessoa> _pessoasBox;
-  late Box<Categoria> _categoriasBox;
 
   // Campos compartilhados
   String _categoriaSelecionada = 'Salário';
   String _tipoReceita = 'Fixo';
-  Pessoa? _pessoa;
   DateTime _data = DateTime.now();
   bool _recorrente = false;
 
@@ -36,21 +31,12 @@ class _MultiplasReceitasScreenState
     'Benefício', 'Outros',
   ];
 
-  List<String> get _categorias {
-    final custom = _categoriasBox.values.map((c) => c.nome).toList();
-    return [..._categoriasFixas, ...custom];
-  }
+  List<String> get _categorias => List.unmodifiable(_categoriasFixas);
 
   @override
   void initState() {
     super.initState();
     _receitasBox = Hive.box<Receita>('receitas');
-    _pessoasBox = Hive.box<Pessoa>('pessoas');
-    _categoriasBox = Hive.box<Categoria>('categorias');
-
-    if (_pessoasBox.isNotEmpty) {
-      _pessoa = _pessoasBox.getAt(0);
-    }
     _adicionarLinha();
   }
 
@@ -219,7 +205,7 @@ class _MultiplasReceitasScreenState
           valor: v,
           categoria: _categoriaSelecionada,
           data: DateTime(_data.year, _data.month + m, _data.day),
-          pessoa: _pessoa?.nome ?? '',
+          pessoa: '',
           recorrente: _recorrente,
           tipoReceita: _tipoReceita,
           detalhado: true,
@@ -255,7 +241,6 @@ class _MultiplasReceitasScreenState
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final pessoas = _pessoasBox.values.toList();
     final categorias = _categorias;
 
     return Scaffold(
@@ -324,27 +309,6 @@ class _MultiplasReceitasScreenState
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                // Pessoa
-                DropdownButtonFormField<Pessoa>(
-                  key: ValueKey(_pessoa?.nome),
-                  initialValue: _pessoa,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Pessoa',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 10),
-                  ),
-                  items: pessoas
-                      .map((p) => DropdownMenuItem(
-                          value: p,
-                          child: Text(p.nome,
-                              overflow: TextOverflow.ellipsis)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _pessoa = v),
                 ),
                 const SizedBox(height: 8),
                 // Data

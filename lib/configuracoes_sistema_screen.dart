@@ -30,6 +30,7 @@ class ConfiguracoesSistemaScreen extends StatefulWidget {
 class _ConfiguracoesSistemaScreenState
     extends State<ConfiguracoesSistemaScreen> {
   bool _bloqueioAtivo = false;
+  bool _bloqueioWidget = false;
 
   @override
   void initState() {
@@ -39,7 +40,8 @@ class _ConfiguracoesSistemaScreenState
 
   Future<void> _carregarBloqueio() async {
     final ativo = await AuthService.bloqueioAtivo;
-    if (mounted) setState(() => _bloqueioAtivo = ativo);
+    final widget = await AuthService.bloqueioWidgetAtivo;
+    if (mounted) setState(() { _bloqueioAtivo = ativo; _bloqueioWidget = widget; });
   }
 
   Future<void> _toggleBloqueio(bool ativo) async {
@@ -475,6 +477,18 @@ class _ConfiguracoesSistemaScreenState
             subtitle: const Text('Pedir biometria ou PIN ao abrir o app'),
             value: _bloqueioAtivo,
             onChanged: _toggleBloqueio,
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.widgets_outlined),
+            title: const Text('Biometria no widget'),
+            subtitle: const Text('Pedir biometria ou PIN ao usar o widget'),
+            value: _bloqueioWidget,
+            onChanged: _bloqueioAtivo
+                ? (v) async {
+                    await AuthService.setBloqueioWidget(v);
+                    setState(() => _bloqueioWidget = v);
+                  }
+                : null,
           ),
           const Divider(),
 

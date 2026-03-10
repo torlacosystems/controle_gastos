@@ -50,6 +50,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
     setState(() => _erro = false);
     final sucesso = await AuthService.autenticar();
     if (sucesso && mounted) {
+      AuthService.marcarSessaoAutenticada();
       setState(() => _bloqueado = false);
     } else if (mounted) {
       setState(() => _erro = true);

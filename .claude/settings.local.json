@@ -29,7 +29,9 @@
       "Bash(flutter analyze lib/setup_wizard_screen.dart)",
       "Bash(grep -n \"final.*_categorias\\\\|static.*_categorias\\\\|_categoriasGasto\\\\|_dicasPorCategoria\" /c/TorlacoSystems/controle_gastos/lib/*.dart)",
       "Bash(dart analyze lib/main.dart)",
-      "Bash(flutter analyze lib/multiplas_receitas_screen.dart lib/minhas_receitas_screen.dart)"
+      "Bash(flutter analyze lib/multiplas_receitas_screen.dart lib/minhas_receitas_screen.dart)",
+      "Bash(ls -la /c/TorlacoSystems/controle_gastos/lib/*.dart)",
+      "Bash(grep -n \"SplashScreen\\\\|splash_screen\\\\|class Splash\" /c/TorlacoSystems/controle_gastos/lib/*.dart)"
     ]
   }
 }

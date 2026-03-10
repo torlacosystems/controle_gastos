@@ -19,6 +19,7 @@ import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
 import 'app_settings.dart';
 import 'lock_screen.dart';
+import 'auth_service.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'subscription_service.dart';
 import 'paywall_screen.dart';
@@ -49,6 +50,9 @@ void main() async {
   await carregarTema(brightness);
   runApp(const MyApp());
 }
+
+/// Ação do widget capturada na SplashScreen antes do HomeScreen estar montado
+String? widgetAcaoPendente;
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -100,24 +104,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late Box<Receita> _receitasBox;
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
+  late Box<Orcamento> _orcamentosBox;
   double? _rendaMensal;
-
   final TextEditingController _buscaHomeController = TextEditingController();
-
-  final List<String> _nomesMeses = [
-    'Janeiro',
-    'Fevereiro',
-    'Março',
-    'Abril',
-    'Maio',
-    'Junho',
-    'Julho',
-    'Agosto',
-    'Setembro',
-    'Outubro',
-    'Novembro',
-    'Dezembro',
-  ];
 
   static final _widgetChannel = MethodChannel('com.example.controle_gastos/widget');
 
@@ -128,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _receitasBox = Hive.box<Receita>('receitas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     carregarRendaMensal().then((v) {
       if (mounted && v != null) setState(() => _rendaMensal = v);
     });
@@ -139,10 +129,30 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
     _widgetChannel.setMethodCallHandler((call) async {
-      if (call.method == 'novo_gasto') {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _abrirAdicionarGasto());
+      if (call.method == 'novo_gasto' || call.method == 'nova_receita') {
+        await _executarAcaoWidget(call.method);
       }
     });
+    // Ação pendente capturada pela SplashScreen antes do HomeScreen montar
+    if (widgetAcaoPendente != null) {
+      final acao = widgetAcaoPendente!;
+      widgetAcaoPendente = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _executarAcaoWidget(acao));
+    }
+  }
+
+  Future<void> _executarAcaoWidget(String method) async {
+    final bloqueado = await AuthService.bloqueioWidgetAtivo;
+    if (bloqueado && !AuthService.sessaoAutenticada) {
+      final ok = await AuthService.autenticar();
+      if (!ok) return;
+      AuthService.marcarSessaoAutenticada();
+    }
+    if (!mounted) return;
+    final isGasto = method == 'novo_gasto';
+    WidgetsBinding.instance.addPostFrameCallback((_) => isGasto
+        ? _abrirQuickAddGasto(fromWidget: true)
+        : _abrirQuickAddReceita(fromWidget: true));
   }
 
   @override
@@ -170,13 +180,231 @@ class _HomeScreenState extends State<HomeScreen> {
   String _formatarValor(double valor) =>
       valor.toStringAsFixed(2).replaceAll('.', ',');
 
-  String _formatarData(DateTime data) =>
-      '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
+  double _gastosMesPorCategoria(String categoria) {
+    final agora = DateTime.now();
+    return _gastosBox.values
+        .where((g) =>
+            g.categoria == categoria &&
+            g.data.month == agora.month &&
+            g.data.year == agora.year)
+        .fold(0, (s, g) => s + g.valor);
+  }
+
+  Widget _appBarAcao(IconData icone, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icone, color: Colors.white, size: 20),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(color: Colors.white, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // limite == null → categoria sem orçamento configurado
+  Widget _orcBarRow(String categoria, double gasto, double? limite) {
+    final semLimite = limite == null;
+    final percentual = (limite != null && limite > 0) ? (gasto / limite) : null;
+    final ultrapassou = percentual != null && percentual >= 1.0;
+    final corPct = semLimite
+        ? Colors.blueGrey
+        : ultrapassou
+            ? Colors.red
+            : percentual! >= 0.75
+                ? Colors.orange
+                : Colors.green;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 90,
+                child: Text(
+                  categoria,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (ctx, constraints) {
+                    final total = constraints.maxWidth;
+                    if (semLimite) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          height: 18,
+                          color: Colors.blueGrey.shade200,
+                        ),
+                      );
+                    }
+                    if (ultrapassou) {
+                      final limiteW = total * 0.75;
+                      final excedenteW = total - limiteW;
+                      return Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: SizedBox(
+                              height: 18,
+                              child: Row(
+                                children: [
+                                  Container(width: limiteW, color: Colors.green[600]),
+                                  Container(width: excedenteW, color: Colors.red[600]),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: limiteW - 1.5,
+                            top: 0,
+                            bottom: 0,
+                            child: Container(width: 3, color: Colors.white),
+                          ),
+                        ],
+                      );
+                    }
+                    final gastoW = (percentual! * total).clamp(0.0, total);
+                    final restoW = total - gastoW;
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: SizedBox(
+                        height: 18,
+                        child: Row(
+                          children: [
+                            if (gastoW > 0) Container(width: gastoW, color: corPct),
+                            if (restoW > 0) Container(width: restoW, color: Colors.grey.shade200),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 50,
+                child: Text(
+                  semLimite
+                      ? '—'
+                      : '${(percentual! * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: corPct),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 98),
+            child: Row(
+              children: [
+                Text(
+                  'R\$ ${_formatarValor(gasto)}',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: corPct,
+                      fontWeight: FontWeight.w600),
+                ),
+                const Text(' / ',
+                    style: TextStyle(fontSize: 10, color: Colors.grey)),
+                Text(
+                  semLimite ? 'sem limite' : 'R\$ ${_formatarValor(limite!)}',
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                if (ultrapassou) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.warning_amber, color: Colors.red, size: 12),
+                  const SizedBox(width: 2),
+                  Text(
+                    'Limite excedido',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metaCard({
+    required String titulo,
+    required double valor,
+    required double? meta,
+    required IconData icone,
+  }) {
+    final ok = meta == null || valor <= meta;
+    final cor = ok ? Colors.green[700]! : Colors.red[700]!;
+    final bgCor = ok
+        ? Colors.green.withValues(alpha: 0.08)
+        : Colors.red.withValues(alpha: 0.08);
+    final borderCor = ok
+        ? Colors.green.withValues(alpha: 0.25)
+        : Colors.red.withValues(alpha: 0.25);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bgCor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderCor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icone, size: 14, color: cor),
+              const SizedBox(width: 4),
+              Text(titulo,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'R\$ ${_formatarValor(valor)}',
+            style: TextStyle(
+                fontSize: 15, fontWeight: FontWeight.bold, color: cor),
+          ),
+          if (meta != null)
+            Text(
+              'Meta: R\$ ${_formatarValor(meta)}',
+              style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+            )
+          else
+            Text(
+              'Meta: não configurada',
+              style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+            ),
+        ],
+      ),
+    );
+  }
 
   bool get _cadastroCompleto =>
       _formasPagamentoBox.isNotEmpty && _pessoasBox.isNotEmpty;
 
-  void _abrirQuickAddGasto() {
+  void _abrirQuickAddGasto({bool fromWidget = false}) {
     final valorCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -267,6 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _gastosBox.add(g);
                           Navigator.pop(ctx);
                           setState(() {});
+                          if (fromWidget) SystemNavigator.pop();
                         },
                         child: const Text(
                           'Salvar e Detalhar Depois',
@@ -404,7 +633,8 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       FadeRoute(page: const ConfiguracoesSistemaScreen()),
     );
-    setState(() {});
+    final v = await carregarRendaMensal();
+    if (mounted) setState(() => _rendaMensal = v);
   }
 
   void _abrirMeusGastos() async {
@@ -418,7 +648,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
-  void _abrirQuickAddReceita() {
+  void _abrirQuickAddReceita({bool fromWidget = false}) {
     final valorCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -506,6 +736,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _receitasBox.add(r);
                           Navigator.pop(ctx);
                           setState(() {});
+                          if (fromWidget) SystemNavigator.pop();
                         },
                         child: const Text(
                           'Salvar e Detalhar Depois',
@@ -607,41 +838,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Map.fromEntries(sorted.take(6));
   }
 
-  List<Map<String, dynamic>> get _ultimos3Gastos {
-    final agora = DateTime.now();
-    final lista = <Map<String, dynamic>>[];
-    for (int i = 0; i < _gastosBox.length; i++) {
-      final g = _gastosBox.getAt(i);
-      if (g != null &&
-          g.data.month == agora.month &&
-          g.data.year == agora.year) {
-        lista.add({'item': g, 'index': i});
-      }
-    }
-    lista.sort(
-      (a, b) => (b['item'] as Gasto).data.compareTo((a['item'] as Gasto).data),
-    );
-    return lista.take(3).toList();
-  }
-
-  List<Map<String, dynamic>> get _ultimas3Receitas {
-    final agora = DateTime.now();
-    final lista = <Map<String, dynamic>>[];
-    for (int i = 0; i < _receitasBox.length; i++) {
-      final r = _receitasBox.getAt(i);
-      if (r != null &&
-          r.data.month == agora.month &&
-          r.data.year == agora.year) {
-        lista.add({'item': r, 'index': i});
-      }
-    }
-    lista.sort(
-      (a, b) =>
-          (b['item'] as Receita).data.compareTo((a['item'] as Receita).data),
-    );
-    return lista.take(3).toList();
-  }
-
   Widget _botaoNavegacao(IconData icone, String label, VoidCallback onPressed) {
     return InkWell(
       onTap: onPressed,
@@ -679,6 +875,8 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
+          _appBarAcao(Icons.trending_down, 'Novo Gasto', _abrirQuickAddGasto),
+          _appBarAcao(Icons.trending_up, 'Nova Receita', _abrirQuickAddReceita),
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white),
             tooltip: 'Configurações',
@@ -710,9 +908,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      body: Stack(
-        children: [
-          Column(
+      body: Column(
             children: [
               Container(
                 width: double.infinity,
@@ -774,52 +970,43 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          if (_rendaMensal != null && _rendaMensal! > 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Builder(builder: (context) {
-                final agora = DateTime.now();
-                final diasNoMes = DateUtils.getDaysInMonth(agora.year, agora.month);
-                final gastoDiario = _totalGastosMes / agora.day;
-                final rendaDiaria = _rendaMensal! / diasNoMes;
-                final ok = gastoDiario <= rendaDiaria;
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: ok
-                        ? Colors.green.withValues(alpha: 0.12)
-                        : Colors.red.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: ok
-                          ? Colors.green.withValues(alpha: 0.3)
-                          : Colors.red.withValues(alpha: 0.3),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Builder(builder: (context) {
+              final agora = DateTime.now();
+              final diasNoMes = DateUtils.getDaysInMonth(agora.year, agora.month);
+              final metaDiaria = _rendaMensal != null ? _rendaMensal! / diasNoMes : null;
+              final hoje = DateTime(agora.year, agora.month, agora.day);
+              final totalHoje = _gastosBox.values.where((g) {
+                final d = DateTime(g.data.year, g.data.month, g.data.day);
+                return d == hoje;
+              }).fold(0.0, (s, g) => s + g.valor);
+              final mediaDiaria = agora.day > 0 ? _totalGastosMes / agora.day : 0.0;
+              return Row(
+                children: [
+                  // Card 1: Gasto do dia
+                  Expanded(
+                    child: _metaCard(
+                      titulo: 'Gasto hoje',
+                      valor: totalHoje,
+                      meta: metaDiaria,
+                      icone: Icons.today,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        ok ? Icons.trending_down : Icons.trending_up,
-                        color: ok ? Colors.green[700] : Colors.red[700],
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Gasto diário médio: R\$ ${_formatarValor(gastoDiario)}  •  '
-                          'Renda diária: R\$ ${_formatarValor(rendaDiaria)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: ok ? Colors.green[800] : Colors.red[800],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 10),
+                  // Card 2: Média diária acumulada
+                  Expanded(
+                    child: _metaCard(
+                      titulo: 'Média diária',
+                      valor: mediaDiaria,
+                      meta: metaDiaria,
+                      icone: Icons.show_chart,
+                    ),
                   ),
-                );
-              }),
-            ),
+                ],
+              );
+            }),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: TextField(
@@ -959,362 +1146,82 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
 
-                  // ── LANÇAMENTOS ───────────────────────────────────────
+                  // ── ORÇAMENTO POR CATEGORIA ───────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Lançamentos de ${_nomesMeses[DateTime.now().month - 1]}',
-                          style: const TextStyle(
+                        const Text(
+                          'Orçamento por Categoria',
+                          style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         TextButton(
-                          onPressed: () => _abrirTodosRegistros(),
-                          child: const Text('Ver todos'),
+                          onPressed: () => _abrirRelatorios(),
+                          child: const Text('Ver mais'),
                         ),
                       ],
                     ),
                   ),
-                  if (_ultimos3Gastos.isEmpty && _ultimas3Receitas.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          'Nenhum lançamento este mês.',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Builder(builder: (ctx) {
+                      final agora = DateTime.now();
+                      final orcamentos = _orcamentosBox.values.toList()
+                        ..sort((a, b) {
+                            if (a.categoria == 'Outros') return 1;
+                            if (b.categoria == 'Outros') return -1;
+                            return a.categoria.compareTo(b.categoria);
+                          });
+                      final catsSemLimite = _gastosBox.values
+                          .where((g) =>
+                              g.data.month == agora.month &&
+                              g.data.year == agora.year)
+                          .map((g) => g.categoria)
+                          .toSet()
+                          .where((c) => !orcamentos.any((o) => o.categoria == c))
+                          .toList()
+                        ..sort((a, b) {
+                            if (a == 'Outros') return 1;
+                            if (b == 'Outros') return -1;
+                            return a.compareTo(b);
+                          });
+                      if (orcamentos.isEmpty && catsSemLimite.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text(
+                              'Nenhum gasto ou orçamento este mês.',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        );
+                      }
+                      return Column(
                         children: [
-                          // GASTOS
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Row(
-                                  children: [
-                                    Icon(
-                                      Icons.arrow_downward,
-                                      color: Colors.red,
-                                      size: 14,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Gastos',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                        color: Colors.red,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                ..._ultimos3Gastos.map((item) {
-                                  final g = item['item'] as Gasto;
-                                  final boxIndex = item['index'] as int;
-                                  return Dismissible(
-                                    key: Key('gasto_${g.id}'),
-                                    direction: DismissDirection.endToStart,
-                                    background: Container(
-                                      alignment: Alignment.centerRight,
-                                      padding: const EdgeInsets.only(right: 16),
-                                      margin: const EdgeInsets.only(bottom: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Icon(
-                                        Icons.delete,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    confirmDismiss: (_) async {
-                                      return await showDialog<bool>(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title: const Text('Excluir gasto'),
-                                          content: Text(
-                                            'Deseja excluir "${g.categoria}" de R\$ ${_formatarValor(g.valor)}?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx, false),
-                                              child: const Text('Cancelar'),
-                                            ),
-                                            ElevatedButton(
-                                              style:
-                                                  ElevatedButton.styleFrom(
-                                                    backgroundColor:
-                                                        Colors.red,
-                                                    foregroundColor:
-                                                        Colors.white,
-                                                  ),
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx, true),
-                                              child: const Text('Excluir'),
-                                            ),
-                                          ],
-                                        ),
-                                      ) ??
-                                          false;
-                                    },
-                                    onDismissed: (_) {
-                                      _gastosBox.deleteAt(boxIndex);
-                                      setState(() {});
-                                    },
-                                    child: GestureDetector(
-                                      onTap: () => _abrirAdicionarGasto(
-                                        gasto: g,
-                                        index: boxIndex,
-                                      ),
-                                      child: Container(
-                                        margin: const EdgeInsets.only(
-                                          bottom: 6,
-                                        ),
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          border: const Border(
-                                            left: BorderSide(
-                                              color: Colors.red,
-                                              width: 3,
-                                            ),
-                                          ),
-                                          color: Theme.of(context).cardColor,
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black12,
-                                              blurRadius: 2,
-                                            ),
-                                          ],
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              g.categoria,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              'R\$ ${_formatarValor(g.valor)}',
-                                              style: const TextStyle(
-                                                color: Colors.red,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            Text(
-                                              _formatarData(g.data),
-                                              style: const TextStyle(
-                                                color: Colors.grey,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // RECEITAS
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Row(
-                                  children: [
-                                    Icon(
-                                      Icons.arrow_upward,
-                                      color: Colors.green,
-                                      size: 14,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Receitas',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                ..._ultimas3Receitas.map((item) {
-                                  final r = item['item'] as Receita;
-                                  final boxIndex = item['index'] as int;
-                                  return Dismissible(
-                                    key: Key('receita_${r.id}'),
-                                    direction: DismissDirection.endToStart,
-                                    background: Container(
-                                      alignment: Alignment.centerRight,
-                                      padding: const EdgeInsets.only(right: 16),
-                                      margin: const EdgeInsets.only(bottom: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Icon(
-                                        Icons.delete,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    confirmDismiss: (_) async {
-                                      return await showDialog<bool>(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title: const Text('Excluir receita'),
-                                          content: Text(
-                                            'Deseja excluir "${r.categoria}" de R\$ ${_formatarValor(r.valor)}?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx, false),
-                                              child: const Text('Cancelar'),
-                                            ),
-                                            ElevatedButton(
-                                              style:
-                                                  ElevatedButton.styleFrom(
-                                                    backgroundColor:
-                                                        Colors.red,
-                                                    foregroundColor:
-                                                        Colors.white,
-                                                  ),
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx, true),
-                                              child: const Text('Excluir'),
-                                            ),
-                                          ],
-                                        ),
-                                      ) ??
-                                          false;
-                                    },
-                                    onDismissed: (_) {
-                                      _receitasBox.deleteAt(boxIndex);
-                                      setState(() {});
-                                    },
-                                    child: GestureDetector(
-                                      onTap: () => _abrirAdicionarReceita(
-                                        receita: r,
-                                        index: boxIndex,
-                                      ),
-                                      child: Container(
-                                        margin: const EdgeInsets.only(
-                                          bottom: 6,
-                                        ),
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          border: const Border(
-                                            left: BorderSide(
-                                              color: Colors.green,
-                                              width: 3,
-                                            ),
-                                          ),
-                                          color: Theme.of(context).cardColor,
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black12,
-                                              blurRadius: 2,
-                                            ),
-                                          ],
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              r.categoria,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              'R\$ ${_formatarValor(r.valor)}',
-                                              style: const TextStyle(
-                                                color: Colors.green,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            Text(
-                                              _formatarData(r.data),
-                                              style: const TextStyle(
-                                                color: Colors.grey,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
+                          ...orcamentos.map((orc) => _orcBarRow(
+                                orc.categoria,
+                                _gastosMesPorCategoria(orc.categoria),
+                                orc.limite,
+                              )),
+                          ...catsSemLimite.map((cat) => _orcBarRow(
+                                cat,
+                                _gastosMesPorCategoria(cat),
+                                null,
+                              )),
                         ],
-                      ),
-                    ),
+                      );
+                    }),
+                  ),
                 ],
               ),
             ),
           ),
             ],
           ),
-          Align(
-            alignment: const Alignment(1.0, 0.5),
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FloatingActionButton.small(
-                    heroTag: 'fab_gasto',
-                    onPressed: _abrirQuickAddGasto,
-                    backgroundColor: Colors.red[600],
-                    foregroundColor: Colors.white,
-                    tooltip: 'Novo Gasto',
-                    child: const Icon(Icons.add),
-                  ),
-                  const SizedBox(height: 8),
-                  FloatingActionButton.small(
-                    heroTag: 'fab_receita',
-                    onPressed: _abrirQuickAddReceita,
-                    backgroundColor: Colors.green[600],
-                    foregroundColor: Colors.white,
-                    tooltip: 'Nova Receita',
-                    child: const Icon(Icons.add),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1367,10 +1274,13 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   ];
 
   List<Map<String, dynamic>> get _categorias {
+    final fixasSemOutros =
+        _categoriasFixas.where((c) => c['nome'] != 'Outros').toList();
+    final outros = _categoriasFixas.firstWhere((c) => c['nome'] == 'Outros');
     final custom = _categoriasBox.values
         .map((c) => {'nome': c.nome, 'icone': c.icone})
         .toList();
-    return [..._categoriasFixas, ...custom];
+    return [...fixasSemOutros, ...custom, outros];
   }
 
   @override
@@ -2299,13 +2209,8 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   late TextEditingController _descricaoController;
   late String _categoriaSelecionada;
   late DateTime _dataSelecionada;
-  Pessoa? _pessoaSelecionada;
   late bool _recorrente;
   late String _tipoReceita;
-
-  bool _pessoaOrfa = false;
-
-  late Box<Pessoa> _pessoasBox;
 
   final List<Map<String, dynamic>> _categorias = [
     {'nome': 'Salário', 'icone': Icons.work},
@@ -2320,8 +2225,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   @override
   void initState() {
     super.initState();
-    _pessoasBox = Hive.box<Pessoa>('pessoas');
-
     final r = widget.receita;
     _valorController = TextEditingController(
       text: r != null ? r.valor.toStringAsFixed(2).replaceAll('.', ',') : '',
@@ -2331,19 +2234,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     _dataSelecionada = r?.data ?? DateTime.now();
     _recorrente = r?.recorrente ?? false;
     _tipoReceita = r?.tipoReceita ?? 'Fixo';
-
-    final pessoas = _pessoasBox.values.toList();
-    if (r != null && r.pessoa.isNotEmpty) {
-      final existe = pessoas.any((p) => p.nome == r.pessoa);
-      if (existe) {
-        _pessoaSelecionada = pessoas.firstWhere((p) => p.nome == r.pessoa);
-      } else {
-        _pessoaSelecionada = null;
-        _pessoaOrfa = true;
-      }
-    } else {
-      _pessoaSelecionada = pessoas.isNotEmpty ? pessoas.first : null;
-    }
   }
 
   void _mostrarSnackbarSucesso(String mensagem) {
@@ -2398,30 +2288,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     );
   }
 
-  Widget _avisoOrfao(String mensagem) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.orange[50],
-        border: Border.all(color: Colors.orange),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              mensagem,
-              style: const TextStyle(fontSize: 13, color: Colors.orange),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _salvarReceita() async {
     String textoValor = _valorController.text.replaceAll('.', ',');
     if (!textoValor.contains(',')) textoValor = '$textoValor,00';
@@ -2444,7 +2310,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
       valor: valor,
       categoria: _categoriaSelecionada,
       data: _dataSelecionada,
-      pessoa: _pessoaSelecionada!.nome,
+      pessoa: '',
       recorrente: _recorrente,
       tipoReceita: _tipoReceita,
       detalhado: true,
@@ -2554,9 +2420,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pessoas = _pessoasBox.values.toList();
-    final podeSalvar = _pessoaSelecionada != null &&
-        _descricaoController.text.trim().isNotEmpty;
+    final podeSalvar = _descricaoController.text.trim().isNotEmpty;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -2714,42 +2578,6 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-
-              const Text(
-                'Pessoa',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              if (_pessoaOrfa && _pessoaSelecionada == null)
-                _avisoOrfao(
-                  'A pessoa "${widget.receita?.pessoa}" foi removida. Selecione uma nova.',
-                ),
-              DropdownButtonFormField<Pessoa>(
-                initialValue: _pessoaSelecionada,
-                hint: const Text('Selecione a pessoa'),
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  enabledBorder: _pessoaOrfa && _pessoaSelecionada == null
-                      ? const OutlineInputBorder(
-                          borderSide: BorderSide(
-                            color: Colors.orange,
-                            width: 2,
-                          ),
-                        )
-                      : const OutlineInputBorder(),
-                ),
-                items: pessoas.map((pessoa) {
-                  return DropdownMenuItem(
-                    value: pessoa,
-                    child: Text('${pessoa.nome} • ${pessoa.parentesco}'),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() {
-                  _pessoaSelecionada = value;
-                  _pessoaOrfa = false;
-                }),
               ),
               const SizedBox(height: 24),
 

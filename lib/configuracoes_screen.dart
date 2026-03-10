@@ -9,7 +9,6 @@ import 'categoria.dart';
 import 'subscription_service.dart';
 import 'paywall_screen.dart';
 import 'fade_route.dart';
-import 'app_settings.dart';
 
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
@@ -27,7 +26,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
   late Box<Categoria> _categoriasBox;
-  double? _rendaMensal;
 
   final List<String> _grausParentesco = [
     'Eu Mesmo',
@@ -74,9 +72,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
     _categoriasBox = Hive.box<Categoria>('categorias');
-    carregarRendaMensal().then((v) {
-      if (mounted) setState(() => _rendaMensal = v);
-    });
   }
 
   void _mostrarSnackbarSucesso(String mensagem) {
@@ -438,87 +433,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
-  // ── Editar renda mensal ───────────────────────────────────────────────────
-
-  void _editarRendaMensal() {
-    final ctrl = TextEditingController(
-      text: _rendaMensal != null
-          ? _rendaMensal!.toStringAsFixed(2).replaceAll('.', ',')
-          : '',
-    );
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom +
-              MediaQuery.of(context).padding.bottom +
-              24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Renda mensal familiar',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Usada para calcular gasto diário vs renda diária nos insights.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Valor (R\$)',
-                hintText: '0,00',
-                prefixText: 'R\$ ',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final texto = ctrl.text.trim().replaceAll(',', '.');
-                  final valor = double.tryParse(texto);
-                  if (valor == null || valor <= 0) return;
-                  await salvarRendaMensal(valor);
-                  if (!context.mounted) return;
-                  setState(() => _rendaMensal = valor);
-                  Navigator.pop(context);
-                  _mostrarSnackbarSucesso('Renda mensal atualizada!');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Salvar',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── Editar nome do usuário principal ─────────────────────────────────────
 
@@ -1423,26 +1337,6 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
           // ── ABA PESSOAS ────────────────────────────────────────────────
           Column(
             children: [
-              // Card renda mensal
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  child: Icon(Icons.attach_money, color: Theme.of(context).colorScheme.primary),
-                ),
-                title: const Text('Renda mensal familiar', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(
-                  _rendaMensal != null
-                      ? 'R\$ ${_rendaMensal!.toStringAsFixed(2).replaceAll('.', ',')}'
-                      : 'Não informada — toque para adicionar',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: _editarRendaMensal,
-                ),
-                onTap: _editarRendaMensal,
-              ),
-              const Divider(),
               Expanded(
                 child: pessoasFamilia.isEmpty && pessoasPrincipal.isEmpty
               ? const Center(

@@ -45,7 +45,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   String _receitaPeriodoSelecionado = '30d';
   late DateTime _receitaDataInicio;
   late DateTime _receitaDataFim;
-  String? _receitaPessoaSelecionada;
   String? _receitaCategoriaSelecionada;
 
   // Controle de linhas do gráfico (aba Gastos)
@@ -238,8 +237,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
       if (r.data.isBefore(_receitaDataInicio.subtract(const Duration(days: 1))))
         return false;
       if (r.data.isAfter(_receitaDataFim.add(const Duration(days: 1)))) return false;
-      if (_receitaPessoaSelecionada != null && r.pessoa != _receitaPessoaSelecionada)
-        return false;
       if (_receitaCategoriaSelecionada != null && r.categoria != _receitaCategoriaSelecionada)
         return false;
       return true;
@@ -253,7 +250,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   double get _totalReceitasPeriodoGastos => _receitasBox.values.where((r) {
         if (r.data.isBefore(_dataInicio.subtract(const Duration(days: 1)))) return false;
         if (r.data.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
-        if (_pessoaSelecionada != null && r.pessoa != _pessoaSelecionada) return false;
         return true;
       }).fold(0, (s, r) => s + r.valor);
   double get _saldoPeriodoGastos => _totalReceitasPeriodoGastos - _totalGastos;
@@ -344,8 +340,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   double _receitasPorMes(DateTime mes) => _receitasBox.values
       .where((r) {
         if (r.data.month != mes.month || r.data.year != mes.year) return false;
-        if (_pessoaSelecionada != null && r.pessoa != _pessoaSelecionada)
-          return false;
         return true;
       })
       .fold(0, (s, r) => s + r.valor);
@@ -376,7 +370,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   double _receitasPorMesHistorico(DateTime mes) => _receitasBox.values
       .where((r) {
         if (r.data.month != mes.month || r.data.year != mes.year) return false;
-        if (_receitaPessoaSelecionada != null && r.pessoa != _receitaPessoaSelecionada) return false;
         if (_receitaCategoriaSelecionada != null && r.categoria != _receitaCategoriaSelecionada) return false;
         return true;
       })
@@ -393,21 +386,141 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   double _gastosNoPeriodoPorCategoria(String categoria) =>
       _gastosFiltrados.where((g) => g.categoria == categoria).fold(0, (s, g) => s + g.valor);
 
-  double _limiteAjustado(double limiteBase) {
-    if (_periodoSelecionado == 'todos' && _gastosFiltrados.isNotEmpty) {
-      final primeiro = _gastosFiltrados.map((g) => g.data).reduce((a, b) => a.isBefore(b) ? a : b);
-      final ultimo = _gastosFiltrados.map((g) => g.data).reduce((a, b) => a.isAfter(b) ? a : b);
-      final meses = (ultimo.year - primeiro.year) * 12 + (ultimo.month - primeiro.month) + 1;
-      return limiteBase * meses;
-    }
-    final dias = _dataFim.difference(_dataInicio).inDays + 1;
-    return limiteBase * dias / 30;
-  }
-
-  Color _corProgresso(double percentual) {
-    if (percentual >= 1.0) return Colors.red;
-    if (percentual >= 0.8) return Colors.orange;
-    return Colors.green;
+  // limite == null → categoria sem orçamento configurado
+  Widget _orcRow(String categoria, double gasto, double? limite) {
+    final semLimite = limite == null;
+    final percentual = (limite != null && limite > 0) ? (gasto / limite) : null;
+    final ultrapassou = percentual != null && percentual >= 1.0;
+    final corPct = semLimite
+        ? Colors.blueGrey
+        : ultrapassou
+            ? Colors.red
+            : percentual! >= 0.75
+                ? Colors.orange
+                : Colors.green;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 90,
+                child: Text(
+                  categoria,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (ctx, constraints) {
+                    final total = constraints.maxWidth;
+                    if (semLimite) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                            height: 20, color: Colors.blueGrey.shade200),
+                      );
+                    }
+                    if (ultrapassou) {
+                      final limiteW = total * 0.75;
+                      final excedenteW = total - limiteW;
+                      return Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: SizedBox(
+                              height: 20,
+                              child: Row(
+                                children: [
+                                  Container(width: limiteW, color: Colors.green[600]),
+                                  Container(width: excedenteW, color: Colors.red[600]),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: limiteW - 1.5,
+                            top: 0,
+                            bottom: 0,
+                            child: Container(width: 3, color: Colors.white),
+                          ),
+                        ],
+                      );
+                    }
+                    final gastoW = (percentual! * total).clamp(0.0, total);
+                    final restoW = total - gastoW;
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: SizedBox(
+                        height: 20,
+                        child: Row(
+                          children: [
+                            if (gastoW > 0) Container(width: gastoW, color: corPct),
+                            if (restoW > 0) Container(width: restoW, color: Colors.grey.shade200),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 50,
+                child: Text(
+                  semLimite
+                      ? '—'
+                      : '${(percentual! * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: corPct),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 98),
+            child: Row(
+              children: [
+                Text(
+                  _formatarValor(gasto),
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: corPct,
+                      fontWeight: FontWeight.w600),
+                ),
+                const Text(' / ',
+                    style: TextStyle(fontSize: 10, color: Colors.grey)),
+                Text(
+                  semLimite ? 'sem limite' : _formatarValor(limite),
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                if (ultrapassou) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.warning_amber, color: Colors.red, size: 12),
+                  const SizedBox(width: 2),
+                  Text(
+                    'Limite excedido',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatarValor(double valor) =>
@@ -634,6 +747,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     );
   }
 
+  Future<Directory> _pastaDownloads() async {
+    if (Platform.isAndroid) {
+      final dir = Directory('/storage/emulated/0/Download');
+      if (await dir.exists()) return dir;
+    }
+    Directory? dir;
+    try { dir = await getDownloadsDirectory(); } catch (_) {}
+    return dir ?? await getApplicationDocumentsDirectory();
+  }
+
   Future<void> _downloadPdf() async {
     _mostrarLoadingPdf();
     try {
@@ -642,18 +765,13 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
       final bytes = await doc.save();
       if (!mounted) return;
       Navigator.of(context).pop();
-      // Tenta pasta Downloads; fallback para documentos do app
-      Directory? dir;
-      try {
-        dir = await getDownloadsDirectory();
-      } catch (_) {}
-      dir ??= await getApplicationDocumentsDirectory();
+      final dir = await _pastaDownloads();
       final nome = 'relatorio_granix_${DateTime.now().millisecondsSinceEpoch}.pdf';
       final arquivo = File('${dir.path}/$nome');
       await arquivo.writeAsBytes(bytes);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF salvo em: ${arquivo.path}'), duration: const Duration(seconds: 4)),
+        SnackBar(content: Text('PDF salvo em Downloads: $nome'), duration: const Duration(seconds: 4)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -782,10 +900,20 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     final gastosPorCat = _gastosPorCategoria;
-    final categorias = gastosPorCat.keys.toList();
+    final categorias = gastosPorCat.keys.toList()
+      ..sort((a, b) {
+        if (a == 'Outros') return 1;
+        if (b == 'Outros') return -1;
+        return a.compareTo(b);
+      });
     final mesesHistorico = _gerarMesesHistorico();
     final agora = DateTime.now();
-    final orcamentos = _orcamentosBox.values.toList();
+    final orcamentos = _orcamentosBox.values.toList()
+      ..sort((a, b) {
+        if (a.categoria == 'Outros') return 1;
+        if (b.categoria == 'Outros') return -1;
+        return a.categoria.compareTo(b.categoria);
+      });
     final todasPessoas = _todasPessoas;
     final acumulados = _calcularAcumulado(mesesHistorico);
     final gastosPorPessoa = _gastosPorPessoa;
@@ -1716,105 +1844,61 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
             const SizedBox(height: 24),
 
             // ── ORÇAMENTO POR CATEGORIA ────────────────────────────────────
-            if (orcamentos.isNotEmpty) ...[
-              const Text(
-                'Orçamento por Categoria',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              ...orcamentos.map((orc) {
-                final gasto = _gastosNoPeriodoPorCategoria(orc.categoria);
-                final limite = _limiteAjustado(orc.limite);
-                final percentual = limite > 0 ? (gasto / limite) : 0.0;
-                final cor = _corProgresso(percentual);
-                final ultrapassou = percentual >= 1.0;
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: ultrapassou
-                        ? const BorderSide(color: Colors.red, width: 1.5)
-                        : BorderSide.none,
+            Builder(builder: (context) {
+              final catsSemLimite = _gastosPorCategoria.keys
+                  .where((c) => !orcamentos.any((o) => o.categoria == c))
+                  .toList()
+                ..sort((a, b) {
+                    if (a == 'Outros') return 1;
+                    if (b == 'Outros') return -1;
+                    return a.compareTo(b);
+                  });
+              if (orcamentos.isEmpty && catsSemLimite.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Orçamento por Categoria',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                orc.categoria,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            if (ultrapassou)
-                              const Icon(
-                                Icons.warning_amber,
-                                color: Colors.red,
-                                size: 16,
-                              ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${(percentual * 100).toStringAsFixed(0)}%',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: cor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: LinearProgressIndicator(
-                            value: percentual.clamp(0.0, 1.0),
-                            minHeight: 10,
-                            backgroundColor: Colors.grey[200],
-                            valueColor: AlwaysStoppedAnimation<Color>(cor),
+                  const SizedBox(height: 12),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              _legendaItem(Colors.green, 'Gasto'),
+                              const SizedBox(width: 16),
+                              _legendaItem(Colors.grey.shade300, 'Disponível'),
+                              const SizedBox(width: 16),
+                              _legendaItem(Colors.red[300]!, 'Excedido'),
+                              const SizedBox(width: 16),
+                              _legendaItem(Colors.blueGrey.shade200, 'Sem limite'),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Gasto: ${_formatarValor(gasto)}',
-                              style: TextStyle(fontSize: 12, color: cor),
-                            ),
-                            Text(
-                              'Limite: ${_formatarValor(limite)}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (ultrapassou)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '⚠ Ultrapassado em ${_formatarValor(gasto - limite)}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.red,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
+                          const SizedBox(height: 14),
+                          ...orcamentos.map((orc) =>
+                              _orcRow(orc.categoria,
+                                  _gastosNoPeriodoPorCategoria(orc.categoria),
+                                  orc.limite)),
+                          ...catsSemLimite.map((cat) =>
+                              _orcRow(cat,
+                                  _gastosNoPeriodoPorCategoria(cat),
+                                  null)),
+                        ],
+                      ),
                     ),
                   ),
-                );
-              }),
-              const SizedBox(height: 14),
-            ],
+                  const SizedBox(height: 14),
+                ],
+              );
+            }),
           ],
         ),
       )
@@ -1823,8 +1907,12 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   }
 
   Widget _buildReceitasTab(BuildContext context) {
-    final todasPessoas = _todasPessoas;
-    final todasCategorias = _receitasBox.values.map((r) => r.categoria).toSet().toList()..sort();
+    final todasCategorias = _receitasBox.values.map((r) => r.categoria).toSet().toList()
+      ..sort((a, b) {
+        if (a == 'Outros') return 1;
+        if (b == 'Outros') return -1;
+        return a.compareTo(b);
+      });
     final receitasPorCat = _receitasPorCategoria;
     final categorias = receitasPorCat.keys.toList();
     final total = _totalReceitas;
@@ -1859,18 +1947,6 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                             if (v == 'Personalizado') setState(() => _receitaPeriodoSelecionado = 'Personalizado');
                             else if (v != null) _aplicarPeriodoReceita(v);
                           },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _dropFiltro<String>(
-                          label: 'Pessoa',
-                          value: _receitaPessoaSelecionada,
-                          items: [
-                            const DropdownMenuItem(value: null, child: Text('Todas', style: TextStyle(fontSize: 13))),
-                            ...todasPessoas.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 13)))),
-                          ],
-                          onChanged: (v) => setState(() => _receitaPessoaSelecionada = v),
                         ),
                       ),
                     ],
@@ -2396,6 +2472,22 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
           ),
         ),
       ),
+    );
+  }
+
+  Widget _legendaItem(Color cor, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+              color: cor, borderRadius: BorderRadius.circular(3)),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      ],
     );
   }
 

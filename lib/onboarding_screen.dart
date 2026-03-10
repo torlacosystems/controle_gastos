@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'setup_wizard_screen.dart';
 import 'fade_route.dart';
+
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -47,14 +49,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
+  // índice total = _paginas.length é a página do widget
+  int get _totalPaginas => _paginas.length + 1;
+  bool get _naPaginaWidget => _pagina == _paginas.length;
+
   void _proximo() {
     if (_pagina < _paginas.length - 1) {
       _controller.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
-    } else {
-      _concluir();
+    } else if (_pagina == _paginas.length - 1) {
+      // da última página normal vai para a página do widget
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
   }
 
@@ -66,6 +76,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  Future<void> _adicionarWidget() async {
+    try {
+      final channel = MethodChannel('com.example.controle_gastos/widget');
+      final suportado = await channel.invokeMethod<bool>('pin_widget') ?? false;
+      if (!suportado && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Seu dispositivo não suporta adição automática de widget. Adicione manualmente pela tela inicial.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (_) {}
+    await _concluir();
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -75,7 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final cor = Theme.of(context).colorScheme.primary;
-    final ultima = _pagina == _paginas.length - 1;
+    final ultimaNormal = _pagina == _paginas.length - 1;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -96,11 +122,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: PageView.builder(
                 controller: _controller,
                 onPageChanged: (i) => setState(() => _pagina = i),
-                itemCount: _paginas.length,
-                itemBuilder: (context, i) => _PaginaWidget(
-                  dados: _paginas[i],
-                  cor: cor,
-                ),
+                itemCount: _totalPaginas,
+                itemBuilder: (context, i) {
+                  if (i == _paginas.length) {
+                    return _PaginaWidgetConvite(cor: cor);
+                  }
+                  return _PaginaWidget(dados: _paginas[i], cor: cor);
+                },
               ),
             ),
 
@@ -108,7 +136,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                _paginas.length,
+                _totalPaginas,
                 (i) => AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -124,25 +152,95 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             const SizedBox(height: 32),
 
-            // Botão avançar / começar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton(
-                  onPressed: _proximo,
-                  child: Text(
-                    ultima ? 'Começar' : 'Próximo',
-                    style: const TextStyle(fontSize: 16),
+            // Botões — página do widget tem layout diferente
+            if (_naPaginaWidget) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: _adicionarWidget,
+                    icon: const Icon(Icons.widgets_outlined),
+                    label: const Text(
+                      'Sim, adicionar widget',
+                      style: TextStyle(fontSize: 16),
+                    ),
                   ),
                 ),
               ),
-            ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton(
+                    onPressed: _concluir,
+                    child: Text(
+                      'Agora não',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    ),
+                  ),
+                ),
+              ),
+            ] else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _proximo,
+                    child: Text(
+                      ultimaNormal ? 'Próximo' : 'Próximo',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PaginaWidgetConvite extends StatelessWidget {
+  final Color cor;
+  const _PaginaWidgetConvite({required this.cor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: cor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.widgets_outlined, size: 48, color: cor),
+          ),
+          const SizedBox(height: 36),
+          const Text(
+            'Adicione o widget na tela inicial',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Com o widget você registra um gasto ou receita diretamente da tela inicial, sem precisar abrir o app.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.6),
+          ),
+        ],
       ),
     );
   }

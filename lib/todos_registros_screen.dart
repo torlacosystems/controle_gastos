@@ -190,7 +190,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
           final buscaBateu = _correspondeBusca(
             r.categoria,
             r.descricao,
-            r.pessoa,
+            '',
             '',
             '',
           );
@@ -296,48 +296,102 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
 
   // ── CSV ───────────────────────────────────────────────────────────────────
 
-  String _gerarCsv() {
+  List<Map<String, dynamic>> get _todosRegistros {
+    final List<Map<String, dynamic>> itens = [];
+    for (int i = 0; i < _gastosBox.length; i++) {
+      final g = _gastosBox.getAt(i);
+      if (g != null) itens.add({'tipo': 'gasto', 'item': g, 'index': i});
+    }
+    for (int i = 0; i < _receitasBox.length; i++) {
+      final r = _receitasBox.getAt(i);
+      if (r != null) itens.add({'tipo': 'receita', 'item': r, 'index': i});
+    }
+    itens.sort((a, b) {
+      final DateTime dataA = a['tipo'] == 'gasto'
+          ? (a['item'] as Gasto).data
+          : (a['item'] as Receita).data;
+      final DateTime dataB = b['tipo'] == 'gasto'
+          ? (b['item'] as Gasto).data
+          : (b['item'] as Receita).data;
+      return dataB.compareTo(dataA);
+    });
+    return itens;
+  }
+
+  String _gerarCsv(List<Map<String, dynamic>> itens) {
+    String v(double valor) => valor.toStringAsFixed(2).replaceAll('.', ',');
+    String q(String s) => '"${s.replaceAll('"', '""')}"';
+
     final buffer = StringBuffer();
+    // BOM UTF-8 para Excel reconhecer acentos automaticamente
+    buffer.write('\uFEFF');
     buffer.writeln(
-      'Tipo,Categoria,Valor,Data,Descrição,Pessoa,Forma Pagamento,Estabelecimento,Parcelado,Parcelas,Recorrente',
+      'Tipo;Categoria;Valor;Data;Descrição;Pessoa;Forma Pagamento;Estabelecimento;Parcelado;Parcelas;Recorrente',
     );
-    for (final item in _todosItens) {
+    for (final item in itens) {
       if (item['tipo'] == 'gasto') {
         final g = item['item'] as Gasto;
-        buffer.writeln(
-          'Gasto,"${g.categoria}",-${g.valor.toStringAsFixed(2)},${_formatarData(g.data)},"${g.descricao}","${g.pessoa}","${g.formaPagamento}","${g.estabelecimento}",${g.parcelado ? 'Sim' : 'Não'},${g.numeroParcelas},${g.recorrente ? 'Sim' : 'Não'}',
-        );
+        buffer.writeln([
+          'Gasto',
+          q(g.categoria),
+          '-${v(g.valor)}',
+          _formatarData(g.data),
+          q(g.descricao),
+          q(g.pessoa),
+          q(g.formaPagamento),
+          q(g.estabelecimento),
+          g.parcelado ? 'Sim' : 'Não',
+          '${g.numeroParcelas}',
+          g.recorrente ? 'Sim' : 'Não',
+        ].join(';'));
       } else {
         final r = item['item'] as Receita;
-        buffer.writeln(
-          'Receita,"${r.categoria}",+${r.valor.toStringAsFixed(2)},${_formatarData(r.data)},"${r.descricao}","${r.pessoa}",,,,${r.recorrente ? 'Sim' : 'Não'}',
-        );
+        buffer.writeln([
+          'Receita',
+          q(r.categoria),
+          v(r.valor),
+          _formatarData(r.data),
+          q(r.descricao),
+          '',
+          '',
+          '',
+          '',
+          r.recorrente ? 'Sim' : 'Não',
+        ].join(';'));
       }
     }
     return buffer.toString();
   }
 
-  Future<File> _salvarCsvArquivo() async {
-    final csv = _gerarCsv();
+  Future<File> _salvarCsvArquivo(List<Map<String, dynamic>> itens) async {
+    final csv = _gerarCsv(itens);
     final dir = await getApplicationDocumentsDirectory();
     final arquivo = File('${dir.path}/registros_granix.csv');
     await arquivo.writeAsString(csv);
     return arquivo;
   }
 
-  Future<void> _downloadCsv() async {
+  Future<Directory> _pastaDownloads() async {
+    if (Platform.isAndroid) {
+      final dir = Directory('/storage/emulated/0/Download');
+      if (await dir.exists()) return dir;
+    }
+    Directory? dir;
+    try { dir = await getDownloadsDirectory(); } catch (_) {}
+    return dir ?? await getApplicationDocumentsDirectory();
+  }
+
+  Future<void> _downloadCsv(List<Map<String, dynamic>> itens) async {
     try {
-      final csv = _gerarCsv();
-      Directory? dir;
-      try { dir = await getDownloadsDirectory(); } catch (_) {}
-      dir ??= await getApplicationDocumentsDirectory();
+      final csv = _gerarCsv(itens);
+      final dir = await _pastaDownloads();
       final nome = 'registros_granix_${DateTime.now().millisecondsSinceEpoch}.csv';
       final arquivo = File('${dir.path}/$nome');
       await arquivo.writeAsString(csv);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('CSV salvo em: ${arquivo.path}'),
+          content: Text('CSV salvo em Downloads: $nome'),
           duration: const Duration(seconds: 4),
         ),
       );
@@ -347,9 +401,9 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     }
   }
 
-  Future<void> _compartilharCsv() async {
+  Future<void> _compartilharCsv(List<Map<String, dynamic>> itens) async {
     try {
-      final arquivo = await _salvarCsvArquivo();
+      final arquivo = await _salvarCsvArquivo(itens);
       await Share.shareXFiles([XFile(arquivo.path)], text: 'Registros — Granix');
     } catch (e) {
       if (!mounted) return;
@@ -357,9 +411,9 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     }
   }
 
-  Future<void> _enviarCsvEmail() async {
+  Future<void> _enviarCsvEmail(List<Map<String, dynamic>> itens) async {
     try {
-      final arquivo = await _salvarCsvArquivo();
+      final arquivo = await _salvarCsvArquivo(itens);
       try {
         final email = Email(
           body: 'Segue em anexo os registros financeiros.',
@@ -379,6 +433,62 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao enviar: $e')));
     }
+  }
+
+  Future<void> _mostrarOpcoesExportacao(String acao) async {
+    final visiveis = _todosItens;
+    final selecionados = visiveis.where((i) => _selecionados.contains(_itemId(i))).toList();
+    final todos = _todosRegistros;
+
+    String? escopo = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Exportar CSV — Quais registros?'),
+        children: [
+          if (_selecionados.isNotEmpty)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, 'selecionados'),
+              child: ListTile(
+                leading: const Icon(Icons.check_box),
+                title: Text('Selecionados (${selecionados.length})'),
+                dense: true,
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'visiveis'),
+            child: ListTile(
+              leading: const Icon(Icons.filter_list),
+              title: Text(
+                _mesFiltro != null
+                    ? 'Mês filtrado (${_nomesMeses[_mesFiltro! - 1]}/$_anoFiltro)'
+                    : 'Visíveis na tela (${visiveis.length})',
+              ),
+              dense: true,
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'todos'),
+            child: ListTile(
+              leading: const Icon(Icons.select_all),
+              title: Text('Todos os registros (${todos.length})'),
+              dense: true,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (escopo == null || !mounted) return;
+
+    final itensExportar = escopo == 'selecionados'
+        ? selecionados
+        : escopo == 'visiveis'
+            ? visiveis
+            : todos;
+
+    if (acao == 'download') _downloadCsv(itensExportar);
+    if (acao == 'share') _compartilharCsv(itensExportar);
+    if (acao == 'email') _enviarCsvEmail(itensExportar);
   }
 
 
@@ -561,6 +671,40 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
               tooltip: 'Selecionar todos',
               onPressed: _selecionarTodos,
             ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: 'Exportar CSV',
+              onSelected: (v) => _mostrarOpcoesExportacao(v),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'download',
+                  child: ListTile(
+                    leading: Icon(Icons.download),
+                    title: Text('Baixar CSV'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'share',
+                  child: ListTile(
+                    leading: Icon(Icons.share),
+                    title: Text('Compartilhar CSV'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'email',
+                  child: ListTile(
+                    leading: Icon(Icons.email),
+                    title: Text('Enviar por e-mail'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              ],
+            ),
             IconButton(
               icon: const Icon(Icons.delete),
               tooltip: 'Excluir selecionados',
@@ -590,11 +734,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
               tooltip: 'Exportar CSV',
-              onSelected: (v) {
-                if (v == 'download') _downloadCsv();
-                if (v == 'share') _compartilharCsv();
-                if (v == 'email') _enviarCsvEmail();
-              },
+              onSelected: (v) => _mostrarOpcoesExportacao(v),
               itemBuilder: (_) => const [
                 PopupMenuItem(
                   value: 'download',

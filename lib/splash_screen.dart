@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'main.dart';
 import 'onboarding_screen.dart';
@@ -47,6 +48,24 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _iniciar() async {
+    // Verifica se foi aberto pelo widget — se sim, pula a animação
+    try {
+      final channel = MethodChannel('com.example.controle_gastos/widget');
+      final acao = await channel.invokeMethod<String?>('get_pending_action');
+      if (acao != null) {
+        widgetAcaoPendente = acao;
+        final prefs = await SharedPreferences.getInstance();
+        final onboardingCompleto = prefs.getBool('onboarding_completo') ?? false;
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          FadeRoute(page: onboardingCompleto ? const HomeScreen() : const OnboardingScreen()),
+        );
+        return;
+      }
+    } catch (_) {}
+
+    // Animação normal
     _logoController.forward();
     await Future.delayed(const Duration(milliseconds: 350));
     _textController.forward();
@@ -64,9 +83,7 @@ class _SplashScreenState extends State<SplashScreen>
       Navigator.pushReplacement(
         context,
         FadeRoute(
-          page: onboardingCompleto
-              ? const HomeScreen()
-              : const OnboardingScreen(),
+          page: onboardingCompleto ? const HomeScreen() : const OnboardingScreen(),
         ),
       );
     }

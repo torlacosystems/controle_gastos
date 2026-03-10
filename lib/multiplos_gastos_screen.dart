@@ -40,8 +40,10 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
   ];
 
   List<String> get _categorias {
+    final fixasSemOutros =
+        _categoriasFixas.where((c) => c != 'Outros').toList();
     final custom = _categoriasBox.values.map((c) => c.nome).toList();
-    return [..._categoriasFixas, ...custom];
+    return [...fixasSemOutros, ...custom, 'Outros'];
   }
 
   @override

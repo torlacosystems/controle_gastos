@@ -6,6 +6,12 @@ class AuthService {
   static final _auth = LocalAuthentication();
 
   static const _kBloqueioAtivo = 'bloqueio_ativo';
+  static const _kBloqueioWidget = 'bloqueio_widget';
+
+  /// True quando a biometria já foi validada nesta sessão (evita pedir duas vezes)
+  static bool _sessaoAutenticada = false;
+  static bool get sessaoAutenticada => _sessaoAutenticada;
+  static void marcarSessaoAutenticada() => _sessaoAutenticada = true;
 
   /// Se o dispositivo suporta biometria ou PIN
   static Future<bool> get disponivel async {
@@ -26,6 +32,20 @@ class AuthService {
   static Future<void> setBloqueio(bool ativo) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kBloqueioAtivo, ativo);
+    // Ao desativar o bloqueio principal, desativa o do widget também
+    if (!ativo) await prefs.setBool(_kBloqueioWidget, false);
+  }
+
+  /// Se o usuário ativou o bloqueio no widget
+  static Future<bool> get bloqueioWidgetAtivo async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kBloqueioWidget) ?? false;
+  }
+
+  /// Ativa ou desativa o bloqueio no widget
+  static Future<void> setBloqueioWidget(bool ativo) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBloqueioWidget, ativo);
   }
 
   /// Autentica o usuário — biometria com fallback para PIN do dispositivo
