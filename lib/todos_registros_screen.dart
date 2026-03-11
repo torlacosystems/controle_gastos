@@ -907,36 +907,24 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       appBar: AppBar(
         backgroundColor: primary,
         foregroundColor: Colors.white,
-        title: _modoBusca
-            ? TextField(
-                controller: _buscaController,
-                autofocus: true,
-                style: const TextStyle(color: Colors.white),
-                cursorColor: Colors.white,
-                decoration: const InputDecoration(
-                  hintText: 'Buscar por categoria, descrição, pessoa...',
-                  hintStyle: TextStyle(color: Colors.white70),
-                  border: InputBorder.none,
-                ),
-                onChanged: (v) => setState(() => _termoBusca = v),
-              )
-            : Text(
-                _modoSelecao
-                    ? '${_selecionados.length} selecionado(s)'
-                    : 'Todos os Registros',
-              ),
+        title: _modoSelecao
+            ? Text('${_selecionados.length} selecionado(s)')
+            : _modoBusca
+                ? TextField(
+                    controller: _buscaController,
+                    autofocus: true,
+                    style: const TextStyle(color: Colors.white),
+                    cursorColor: Colors.white,
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar por categoria, descrição, pessoa...',
+                      hintStyle: TextStyle(color: Colors.white70),
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (v) => setState(() => _termoBusca = v),
+                  )
+                : const Text('Todos os Registros'),
         actions: [
-          if (_modoBusca) ...[
-            if (_termoBusca.isNotEmpty)
-              IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () => setState(() {
-                  _termoBusca = '';
-                  _buscaController.clear();
-                }),
-              ),
-            IconButton(icon: const Icon(Icons.close), onPressed: _fecharBusca),
-          ] else if (_modoSelecao) ...[
+          if (_modoSelecao) ...[
             if (_tipoSelecao != null)
               IconButton(
                 icon: const Icon(Icons.edit),
@@ -994,6 +982,16 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                 _modoSelecao = false;
               }),
             ),
+          ] else if (_modoBusca) ...[
+            if (_termoBusca.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () => setState(() {
+                  _termoBusca = '';
+                  _buscaController.clear();
+                }),
+              ),
+            IconButton(icon: const Icon(Icons.close), onPressed: _fecharBusca),
           ] else ...[
             IconButton(
               icon: const Icon(Icons.search),

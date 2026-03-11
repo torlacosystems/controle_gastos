@@ -47,6 +47,15 @@ void main() async {
     await Hive.openBox<Categoria>('categorias');
   }
   await SubscriptionService.instance.initialize();
+  // Detecta ação do widget antes do runApp para que LockScreen saiba pular a autenticação
+  try {
+    const widgetChannel = MethodChannel('com.example.controle_gastos/widget');
+    final acao = await widgetChannel.invokeMethod<String?>('get_pending_action');
+    if (acao != null) {
+      widgetAcaoPendente = acao;
+      AuthService.abertoPeloWidget = true;
+    }
+  } catch (_) {}
   final brightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
   await carregarTema(brightness);
@@ -111,23 +120,19 @@ class _BootScreenState extends State<_BootScreen> {
   }
 
   Future<void> _rotear() async {
-    try {
-      const channel = MethodChannel('com.example.controle_gastos/widget');
-      final acao = await channel.invokeMethod<String?>('get_pending_action');
-      if (acao != null && mounted) {
-        widgetAcaoPendente = acao;
-        final prefs = await SharedPreferences.getInstance();
-        final onboardingCompleto = prefs.getBool('onboarding_completo') ?? false;
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => onboardingCompleto ? const HomeScreen() : const OnboardingScreen(),
-          ),
-        );
-        return;
-      }
-    } catch (_) {}
+    // Ação do widget já detectada em main() — usa a variável global
+    if (widgetAcaoPendente != null && mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      final onboardingCompleto = prefs.getBool('onboarding_completo') ?? false;
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => onboardingCompleto ? const HomeScreen() : const OnboardingScreen(),
+        ),
+      );
+      return;
+    }
 
     if (!mounted) return;
     Navigator.pushReplacement(

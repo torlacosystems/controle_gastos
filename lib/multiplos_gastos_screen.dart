@@ -19,7 +19,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
   late Box<Categoria> _categoriasBox;
 
   // Campos compartilhados
-  String _categoriaSelecionada = 'Outros';
+  String _categoriaSelecionada = 'Alimentação';
   String _tipoGasto = 'Variável';
   FormaPagamento? _formaPagamento;
   Pessoa? _pessoa;

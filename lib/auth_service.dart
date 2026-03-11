@@ -13,6 +13,9 @@ class AuthService {
   static bool get sessaoAutenticada => _sessaoAutenticada;
   static void marcarSessaoAutenticada() => _sessaoAutenticada = true;
 
+  /// True quando o app foi aberto via widget (cold start)
+  static bool abertoPeloWidget = false;
+
   /// Se o dispositivo suporta biometria ou PIN
   static Future<bool> get disponivel async {
     try {

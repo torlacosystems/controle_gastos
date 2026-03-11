@@ -5,6 +5,7 @@ import 'main.dart';
 import 'fade_route.dart';
 import 'multiplas_receitas_screen.dart';
 import 'pessoa.dart';
+import 'registros_por_datas_screen.dart';
 
 class MinhasReceitasScreen extends StatefulWidget {
   const MinhasReceitasScreen({super.key});
@@ -625,6 +626,30 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          if (!_modoSelecao)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                  16, 0, 16, MediaQuery.of(context).padding.bottom + 12),
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final salvo = await Navigator.push<bool>(
+                    context,
+                    FadeRoute(
+                        page: const RegistrosPorDatasScreen(
+                            iniciarComoGasto: false, fixarTipo: true)),
+                  );
+                  if (salvo == true) setState(() {});
+                },
+                icon: const Icon(Icons.date_range),
+                label: const Text('Receitas por Datas'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[700],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  minimumSize: const Size(double.infinity, 48),
+                ),
               ),
             ),
         ],

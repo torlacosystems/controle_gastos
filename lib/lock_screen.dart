@@ -35,6 +35,15 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // Se aberto pelo widget e bloqueio de widget está desativado, pula autenticação
+    if (AuthService.abertoPeloWidget) {
+      final bloqueioWidget = await AuthService.bloqueioWidgetAtivo;
+      if (!bloqueioWidget) {
+        if (mounted) setState(() { _bloqueado = false; _verificando = false; });
+        return;
+      }
+    }
+
     // Pede a biometria imediatamente, antes de mostrar qualquer tela
     final sucesso = await AuthService.autenticar();
     if (!mounted) return;

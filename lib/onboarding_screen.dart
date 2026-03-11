@@ -25,22 +25,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'Seu assistente inteligente para controle de gastos pessoais. Simples, rápido e completo.',
     ),
     _PaginaData(
-      icone: Icons.add_circle_outline,
-      titulo: 'Registre gastos e receitas',
+      icone: Icons.tune,
+      titulo: 'Configure antes de começar',
       descricao:
-          'Cadastre seus gastos e receitas com categoria, forma de pagamento e pessoa responsável. Suporte a parcelamentos.',
+          'Em Configurações › Cadastro Inicial, defina suas formas de pagamento (débito, crédito, VA, VR…), pessoas e orçamentos mensais. Isso torna o registro muito mais rápido.',
+    ),
+    _PaginaData(
+      icone: Icons.add_circle_outline,
+      titulo: 'Registre um gasto',
+      descricao:
+          'Toque em "Novo Gasto" na tela inicial. Preencha o valor, descrição, categoria e forma de pagamento. Para compras parceladas, ative a opção de parcelamento e informe o número de parcelas.',
+    ),
+    _PaginaData(
+      icone: Icons.south_west,
+      titulo: 'Registre uma receita',
+      descricao:
+          'Toque em "Nova Receita" na tela inicial para lançar salário, freelance ou qualquer entrada. Informe o valor, descrição e, se quiser, a pessoa relacionada.',
+    ),
+    _PaginaData(
+      icone: Icons.date_range,
+      titulo: 'Gastos e Receitas por Datas',
+      descricao:
+          'Na tela de Gastos ou Receitas, use o botão "por Datas" para lançar vários registros de uma só vez em datas diferentes — ideal para organizar o mês inteiro rapidamente.',
     ),
     _PaginaData(
       icone: Icons.dashboard_outlined,
-      titulo: 'Acompanhe seu saldo',
+      titulo: 'Painel mensal',
       descricao:
-          'Veja no resumo mensal quanto entrou, quanto saiu e qual é o seu saldo. Tudo atualizado em tempo real.',
+          'A tela inicial mostra o resumo do mês atual: total de entradas, saídas e saldo. Acompanhe em tempo real quanto ainda tem disponível no mês.',
+    ),
+    _PaginaData(
+      icone: Icons.receipt_long_outlined,
+      titulo: 'Meus Gastos e Receitas',
+      descricao:
+          'Acesse a lista completa de gastos ou receitas pelo menu inferior. Toque em qualquer item para editar ou excluir. Use o filtro para ocultar registros já detalhados.',
+    ),
+    _PaginaData(
+      icone: Icons.list_alt_outlined,
+      titulo: 'Todos os Registros',
+      descricao:
+          'Visualize gastos e receitas juntos em uma só lista. Use a busca para localizar registros, selecione múltiplos itens para editar em massa, excluir em lote ou exporte os dados filtrados em CSV.',
     ),
     _PaginaData(
       icone: Icons.bar_chart_outlined,
-      titulo: 'Relatórios e Insights',
+      titulo: 'Relatórios e Gráficos',
       descricao:
-          'Analise seus gastos por categoria, período e forma de pagamento. Receba insights automáticos sobre seus hábitos financeiros.',
+          'Analise seus gastos por categoria, forma de pagamento e período. Os gráficos mostram onde seu dinheiro está indo e insights destacam os maiores gastos do mês.',
+    ),
+    _PaginaData(
+      icone: Icons.savings_outlined,
+      titulo: 'Orçamentos',
+      descricao:
+          'Defina um limite mensal por categoria ou geral. O app avisa quando você está se aproximando do teto, ajudando a manter o controle antes de extrapolar.',
     ),
     _PaginaData(
       icone: Icons.workspace_premium_outlined,

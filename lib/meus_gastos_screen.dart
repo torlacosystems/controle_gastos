@@ -6,6 +6,7 @@ import 'atualizar_parcelas_result.dart';
 import 'fade_route.dart';
 import 'multiplos_gastos_screen.dart';
 import 'categoria.dart';
+import 'registros_por_datas_screen.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 
@@ -648,6 +649,28 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          if (!_modoSelecao)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                  16, 0, 16, MediaQuery.of(context).padding.bottom + 12),
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final salvo = await Navigator.push<bool>(
+                    context,
+                    FadeRoute(page: const RegistrosPorDatasScreen(iniciarComoGasto: true, fixarTipo: true)),
+                  );
+                  if (salvo == true) setState(() {});
+                },
+                icon: const Icon(Icons.date_range),
+                label: const Text('Gastos por Datas'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[800],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  minimumSize: const Size(double.infinity, 48),
+                ),
               ),
             ),
         ],
