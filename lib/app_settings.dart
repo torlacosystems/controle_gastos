@@ -9,7 +9,9 @@ const _kRendaMensal = 'renda_mensal_familiar';
 
 Future<double?> carregarRendaMensal() async {
   final prefs = await SharedPreferences.getInstance();
-  return prefs.containsKey(_kRendaMensal) ? prefs.getDouble(_kRendaMensal) : null;
+  return prefs.containsKey(_kRendaMensal)
+      ? prefs.getDouble(_kRendaMensal)
+      : null;
 }
 
 Future<void> salvarRendaMensal(double valor) async {

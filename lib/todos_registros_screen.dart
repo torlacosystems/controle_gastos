@@ -383,7 +383,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                     const Text('Pessoa', style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: novaPessoa,
+                      key: const ValueKey('pessoa'),
+                      initialValue: novaPessoa,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText: '— sem alteração —',
@@ -402,7 +403,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                   const Text('Categoria', style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: novaCategoria,
+                    key: const ValueKey('categoria'),
+                    initialValue: novaCategoria,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       hintText: '— sem alteração —',
@@ -421,7 +423,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                     const Text('Forma de pagamento', style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: novaForma,
+                      key: const ValueKey('forma'),
+                      initialValue: novaForma,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText: '— sem alteração —',
@@ -443,7 +446,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                   ),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: novoTipo,
+                    key: const ValueKey('tipo'),
+                    initialValue: novoTipo,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       hintText: '— sem alteração —',
@@ -463,7 +467,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                     const Text('Recorrência', style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<bool>(
-                      value: novoRecorrente,
+                      key: const ValueKey('recorrente'),
+                      initialValue: novoRecorrente,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText: '— sem alteração —',

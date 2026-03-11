@@ -104,9 +104,14 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     final desc = _descricaoCtrl.text.trim();
     if (desc.isEmpty) return;
     final jaExiste = _formasAdicionadas.any(
-      (f) => f.descricao.toLowerCase() == desc.toLowerCase(),
+      (f) => f.descricao.toLowerCase() == desc.toLowerCase() && f.tipo == _tipoSelecionado,
     );
-    if (jaExiste) return;
+    if (jaExiste) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Forma de pagamento já cadastrada com esse nome e tipo.')),
+      );
+      return;
+    }
     final forma = FormaPagamento(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       descricao: desc,
@@ -572,6 +577,15 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   void _adicionarPessoa() {
     final nome = _pessoaNomeCtrl.text.trim();
     if (nome.isEmpty) return;
+    final jaExiste = _pessoasAdicionadas.any(
+      (p) => p.nome.toLowerCase() == nome.toLowerCase() && p.parentesco == _parentescoSelecionado,
+    );
+    if (jaExiste) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pessoa já cadastrada com esse nome e parentesco.')),
+      );
+      return;
+    }
     setState(() {
       _pessoasAdicionadas.add(Pessoa(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
