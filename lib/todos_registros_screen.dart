@@ -76,8 +76,10 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     super.dispose();
   }
 
-  String _formatarValor(double valor) =>
-      valor.toStringAsFixed(2).replaceAll('.', ',');
+  String _formatarValor(double valor) {
+    final p = valor.toStringAsFixed(2).split('.');
+    return '${p[0].replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')},${p[1]}';
+  }
 
   String _formatarData(DateTime data) =>
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';

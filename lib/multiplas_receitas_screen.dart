@@ -99,8 +99,10 @@ class _MultiplasReceitasScreenState
   String _formatarData(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
-  String _formatarValor(double v) =>
-      v.toStringAsFixed(2).replaceAll('.', ',');
+  String _formatarValor(double v) {
+    final p = v.toStringAsFixed(2).split('.');
+    return '${p[0].replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')},${p[1]}';
+  }
 
   Future<void> _selecionarData() async {
     final picked = await showDatePicker(

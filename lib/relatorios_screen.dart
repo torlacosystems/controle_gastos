@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -26,6 +27,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
   late Box<Orcamento> _orcamentosBox;
   late Box<Pessoa> _pessoasBox;
   late Box<FormaPagamento> _formasPagamentoBox;
+  StreamSubscription? _gastosSubscription;
+  StreamSubscription? _receitasSubscription;
 
   DateTime _dataInicio = DateTime.now().subtract(const Duration(days: 30));
   DateTime _dataFim = DateTime.now();
@@ -94,6 +97,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
+    _gastosSubscription = _gastosBox.watch().listen((_) { if (mounted) setState(() {}); });
+    _receitasSubscription = _receitasBox.watch().listen((_) { if (mounted) setState(() {}); });
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() { if (mounted) setState(() {}); });
     _aplicarPeriodo('30d');
@@ -102,6 +107,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
 
   @override
   void dispose() {
+    _gastosSubscription?.cancel();
+    _receitasSubscription?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -530,8 +537,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     );
   }
 
-  String _formatarValor(double valor) =>
-      'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+  String _formatarValor(double valor) {
+    final p = valor.toStringAsFixed(2).split('.');
+    return 'R\$ ${p[0].replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')},${p[1]}';
+  }
 
   String _formatarData(DateTime data) =>
       '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';

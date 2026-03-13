@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
   late Box<Gasto> _gastosBox;
   late Box<Receita> _receitasBox;
   late Box<FormaPagamento> _formasPagamentoBox;
+  StreamSubscription? _gastosSubscription;
+  StreamSubscription? _receitasSubscription;
   double _metaEconomia = 0;
   double? _rendaMensal;
   final TextEditingController _metaController = TextEditingController();
@@ -56,6 +59,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
     _gastosBox = Hive.box<Gasto>('gastos');
     _receitasBox = Hive.box<Receita>('receitas');
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
+    _gastosSubscription = _gastosBox.watch().listen((_) { if (mounted) setState(() {}); });
+    _receitasSubscription = _receitasBox.watch().listen((_) { if (mounted) setState(() {}); });
     _aplicarPeriodo('30d');
     _carregarMeta();
     carregarRendaMensal().then((v) {
@@ -135,6 +140,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   @override
   void dispose() {
+    _gastosSubscription?.cancel();
+    _receitasSubscription?.cancel();
     _metaController.dispose();
     super.dispose();
   }
@@ -281,8 +288,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   double get _economiaAtual => _totalReceitas - _totalPeriodo;
 
-  String _formatarValor(double valor) =>
-      'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+  String _formatarValor(double valor) {
+    final p = valor.toStringAsFixed(2).split('.');
+    return 'R\$ ${p[0].replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')},${p[1]}';
+  }
 
   String _formatarData(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -643,14 +652,40 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 );
               },
             ),
+            Builder(builder: (context) {
+              final regras = calcularRegras(
+                gastos: _gastosPeriodo,
+                receitas: _receitasBox.values
+                    .where((r) => _noperiodo(r.data))
+                    .toList(),
+                gastosAnteriores: _gastosPeriodoAnterior,
+              );
+              if (regras.isEmpty) return const SizedBox.shrink();
+              return Column(
+                children: regras.map((r) => Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: _cardAlerta(
+                    icone: r.icone,
+                    cor: r.cor,
+                    titulo: r.titulo,
+                    conteudo: r.mensagem,
+                    subtexto: '',
+                    destaque: r.destaque,
+                  ),
+                )).toList(),
+              );
+            }),
             const SizedBox(height: 20),
 
             // ── META DE ECONOMIA ─────────────────────────────────────────
             _secaoTitulo('🎯 Meta de Economia'),
             const SizedBox(height: 12),
             Card(
+              elevation: 0,
+              color: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.green.withValues(alpha: 0.5), width: 1.5),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -733,63 +768,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-
-            // ── REGRAS FINANCEIRAS ────────────────────────────────────
-            _secaoTitulo('📋 Regras Financeiras'),
-            const SizedBox(height: 12),
-            Builder(builder: (context) {
-              final regras = calcularRegras(
-                gastos: _gastosPeriodo,
-                receitas: _receitasBox.values
-                    .where((r) => _noperiodo(r.data))
-                    .toList(),
-                gastosAnteriores: _gastosPeriodoAnterior,
-              );
-              if (regras.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundColor:
-                                Colors.green.withValues(alpha: 0.15),
-                            child: const Icon(Icons.check_circle,
-                                color: Colors.green, size: 22),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Text(
-                              'Nenhum alerta para o período selecionado. Suas finanças estão equilibradas!',
-                              style:
-                                  TextStyle(fontSize: 13, color: Colors.grey),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }
-              return Column(
-                children: regras.map((r) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _cardAlerta(
-                      icone: r.icone,
-                      cor: r.cor,
-                      titulo: r.titulo,
-                      conteudo: r.mensagem,
-                      subtexto: '',
-                      destaque: r.destaque,
-                    ),
-                  );
-                }).toList(),
-              );
-            }),
             const SizedBox(height: 24),
           ],
         ),
@@ -809,7 +787,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
     required String conteudo,
   }) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cor.withValues(alpha: 0.5), width: 1.5),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -854,7 +837,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
     required Color corBarra,
   }) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cor.withValues(alpha: 0.5), width: 1.5),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -915,13 +903,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
     required bool destaque,
   }) {
     return Card(
+      elevation: 0,
+      shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: destaque
-            ? BorderSide(color: cor.withValues(alpha: 0.5), width: 1.5)
-            : BorderSide.none,
+        side: BorderSide(color: cor.withValues(alpha: 0.5), width: 1.5),
       ),
-      color: destaque ? cor.withValues(alpha: 0.05) : null,
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(

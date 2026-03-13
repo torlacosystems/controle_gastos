@@ -1249,8 +1249,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
   }
 
-  String _formatarValor(double valor) =>
-      'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+  String _formatarValor(double valor) {
+    final p = valor.toStringAsFixed(2).split('.');
+    return 'R\$ ${p[0].replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')},${p[1]}';
+  }
 
   @override
   Widget build(BuildContext context) {

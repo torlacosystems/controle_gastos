@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'receita.dart';
@@ -17,6 +18,7 @@ class MinhasReceitasScreen extends StatefulWidget {
 class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
   late Box<Receita> _receitasBox;
   late Box<Pessoa> _pessoasBox;
+  StreamSubscription? _receitasSubscription;
   bool _filtroNaoDetalhado = false;
   final TextEditingController _buscaController = TextEditingController();
   String _termoBusca = '';
@@ -26,6 +28,7 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
 
   @override
   void dispose() {
+    _receitasSubscription?.cancel();
     _buscaController.dispose();
     super.dispose();
   }
@@ -35,9 +38,13 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
     super.initState();
     _receitasBox = Hive.box<Receita>('receitas');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _receitasSubscription = _receitasBox.watch().listen((_) { if (mounted) setState(() {}); });
   }
 
-  String _formatarValor(double v) => v.toStringAsFixed(2).replaceAll('.', ',');
+  String _formatarValor(double v) {
+    final p = v.toStringAsFixed(2).split('.');
+    return '${p[0].replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')},${p[1]}';
+  }
 
   String _formatarData(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';

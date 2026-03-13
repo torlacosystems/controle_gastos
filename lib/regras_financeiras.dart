@@ -52,8 +52,9 @@ String _fmt(double v) {
   return 'R\$ $intPart,${parts[1]}';
 }
 
-/// Calcula até 10 regras financeiras dinâmicas baseadas em categorias,
-/// comparando gastos e receitas do período atual com o anterior.
+/// Regras financeiras complementares (sem duplicar os cards de Destaques/Alertas).
+/// Regras removidas por já existirem na tela: categoria dominante, gastos fixos,
+/// comparação de período, gastos evitáveis e gastos inesperados.
 List<RegraFinanceira> calcularRegras({
   required List<Gasto> gastos,
   required List<Receita> receitas,
@@ -62,92 +63,8 @@ List<RegraFinanceira> calcularRegras({
   final regras = <RegraFinanceira>[];
   final totalGastos = gastos.fold(0.0, (s, g) => s + g.valor);
   final totalReceitas = receitas.fold(0.0, (s, r) => s + r.valor);
-  final totalAnterior = gastosAnteriores.fold(0.0, (s, g) => s + g.valor);
 
-  // ── Regra 1: Categoria dominante (≥40% do total) ─────────────────────────
-  if (gastos.isNotEmpty && totalGastos > 0) {
-    final mapa = <String, double>{};
-    for (final g in gastos) {
-      mapa[g.categoria] = (mapa[g.categoria] ?? 0) + g.valor;
-    }
-    final top = mapa.entries.reduce((a, b) => a.value > b.value ? a : b);
-    final pct = top.value / totalGastos * 100;
-    if (pct >= 40) {
-      regras.add(RegraFinanceira(
-        icone: Icons.pie_chart,
-        cor: Colors.orange,
-        titulo: 'Categoria dominante',
-        mensagem:
-            '${top.key} representa ${pct.toStringAsFixed(1)}% dos seus gastos '
-            '(${_fmt(top.value)}). Considere diversificar.',
-        destaque: true,
-      ));
-    }
-  }
-
-  // ── Regra 2: Gastos fixos comprometem >70% da renda ──────────────────────
-  if (totalReceitas > 0) {
-    final fixos =
-        gastos.where((g) => g.tipoGasto == 'Fixo').fold(0.0, (s, g) => s + g.valor);
-    final pct = fixos / totalReceitas * 100;
-    if (pct >= 70) {
-      regras.add(RegraFinanceira(
-        icone: Icons.lock_clock,
-        cor: Colors.red,
-        titulo: 'Gastos fixos elevados',
-        mensagem:
-            '${pct.toStringAsFixed(1)}% da sua renda está comprometida com '
-            'gastos fixos (${_fmt(fixos)}). Pouco espaço para imprevistos.',
-        destaque: true,
-      ));
-    }
-  }
-
-  // ── Regra 3: Gastos cresceram >20% vs período anterior ───────────────────
-  if (gastosAnteriores.isNotEmpty && totalAnterior > 0) {
-    final variacao = (totalGastos - totalAnterior) / totalAnterior * 100;
-    if (variacao > 20) {
-      regras.add(RegraFinanceira(
-        icone: Icons.trending_up,
-        cor: Colors.red,
-        titulo: 'Gastos em alta',
-        mensagem:
-            'Seus gastos cresceram ${variacao.toStringAsFixed(1)}% em relação '
-            'ao período anterior (${_fmt(totalAnterior)} → ${_fmt(totalGastos)}).',
-        destaque: true,
-      ));
-    } else if (variacao < -10) {
-      regras.add(RegraFinanceira(
-        icone: Icons.trending_down,
-        cor: Colors.green,
-        titulo: 'Gastos em queda',
-        mensagem:
-            'Parabéns! Seus gastos caíram ${variacao.abs().toStringAsFixed(1)}% '
-            'em relação ao período anterior.',
-        destaque: false,
-      ));
-    }
-  }
-
-  // ── Regra 4: Gastos evitáveis ─────────────────────────────────────────────
-  if (totalGastos > 0) {
-    final evitaveis =
-        gastos.where((g) => g.gastoEvitavel).fold(0.0, (s, g) => s + g.valor);
-    if (evitaveis > 0) {
-      final pct = evitaveis / totalGastos * 100;
-      regras.add(RegraFinanceira(
-        icone: Icons.block,
-        cor: Colors.deepOrange,
-        titulo: 'Gastos evitáveis detectados',
-        mensagem:
-            '${_fmt(evitaveis)} (${pct.toStringAsFixed(1)}% do total) '
-            'poderiam ter sido evitados. Revise esses hábitos.',
-        destaque: pct >= 10,
-      ));
-    }
-  }
-
-  // ── Regra 5: Sem receita registrada ──────────────────────────────────────
+  // ── Sem receita registrada ────────────────────────────────────────────────
   if (receitas.isEmpty) {
     regras.add(const RegraFinanceira(
       icone: Icons.account_balance_wallet,
@@ -160,7 +77,7 @@ List<RegraFinanceira> calcularRegras({
     ));
   }
 
-  // ── Regra 6: Saldo negativo ou economia saudável ──────────────────────────
+  // ── Saldo negativo ou economia saudável ───────────────────────────────────
   if (totalReceitas > 0) {
     if (totalGastos > totalReceitas) {
       final deficit = totalGastos - totalReceitas;
@@ -190,25 +107,7 @@ List<RegraFinanceira> calcularRegras({
     }
   }
 
-  // ── Regra 7: Gastos inesperados altos (>15%) ──────────────────────────────
-  if (totalGastos > 0) {
-    final inesperados =
-        gastos.where((g) => !g.gastoEsperado).fold(0.0, (s, g) => s + g.valor);
-    final pct = inesperados / totalGastos * 100;
-    if (pct >= 15) {
-      regras.add(RegraFinanceira(
-        icone: Icons.error_outline,
-        cor: Colors.orange,
-        titulo: 'Muitos gastos inesperados',
-        mensagem:
-            '${pct.toStringAsFixed(1)}% dos seus gastos (${_fmt(inesperados)}) '
-            'não estavam previstos. Considere criar uma reserva de emergência.',
-        destaque: true,
-      ));
-    }
-  }
-
-  // ── Regra 8: Alimentação/Mercado >35% do total ───────────────────────────
+  // ── Alimentação/Mercado >35% do total ────────────────────────────────────
   if (totalGastos > 0) {
     final alim = gastos
         .where((g) => g.categoria == 'Alimentação' || g.categoria == 'Mercado')
@@ -227,7 +126,7 @@ List<RegraFinanceira> calcularRegras({
     }
   }
 
-  // ── Regra 9: Lazer + Assinaturas >20% do total ───────────────────────────
+  // ── Lazer + Assinaturas >20% do total ────────────────────────────────────
   if (totalGastos > 0) {
     final lazer = gastos
         .where((g) => g.categoria == 'Lazer' || g.categoria == 'Assinaturas')
@@ -246,7 +145,7 @@ List<RegraFinanceira> calcularRegras({
     }
   }
 
-  // ── Regra 10: Categoria com maior crescimento vs anterior (>50%) ──────────
+  // ── Categoria com maior crescimento vs anterior (>50%) ───────────────────
   if (gastosAnteriores.isNotEmpty) {
     final mapaAtual = <String, double>{};
     final mapaAnterior = <String, double>{};
@@ -281,7 +180,7 @@ List<RegraFinanceira> calcularRegras({
     }
   }
 
-  // ── Regra Dica: dica personalizada para a categoria mais gasta ───────────
+  // ── Dica personalizada para a categoria mais gasta ───────────────────────
   if (gastos.isNotEmpty && totalGastos > 0) {
     final mapa = <String, double>{};
     for (final g in gastos) {

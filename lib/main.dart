@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -163,6 +164,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
   late Box<Orcamento> _orcamentosBox;
+  StreamSubscription? _gastosSubscription;
+  StreamSubscription? _receitasSubscription;
   double? _rendaMensal;
   final TextEditingController _buscaHomeController = TextEditingController();
 
@@ -176,6 +179,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
+    _gastosSubscription = _gastosBox.watch().listen((_) { if (mounted) setState(() {}); });
+    _receitasSubscription = _receitasBox.watch().listen((_) { if (mounted) setState(() {}); });
     carregarRendaMensal().then((v) {
       if (mounted && v != null) setState(() => _rendaMensal = v);
     });
@@ -215,6 +220,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _gastosSubscription?.cancel();
+    _receitasSubscription?.cancel();
     _buscaHomeController.dispose();
     super.dispose();
   }
@@ -235,8 +242,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   double get _saldo => _totalReceitasMes - _totalGastosMes;
 
-  String _formatarValor(double valor) =>
-      valor.toStringAsFixed(2).replaceAll('.', ',');
+  String _formatarValor(double valor) {
+    final p = valor.toStringAsFixed(2).split('.');
+    return '${p[0].replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')},${p[1]}';
+  }
 
   double _gastosMesPorCategoria(String categoria) {
     final agora = DateTime.now();
@@ -1274,6 +1283,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding:
                                   const EdgeInsets.fromLTRB(16, 0, 16, 8),
                               child: Card(
+                                elevation: 0,
+                                shadowColor: Colors.transparent,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   side: BorderSide(
@@ -1281,7 +1292,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     width: 1.2,
                                   ),
                                 ),
-                                color: r.cor.withValues(alpha: 0.05),
+                                color: Colors.transparent,
                                 child: Padding(
                                   padding: const EdgeInsets.all(14),
                                   child: Row(
@@ -1328,26 +1339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   }),
 
-                  // ── ORÇAMENTO POR CATEGORIA ───────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Orçamento por Categoria',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => _abrirRelatorios(),
-                          child: const Text('Ver mais'),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // ── DICA DE CATEGORIA ─────────────────────────────────
                   Builder(builder: (context) {
                     final catTop = _categoriaMaisGastaMes;
                     if (catTop.isEmpty) return const SizedBox.shrink();
@@ -1393,6 +1385,27 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     );
                   }),
+
+                  // ── ORÇAMENTO POR CATEGORIA ───────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Orçamento por Categoria',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => _abrirRelatorios(),
+                          child: const Text('Ver mais'),
+                        ),
+                      ],
+                    ),
+                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                     child: Builder(builder: (ctx) {
