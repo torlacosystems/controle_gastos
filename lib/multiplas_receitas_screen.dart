@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'receita.dart';
+import 'currency_formatter.dart';
 
 class MultiplasReceitasScreen extends StatefulWidget {
   const MultiplasReceitasScreen({super.key});
@@ -75,7 +76,7 @@ class _MultiplasReceitasScreenState
   void _confirmarLinha(int i) {
     final desc = _linhas[i]['desc']!.text.trim();
     final v =
-        double.tryParse(_linhas[i]['valor']!.text.replaceAll(',', '.'));
+        double.tryParse(_linhas[i]['valor']!.text.replaceAll('.', '').replaceAll(',', '.'));
     if (desc.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Informe a descrição')),
@@ -196,7 +197,7 @@ class _MultiplasReceitasScreenState
       if (!_confirmadas[li]) continue;
       final l = _linhas[li];
       final v =
-          double.tryParse(l['valor']!.text.replaceAll(',', '.'));
+          double.tryParse(l['valor']!.text.replaceAll('.', '').replaceAll(',', '.'));
       if (v == null || v <= 0) continue;
       for (int m = 0; m < meses; m++) {
         final r = Receita(
@@ -356,7 +357,7 @@ class _MultiplasReceitasScreenState
 
                 if (confirmado) {
                   final v = double.tryParse(
-                          l['valor']!.text.replaceAll(',', '.')) ??
+                          l['valor']!.text.replaceAll('.', '').replaceAll(',', '.')) ??
                       0;
                   return Dismissible(
                     key: Key('receita_linha_$linhaId'),
@@ -449,6 +450,7 @@ class _MultiplasReceitasScreenState
                           keyboardType:
                               const TextInputType.numberWithOptions(
                                   decimal: true),
+                          inputFormatters: [CurrencyInputFormatter()],
                           decoration: const InputDecoration(
                             hintText: '0,00',
                             prefixText: 'R\$ ',

@@ -1,3 +1,10 @@
-rodar todas as exportações
-validar uma tela estatisticas
-adicionar o filtro todos em insights
+gasto evitável aparece 2 vezes no insights
+buscar registros na tela de meus gastos
+buscar registros na tela de minhas receitas
+colocar na main as dicas que estão no insights
+opção na tela de boas vindas, para o usuário inserir os gastos e as receitas com valor fixo e recorrente
+criar 10 regras dinâmicas baseada nas categorias e coloque na main conforme os registros são lançados
+relacionar os gastos com as receitas e também gerar insights para a main
+
+
+

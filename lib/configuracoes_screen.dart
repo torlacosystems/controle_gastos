@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
+import 'currency_formatter.dart';
 import 'gasto.dart';
 import 'receita.dart';
 import 'categoria.dart';
@@ -52,6 +53,9 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     {'nome': 'Moradia', 'icone': Icons.home},
     {'nome': 'Educação', 'icone': Icons.school},
     {'nome': 'Assinaturas', 'icone': Icons.subscriptions},
+    {'nome': 'Vestuário', 'icone': Icons.checkroom},
+    {'nome': 'Cuidados Pessoais', 'icone': Icons.spa},
+    {'nome': 'Presentes', 'icone': Icons.card_giftcard},
     {'nome': 'Outros', 'icone': Icons.category},
   ];
 
@@ -670,7 +674,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     final orcExistente = orcIdx >= 0 ? _orcamentosBox.getAt(orcIdx) : null;
     final limiteController = TextEditingController(
       text: orcExistente != null
-          ? orcExistente.limite.toStringAsFixed(2).replaceAll('.', ',')
+          ? formatarValorParaCampo(orcExistente.limite)
           : '',
     );
     showModalBottomSheet(
@@ -725,6 +729,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              inputFormatters: [CurrencyInputFormatter()],
               autofocus: true,
               decoration: const InputDecoration(
                 hintText: '0,00 (deixe vazio para sem limite)',
@@ -885,7 +890,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   void _editarLimiteCategoria(Categoria cat, int index) {
     final limiteController = TextEditingController(
       text: cat.limiteMensal > 0
-          ? cat.limiteMensal.toStringAsFixed(2).replaceAll('.', ',')
+          ? formatarValorParaCampo(cat.limiteMensal)
           : '',
     );
     showModalBottomSheet(
@@ -940,6 +945,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              inputFormatters: [CurrencyInputFormatter()],
               autofocus: true,
               decoration: const InputDecoration(
                 hintText: '0,00 (deixe vazio para sem limite)',
@@ -1087,6 +1093,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
+                  inputFormatters: [CurrencyInputFormatter()],
                   decoration: const InputDecoration(
                     hintText: '0,00',
                     border: OutlineInputBorder(),
@@ -1162,6 +1169,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                         'Lazer',
                         'Moradia',
                         'Educação',
+                        'Assinaturas',
+                        'Vestuário',
+                        'Cuidados Pessoais',
+                        'Presentes',
                         'Outros',
                       ];
                       final nomeExiste =

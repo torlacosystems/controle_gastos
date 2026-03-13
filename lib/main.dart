@@ -25,6 +25,8 @@ import 'auth_service.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'subscription_service.dart';
 import 'paywall_screen.dart';
+import 'currency_formatter.dart';
+import 'regras_financeiras.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -244,6 +246,54 @@ class _HomeScreenState extends State<HomeScreen> {
             g.data.month == agora.month &&
             g.data.year == agora.year)
         .fold(0, (s, g) => s + g.valor);
+  }
+
+  static const Map<String, String> _dicasPorCategoria = {
+    'Alimentação': 'Tente cozinhar mais em casa. Pode economizar até 40% comparado a comer fora.',
+    'Transporte': 'Considere caronas compartilhadas ou transporte público para reduzir custos.',
+    'Lazer': 'Busque opções gratuitas de lazer como parques, eventos culturais e afins.',
+    'Saúde': 'Mantenha hábitos preventivos para evitar gastos maiores no futuro.',
+    'Moradia': 'Revise contratos de serviços como internet e energia para encontrar planos melhores.',
+    'Educação': 'Explore cursos gratuitos online como complemento aos pagos.',
+    'Assinaturas': 'Revise suas assinaturas ativas. Cancele as que não usa — pequenos valores mensais somam muito ao longo do ano.',
+    'Vestuário': 'Prefira comprar roupas fora de temporada ou em promoções. Evite compras por impulso.',
+    'Cuidados Pessoais': 'Compare preços de produtos de higiene e beleza. Versões genéricas costumam ter a mesma qualidade.',
+    'Presentes': 'Planeje presentes com antecedência para evitar gastos de última hora e aproveitar promoções.',
+    'Outros': 'Revise esses gastos — muitos podem ser evitados ou reduzidos.',
+  };
+
+  List<Gasto> get _gastosUltimoMes {
+    final agora = DateTime.now();
+    final mesAnterior = agora.month == 1 ? 12 : agora.month - 1;
+    final anoAnterior = agora.month == 1 ? agora.year - 1 : agora.year;
+    return _gastosBox.values
+        .where((g) => g.data.month == mesAnterior && g.data.year == anoAnterior)
+        .toList();
+  }
+
+  List<Receita> get _receitasMesAtual {
+    final agora = DateTime.now();
+    return _receitasBox.values
+        .where((r) => r.data.month == agora.month && r.data.year == agora.year)
+        .toList();
+  }
+
+  List<Gasto> get _gastosMesAtualLista {
+    final agora = DateTime.now();
+    return _gastosBox.values
+        .where((g) => g.data.month == agora.month && g.data.year == agora.year)
+        .toList();
+  }
+
+  String get _categoriaMaisGastaMes {
+    final agora = DateTime.now();
+    final mapa = <String, double>{};
+    for (final g in _gastosBox.values) {
+      if (g.data.month != agora.month || g.data.year != agora.year) continue;
+      mapa[g.categoria] = (mapa[g.categoria] ?? 0) + g.valor;
+    }
+    if (mapa.isEmpty) return '';
+    return mapa.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
 
   Widget _appBarAcao(IconData icone, String label, VoidCallback onTap) {
@@ -496,6 +546,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   controller: valorCtrl,
                   autofocus: true,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [CurrencyInputFormatter()],
                   decoration: const InputDecoration(
                     labelText: 'Valor R\$',
                     prefixText: 'R\$ ',
@@ -503,7 +554,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Informe o valor';
-                    final d = double.tryParse(v.replaceAll(',', '.'));
+                    final d = parseCurrency(v);
                     if (d == null || d <= 0) return 'Valor inválido';
                     return null;
                   },
@@ -528,8 +579,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onPressed: () {
                           if (!formKey.currentState!.validate()) return;
-                          final valor = double.parse(
-                              valorCtrl.text.replaceAll(',', '.'));
+                          final valor = parseCurrency(valorCtrl.text)!;
                           final g = Gasto(
                             id: DateTime.now()
                                 .millisecondsSinceEpoch
@@ -571,8 +621,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onPressed: () async {
                           if (!formKey.currentState!.validate()) return;
-                          final valor = double.parse(
-                              valorCtrl.text.replaceAll(',', '.'));
+                          final valor = parseCurrency(valorCtrl.text)!;
                           final gTemp = Gasto(
                             id: DateTime.now()
                                 .millisecondsSinceEpoch
@@ -741,6 +790,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   autofocus: true,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [CurrencyInputFormatter()],
                   decoration: const InputDecoration(
                     labelText: 'Valor R\$',
                     prefixText: 'R\$ ',
@@ -748,7 +798,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Informe o valor';
-                    final d = double.tryParse(v.replaceAll(',', '.'));
+                    final d = parseCurrency(v);
                     if (d == null || d <= 0) return 'Valor inválido';
                     return null;
                   },
@@ -774,8 +824,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onPressed: () {
                           if (!formKey.currentState!.validate()) return;
-                          final valor = double.parse(
-                              valorCtrl.text.replaceAll(',', '.'));
+                          final valor = parseCurrency(valorCtrl.text)!;
                           final r = Receita(
                             id: DateTime.now()
                                 .millisecondsSinceEpoch
@@ -813,8 +862,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onPressed: () async {
                           if (!formKey.currentState!.validate()) return;
-                          final valor = double.parse(
-                              valorCtrl.text.replaceAll(',', '.'));
+                          final valor = parseCurrency(valorCtrl.text)!;
                           final rTemp = Receita(
                             id: DateTime.now()
                                 .millisecondsSinceEpoch
@@ -973,14 +1021,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 const Text(
-                  'Total de Gastos do Mês',
+                  'Saldo do Mês',
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'R\$ ${_formatarValor(_totalGastosMes)}',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  'R\$ ${_formatarValor(_saldo)}',
+                  style: TextStyle(
+                    color: _saldo >= 0 ? Colors.greenAccent : Colors.redAccent,
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1007,15 +1055,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     Column(
                       children: [
                         const Text(
-                          'Saldo',
+                          'Gastos',
                           style: TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                         Text(
-                          'R\$ ${_formatarValor(_saldo)}',
-                          style: TextStyle(
-                            color: _saldo >= 0
-                                ? Colors.greenAccent
-                                : Colors.redAccent,
+                          'R\$ ${_formatarValor(_totalGastosMes)}',
+                          style: const TextStyle(
+                            color: Colors.redAccent,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1202,6 +1248,86 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
 
+                  // ── ALERTAS FINANCEIROS ───────────────────────────────
+                  Builder(builder: (context) {
+                    final regras = calcularRegras(
+                      gastos: _gastosMesAtualLista,
+                      receitas: _receitasMesAtual,
+                      gastosAnteriores: _gastosUltimoMes,
+                    );
+                    final destaques = regras.where((r) => r.destaque).toList();
+                    if (destaques.isEmpty) return const SizedBox.shrink();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Text(
+                            'Alertas Financeiros',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        ...destaques.map((r) => Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                              child: Card(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: r.cor.withValues(alpha: 0.4),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                color: r.cor.withValues(alpha: 0.05),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor:
+                                            r.cor.withValues(alpha: 0.15),
+                                        child: Icon(r.icone,
+                                            color: r.cor, size: 18),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              r.titulo,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: r.cor,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              r.mensagem,
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.black87),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            )),
+                      ],
+                    );
+                  }),
+
                   // ── ORÇAMENTO POR CATEGORIA ───────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -1222,6 +1348,51 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
+                  Builder(builder: (context) {
+                    final catTop = _categoriaMaisGastaMes;
+                    if (catTop.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Card(
+                        color: Colors.blue[50],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.lightbulb,
+                                  color: Colors.blue[700], size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '💡 Dica — $catTop',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue[700],
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _dicasPorCategoria[catTop] ??
+                                          'Continue monitorando seus gastos para identificar oportunidades de economia.',
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                     child: Builder(builder: (ctx) {
@@ -1326,6 +1497,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     {'nome': 'Moradia', 'icone': Icons.home},
     {'nome': 'Educação', 'icone': Icons.school},
     {'nome': 'Assinaturas', 'icone': Icons.subscriptions},
+    {'nome': 'Vestuário', 'icone': Icons.checkroom},
+    {'nome': 'Cuidados Pessoais', 'icone': Icons.spa},
+    {'nome': 'Presentes', 'icone': Icons.card_giftcard},
     {'nome': 'Outros', 'icone': Icons.category},
   ];
 
@@ -1349,7 +1523,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
     final g = widget.gasto;
     _valorController = TextEditingController(
-      text: g != null ? g.valor.toStringAsFixed(2).replaceAll('.', ',') : '',
+      text: g != null ? formatarValorParaCampo(g.valor) : '',
     );
     _descricaoController = TextEditingController(text: g?.descricao ?? '');
     _estabelecimentoController = TextEditingController(
@@ -1360,7 +1534,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _tipoGasto = g?.tipoGasto ?? 'Variável';
     _parcelado = g?.parcelado ?? false;
     _numeroParcelas = g?.numeroParcelas ?? 2;
-    _recorrente = g?.recorrente ?? false;
+    _recorrente = g?.recorrente ?? true;
     _gastoEsperado = g?.gastoEsperado ?? true;
     _gastoEvitavel = g?.gastoEvitavel ?? false;
 
@@ -1448,9 +1622,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   }
 
   Future<void> _salvarGasto() async {
-    String textoValor = _valorController.text.replaceAll('.', ',');
-    if (!textoValor.contains(',')) textoValor = '$textoValor,00';
-    final valor = double.tryParse(textoValor.replaceAll(',', '.'));
+    final valor = parseCurrency(_valorController.text);
 
     if (valor == null || valor <= 0) {
       ScaffoldMessenger.of(
@@ -1811,6 +1983,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                inputFormatters: [CurrencyInputFormatter()],
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -2293,7 +2466,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
     super.initState();
     final r = widget.receita;
     _valorController = TextEditingController(
-      text: r != null ? r.valor.toStringAsFixed(2).replaceAll('.', ',') : '',
+      text: r != null ? formatarValorParaCampo(r.valor) : '',
     );
     _descricaoController = TextEditingController(text: r?.descricao ?? '');
     _categoriaSelecionada = r?.categoria ?? 'Salário';
@@ -2355,9 +2528,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
   }
 
   Future<void> _salvarReceita() async {
-    String textoValor = _valorController.text.replaceAll('.', ',');
-    if (!textoValor.contains(',')) textoValor = '$textoValor,00';
-    final valor = double.tryParse(textoValor.replaceAll(',', '.'));
+    final valor = parseCurrency(_valorController.text);
 
     if (valor == null || valor <= 0) {
       ScaffoldMessenger.of(
@@ -2519,6 +2690,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                inputFormatters: [CurrencyInputFormatter()],
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,

@@ -10,6 +10,8 @@ import 'receita.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
+import 'setup_wizard_screen.dart';
+import 'fade_route.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -273,6 +275,51 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
+  // ── LIMPAR DADOS ──────────────────────────────────────────────────────────
+
+  Future<void> _limparDados() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpar Todos os Dados'),
+        content: const Text(
+          'Todos os gastos, receitas, formas de pagamento, pessoas e orçamentos serão excluídos permanentemente.\n\nEsta ação não pode ser desfeita. Deseja continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Limpar Tudo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    setState(() => _processando = true);
+    await _gastosBox.clear();
+    await _receitasBox.clear();
+    await _formasPagamentoBox.clear();
+    await _pessoasBox.clear();
+    await _orcamentosBox.clear();
+    if (mounted) setState(() => _processando = false);
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        FadeRoute(page: const SetupWizardScreen(initialStep: 1)),
+      );
+    }
+  }
+
   // ── UI ────────────────────────────────────────────────────────────────────
 
   int get _totalRegistros =>
@@ -421,6 +468,41 @@ class _BackupScreenState extends State<BackupScreen> {
                       icon: const Icon(Icons.download),
                       label: const Text(
                         'Restaurar Backup',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // LIMPAR DADOS
+                  const Text(
+                    'Limpar Todos os Dados',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Remove permanentemente todos os registros do app. Após limpar, você poderá recadastrar formas de pagamento, orçamentos, pessoas, gastos e receitas.',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: _limparDados,
+                      icon: const Icon(Icons.delete_forever),
+                      label: const Text(
+                        'Limpar Todos os Dados',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

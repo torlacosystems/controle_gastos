@@ -3,11 +3,15 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
 import 'orcamento.dart';
+import 'gasto.dart';
+import 'receita.dart';
+import 'currency_formatter.dart';
 import 'main.dart';
 import 'fade_route.dart';
 
 class SetupWizardScreen extends StatefulWidget {
-  const SetupWizardScreen({super.key});
+  final int initialStep;
+  const SetupWizardScreen({super.key, this.initialStep = 0});
 
   @override
   State<SetupWizardScreen> createState() => _SetupWizardScreenState();
@@ -15,7 +19,7 @@ class SetupWizardScreen extends StatefulWidget {
 
 class _SetupWizardScreenState extends State<SetupWizardScreen>
     with SingleTickerProviderStateMixin {
-  int _step = 0; // 0=nome, 1=formas, 2=orcamentos, 3=pessoas, 4=pronto
+  int _step = 0; // 0=nome, 1=formas, 2=orcamentos, 3=pessoas, 4=gastos fixos, 5=receitas fixas, 6=pronto
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
@@ -34,7 +38,25 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   late Box<Pessoa> _pessoasBox;
   final Map<String, TextEditingController> _limiteCtrl = {};
 
-  // Step 4 – pessoas
+  // Step 4 – gastos fixos mensais
+  late Box<Gasto> _gastosBox;
+  final _gastoDescCtrl = TextEditingController();
+  final _gastoValorCtrl = TextEditingController();
+  String _gastoCategoria = 'Alimentação';
+  final List<Map<String, dynamic>> _gastosFixos = [];
+
+  // Step 5 – receitas fixas mensais
+  late Box<Receita> _receitasBox;
+  final _receitaDescCtrl = TextEditingController();
+  final _receitaValorCtrl = TextEditingController();
+  String _receitaCategoria = 'Salário';
+  final List<Map<String, dynamic>> _receitasFixas = [];
+
+  static const _categoriasReceita = [
+    'Salário', 'Freelance', 'Investimento', 'Aluguel', 'Benefício', 'Outros',
+  ];
+
+  // Step 3 – pessoas
   final _pessoaNomeCtrl = TextEditingController();
   String _parentescoSelecionado = 'Cônjuge';
   final List<Pessoa> _pessoasAdicionadas = [];
@@ -45,15 +67,18 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   static const _tipos = ['Débito', 'Crédito', 'VA/VR'];
 
   static const List<Map<String, dynamic>> _categorias = [
-    {'nome': 'Alimentação',  'icone': Icons.restaurant},
-    {'nome': 'Mercado',      'icone': Icons.shopping_cart},
-    {'nome': 'Transporte',   'icone': Icons.directions_car},
-    {'nome': 'Saúde',        'icone': Icons.health_and_safety},
-    {'nome': 'Lazer',        'icone': Icons.movie},
-    {'nome': 'Moradia',      'icone': Icons.home},
-    {'nome': 'Educação',            'icone': Icons.school},
-    {'nome': 'Assinaturas', 'icone': Icons.subscriptions},
-    {'nome': 'Outros',              'icone': Icons.category},
+    {'nome': 'Alimentação',       'icone': Icons.restaurant},
+    {'nome': 'Mercado',           'icone': Icons.shopping_cart},
+    {'nome': 'Transporte',        'icone': Icons.directions_car},
+    {'nome': 'Saúde',             'icone': Icons.health_and_safety},
+    {'nome': 'Lazer',             'icone': Icons.movie},
+    {'nome': 'Moradia',           'icone': Icons.home},
+    {'nome': 'Educação',          'icone': Icons.school},
+    {'nome': 'Assinaturas',       'icone': Icons.subscriptions},
+    {'nome': 'Vestuário',         'icone': Icons.checkroom},
+    {'nome': 'Cuidados Pessoais', 'icone': Icons.spa},
+    {'nome': 'Presentes',         'icone': Icons.card_giftcard},
+    {'nome': 'Outros',            'icone': Icons.category},
   ];
 
   @override
@@ -62,6 +87,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     _formasBox = Hive.box<FormaPagamento>('formas_pagamento');
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
+    _gastosBox = Hive.box<Gasto>('gastos');
+    _receitasBox = Hive.box<Receita>('receitas');
+    _step = widget.initialStep;
     for (final cat in _categorias) {
       _limiteCtrl[cat['nome'] as String] = TextEditingController();
     }
@@ -80,6 +108,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     _descricaoCtrl.dispose();
     _bancoCtrl.dispose();
     _pessoaNomeCtrl.dispose();
+    _gastoDescCtrl.dispose();
+    _gastoValorCtrl.dispose();
+    _receitaDescCtrl.dispose();
+    _receitaValorCtrl.dispose();
     for (final c in _limiteCtrl.values) {
       c.dispose();
     }
@@ -97,7 +129,31 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   void _avancar(int step) {
     if (_step == 1 && _descricaoCtrl.text.trim().isNotEmpty) _adicionarForma();
     if (_step == 3 && _pessoaNomeCtrl.text.trim().isNotEmpty) _adicionarPessoa();
+    if (_step == 4 && _gastoDescCtrl.text.trim().isNotEmpty) _adicionarGastoFixo();
+    if (_step == 5 && _receitaDescCtrl.text.trim().isNotEmpty) _adicionarReceitaFixa();
     _irPara(step);
+  }
+
+  void _adicionarGastoFixo() {
+    final desc = _gastoDescCtrl.text.trim();
+    final valor = parseCurrency(_gastoValorCtrl.text);
+    if (desc.isEmpty || valor == null || valor <= 0) return;
+    setState(() {
+      _gastosFixos.add({'descricao': desc, 'valor': valor, 'categoria': _gastoCategoria});
+      _gastoDescCtrl.clear();
+      _gastoValorCtrl.clear();
+    });
+  }
+
+  void _adicionarReceitaFixa() {
+    final desc = _receitaDescCtrl.text.trim();
+    final valor = parseCurrency(_receitaValorCtrl.text);
+    if (desc.isEmpty || valor == null || valor <= 0) return;
+    setState(() {
+      _receitasFixas.add({'descricao': desc, 'valor': valor, 'categoria': _receitaCategoria});
+      _receitaDescCtrl.clear();
+      _receitaValorCtrl.clear();
+    });
   }
 
   void _adicionarForma() {
@@ -148,10 +204,47 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
       await _pessoasBox.put(p.id, p);
     }
 
+    // Salva gastos fixos mensais
+    for (int i = 0; i < _gastosFixos.length; i++) {
+      final item = _gastosFixos[i];
+      await _gastosBox.add(Gasto(
+        id: 'setup_gasto_${DateTime.now().millisecondsSinceEpoch}_$i',
+        descricao: item['descricao'] as String,
+        valor: item['valor'] as double,
+        categoria: item['categoria'] as String,
+        data: DateTime.now(),
+        formaPagamento: _formasAdicionadas.isNotEmpty ? _formasAdicionadas.first.descricao : '',
+        pessoa: nomeUsuario.isNotEmpty ? nomeUsuario : '',
+        tipoGasto: 'Fixo',
+        parcelado: false,
+        numeroParcelas: 1,
+        estabelecimento: '',
+        recorrente: true,
+        gastoEsperado: true,
+        detalhado: true,
+      ));
+    }
+
+    // Salva receitas fixas mensais
+    for (int i = 0; i < _receitasFixas.length; i++) {
+      final item = _receitasFixas[i];
+      await _receitasBox.add(Receita(
+        id: 'setup_receita_${DateTime.now().millisecondsSinceEpoch}_$i',
+        descricao: item['descricao'] as String,
+        valor: item['valor'] as double,
+        categoria: item['categoria'] as String,
+        data: DateTime.now(),
+        pessoa: nomeUsuario.isNotEmpty ? nomeUsuario : '',
+        recorrente: true,
+        tipoReceita: 'Fixo',
+        detalhado: true,
+      ));
+    }
+
     // Salva orçamentos por categoria
     for (final cat in _categorias) {
       final nome = cat['nome'] as String;
-      final texto = _limiteCtrl[nome]!.text.trim().replaceAll(',', '.');
+      final texto = _limiteCtrl[nome]!.text.trim().replaceAll('.', '').replaceAll(',', '.');
       final limite = double.tryParse(texto);
       if (limite != null && limite > 0) {
         final jaExiste = _orcamentosBox.values
@@ -179,19 +272,19 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
         child: Column(
           children: [
             // ── Barra de progresso (steps 1, 2 e 3) ──
-            if (_step >= 1 && _step <= 3)
+            if (_step >= 1 && _step <= 5)
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      children: List.generate(3, (i) {
+                      children: List.generate(5, (i) {
                         final done = i < _step - 1;
                         final active = i == _step - 1;
                         return Expanded(
                           child: Container(
-                            margin: EdgeInsets.only(right: i < 2 ? 6 : 0),
+                            margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
                             height: 6,
                             decoration: BoxDecoration(
                               color: done || active ? cor : Colors.grey[200],
@@ -203,7 +296,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Passo $_step de 3',
+                      'Passo $_step de 5',
                       style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                     ),
                   ],
@@ -234,6 +327,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
       case 3:
         return _buildPessoas(cor);
       case 4:
+        return _buildGastosFixos(cor);
+      case 5:
+        return _buildReceitasFixas(cor);
+      case 6:
         return _buildPronto(cor);
       default:
         return const SizedBox();
@@ -536,6 +633,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                     child: TextField(
                       controller: _limiteCtrl[nome],
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [CurrencyInputFormatter()],
                       decoration: InputDecoration(
                         labelText: nome,
                         hintText: 'Limite mensal',
@@ -710,7 +808,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             height: 50,
             child: FilledButton(
               onPressed: () => _avancar(4),
-              child: const Text('Concluir', style: TextStyle(fontSize: 15)),
+              child: const Text('Próximo: Gastos Fixos', style: TextStyle(fontSize: 15)),
             ),
           ),
           const SizedBox(height: 12),
@@ -726,19 +824,381 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     );
   }
 
-  // ── STEP 4: Pronto ────────────────────────────────────────────────────────
+  // ── STEP 4: Gastos Fixos Mensais ──────────────────────────────────────────
+
+  Widget _buildGastosFixos(Color cor) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.receipt_long_outlined,
+                    color: Colors.red, size: 26),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Gastos Mensais Fixos',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('Aluguel, assinaturas, parcelas...',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, size: 16, color: Colors.red),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Cadastre gastos que se repetem todo mês. Deixe em branco se não tiver agora.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (_gastosFixos.isNotEmpty) ...[
+            const Text('Adicionados:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ..._gastosFixos.asMap().entries.map((e) => Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.receipt_long,
+                        color: Colors.red, size: 20),
+                    title: Text(e.value['descricao'] as String,
+                        style: const TextStyle(fontSize: 13)),
+                    subtitle: Text(
+                        '${e.value['categoria']} • R\$ ${formatarValorParaCampo(e.value['valor'] as double)}',
+                        style: const TextStyle(fontSize: 11)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () =>
+                          setState(() => _gastosFixos.removeAt(e.key)),
+                    ),
+                  ),
+                )),
+            const SizedBox(height: 16),
+          ],
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _gastosFixos.isEmpty
+                        ? 'Adicione seu primeiro gasto fixo'
+                        : 'Adicionar outro',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _gastoDescCtrl,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Descrição (ex: Aluguel)',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _gastoValorCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          inputFormatters: [CurrencyInputFormatter()],
+                          decoration: const InputDecoration(
+                            labelText: 'Valor',
+                            prefixText: 'R\$ ',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _gastoCategoria,
+                          decoration: const InputDecoration(
+                            labelText: 'Categoria',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: _categorias
+                              .map((c) => DropdownMenuItem(
+                                  value: c['nome'] as String,
+                                  child: Text(c['nome'] as String,
+                                      style: const TextStyle(fontSize: 13))))
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => _gastoCategoria = v!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _adicionarGastoFixo,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Adicionar'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
+              onPressed: () => _avancar(5),
+              child: const Text('Próximo: Receitas Mensais',
+                  style: TextStyle(fontSize: 15)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: TextButton(
+              onPressed: () => _irPara(5),
+              child: Text('Pular esta etapa',
+                  style: TextStyle(color: Colors.grey[500])),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── STEP 5: Receitas Fixas Mensais ────────────────────────────────────────
+
+  Widget _buildReceitasFixas(Color cor) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.attach_money_outlined,
+                    color: Colors.green, size: 26),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Receitas Mensais',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('Salário, freelance, rendimentos...',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, size: 16, color: Colors.green),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Cadastre receitas que recebe regularmente. Deixe em branco se preferir.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (_receitasFixas.isNotEmpty) ...[
+            const Text('Adicionadas:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ..._receitasFixas.asMap().entries.map((e) => Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.attach_money,
+                        color: Colors.green, size: 20),
+                    title: Text(e.value['descricao'] as String,
+                        style: const TextStyle(fontSize: 13)),
+                    subtitle: Text(
+                        '${e.value['categoria']} • R\$ ${formatarValorParaCampo(e.value['valor'] as double)}',
+                        style: const TextStyle(fontSize: 11)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () =>
+                          setState(() => _receitasFixas.removeAt(e.key)),
+                    ),
+                  ),
+                )),
+            const SizedBox(height: 16),
+          ],
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _receitasFixas.isEmpty
+                        ? 'Adicione sua primeira receita mensal'
+                        : 'Adicionar outra',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _receitaDescCtrl,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Descrição (ex: Salário empresa X)',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _receitaValorCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          inputFormatters: [CurrencyInputFormatter()],
+                          decoration: const InputDecoration(
+                            labelText: 'Valor',
+                            prefixText: 'R\$ ',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _receitaCategoria,
+                          decoration: const InputDecoration(
+                            labelText: 'Categoria',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: _categoriasReceita
+                              .map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(c,
+                                      style: const TextStyle(fontSize: 13))))
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => _receitaCategoria = v!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _adicionarReceitaFixa,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Adicionar'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
+              onPressed: () => _avancar(6),
+              child: const Text('Concluir configuração',
+                  style: TextStyle(fontSize: 15)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: TextButton(
+              onPressed: () => _irPara(6),
+              child: Text('Pular esta etapa',
+                  style: TextStyle(color: Colors.grey[500])),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── STEP 6: Pronto ────────────────────────────────────────────────────────
 
   Widget _buildPronto(Color cor) {
     final orcamentosDefinidos = _categorias
         .where((cat) {
           final texto = _limiteCtrl[cat['nome'] as String]!.text.trim();
-          final valor = double.tryParse(texto.replaceAll(',', '.'));
+          final valor = double.tryParse(texto.replaceAll('.', '').replaceAll(',', '.'));
           return valor != null && valor > 0;
         })
         .length;
     final temNome = _nomeUsuarioCtrl.text.trim().isNotEmpty;
     final temFormas = _formasAdicionadas.isNotEmpty;
     final temPessoas = _pessoasAdicionadas.isNotEmpty;
+    final temGastos = _gastosFixos.isNotEmpty;
+    final temReceitas = _receitasFixas.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -767,6 +1227,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
               if (temFormas) '${_formasAdicionadas.length} forma${_formasAdicionadas.length == 1 ? '' : 's'} de pagamento adicionada${_formasAdicionadas.length == 1 ? '' : 's'}.',
               if (orcamentosDefinidos > 0) '$orcamentosDefinidos limite${orcamentosDefinidos == 1 ? '' : 's'} de orçamento definido${orcamentosDefinidos == 1 ? '' : 's'}.',
               if (temPessoas) '${_pessoasAdicionadas.length} pessoa${_pessoasAdicionadas.length == 1 ? '' : 's'} adicionada${_pessoasAdicionadas.length == 1 ? '' : 's'}.',
+              if (temGastos) '${_gastosFixos.length} gasto${_gastosFixos.length == 1 ? '' : 's'} fixo${_gastosFixos.length == 1 ? '' : 's'} cadastrado${_gastosFixos.length == 1 ? '' : 's'}.',
+              if (temReceitas) '${_receitasFixas.length} receita${_receitasFixas.length == 1 ? '' : 's'} cadastrada${_receitasFixas.length == 1 ? '' : 's'}.',
               if (!temFormas && orcamentosDefinidos == 0) 'Você pode configurar formas de pagamento e orçamentos nas Configurações a qualquer momento.',
             ].join(' '),
             textAlign: TextAlign.center,
@@ -807,7 +1269,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           ),
           const SizedBox(height: 12),
           TextButton(
-            onPressed: () => _irPara(3),
+            onPressed: () => _irPara(5),
             child: Text('Voltar', style: TextStyle(color: Colors.grey[500])),
           ),
         ],

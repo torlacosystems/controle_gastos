@@ -18,9 +18,17 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
   late Box<Receita> _receitasBox;
   late Box<Pessoa> _pessoasBox;
   bool _filtroNaoDetalhado = false;
+  final TextEditingController _buscaController = TextEditingController();
+  String _termoBusca = '';
 
   final Set<String> _selecionados = {};
   bool _modoSelecao = false;
+
+  @override
+  void dispose() {
+    _buscaController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -45,6 +53,14 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
       final dataReceita = DateTime(r.data.year, r.data.month, r.data.day);
       if (dataReceita.isBefore(limite)) continue;
       if (_filtroNaoDetalhado && r.detalhado) continue;
+      if (_termoBusca.isNotEmpty) {
+        final t = _termoBusca;
+        if (!r.descricao.toLowerCase().contains(t) &&
+            !r.categoria.toLowerCase().contains(t) &&
+            !r.pessoa.toLowerCase().contains(t)) {
+          continue;
+        }
+      }
       lista.add({'item': r, 'index': i});
     }
     lista.sort((a, b) =>
@@ -280,16 +296,20 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
         final r = item['item'] as Receita;
         if (!_selecionados.contains(r.id)) continue;
         final idx = item['index'] as int;
+        final pessoaFinal = novaPessoa ?? r.pessoa;
+        final categoriaFinal = novaCategoria ?? r.categoria;
+        final novoDetalhado = r.detalhado ||
+            r.descricao.trim().isNotEmpty;
         final atualizado = Receita(
           id: r.id,
           descricao: r.descricao,
           valor: r.valor,
-          categoria: novaCategoria ?? r.categoria,
+          categoria: categoriaFinal,
           data: r.data,
-          pessoa: novaPessoa ?? r.pessoa,
+          pessoa: pessoaFinal,
           recorrente: novoRecorrente ?? r.recorrente,
           tipoReceita: novoTipo ?? r.tipoReceita,
-          detalhado: r.detalhado,
+          detalhado: novoDetalhado,
         );
         await _receitasBox.putAt(idx, atualizado);
       }
@@ -360,53 +380,85 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
       body: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             color: Colors.grey[100],
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
-                  onTap: () => setState(
-                      () => _filtroNaoDetalhado = !_filtroNaoDetalhado),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color:
-                          _filtroNaoDetalhado ? Colors.teal : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _filtroNaoDetalhado
-                            ? Colors.teal
-                            : Colors.grey[300]!,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.pending_actions,
-                            size: 14,
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(
+                          () => _filtroNaoDetalhado = !_filtroNaoDetalhado),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: _filtroNaoDetalhado ? Colors.teal : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
                             color: _filtroNaoDetalhado
-                                ? Colors.white
-                                : Colors.grey[700]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Não Detalhados',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _filtroNaoDetalhado
-                                ? Colors.white
-                                : Colors.grey[700],
+                                ? Colors.teal
+                                : Colors.grey[300]!,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.pending_actions,
+                                size: 14,
+                                color: _filtroNaoDetalhado
+                                    ? Colors.white
+                                    : Colors.grey[700]),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Não Detalhados',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: _filtroNaoDetalhado
+                                    ? Colors.white
+                                    : Colors.grey[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '${itens.length} registro(s) • últimos 3 dias',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _buscaController,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por descrição, categoria, pessoa...',
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: _termoBusca.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _buscaController.clear();
+                              setState(() => _termoBusca = '');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '${itens.length} registro(s) • últimos 3 dias',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  onChanged: (v) =>
+                      setState(() => _termoBusca = v.trim().toLowerCase()),
                 ),
               ],
             ),

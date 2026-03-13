@@ -110,6 +110,12 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         return Icons.shopping_cart;
       case 'Assinaturas':
         return Icons.subscriptions;
+      case 'Vestuário':
+        return Icons.checkroom;
+      case 'Cuidados Pessoais':
+        return Icons.spa;
+      case 'Presentes':
+        return Icons.card_giftcard;
       default:
         // Busca em categorias personalizadas
         final custom = _categoriasBox.values.cast<Categoria?>().firstWhere(
@@ -343,7 +349,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     final categoriasReceita = ['Salário', 'Freelance', 'Investimento', 'Aluguel', 'Presente', 'Benefício', 'Outros'];
 
     // Gasto categories
-    final fixasSemOutros = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas'];
+    final fixasSemOutros = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = categoriasBox.values.map((c) => c.nome).toList()..sort();
     final categoriasGasto = [...fixasSemOutros, ...custom, 'Outros'];
 

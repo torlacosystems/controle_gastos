@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -75,6 +76,153 @@ class _ConfiguracoesSistemaScreenState
         SnackBar(
           content: Text(ativo ? 'Bloqueio ativado.' : 'Bloqueio desativado.'),
           backgroundColor: ativo ? Colors.green : Colors.grey,
+        ),
+      );
+    }
+  }
+
+  Future<void> _gerarMassaDados() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Gerar massa de dados'),
+        content: const Text(
+          'Serão inseridos gastos e receitas fictícios dos últimos 3 meses para testes.\n\nOs dados existentes serão mantidos. Deseja continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Gerar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+
+    final gastosBox = Hive.box<Gasto>('gastos');
+    final receitasBox = Hive.box<Receita>('receitas');
+    final formasBox = Hive.box<FormaPagamento>('formas_pagamento');
+    final pessoasBox = Hive.box<Pessoa>('pessoas');
+
+    // Usa formas/pessoas existentes ou cria genéricas
+    final formas = formasBox.values.map((f) => f.descricao).toList();
+    if (formas.isEmpty) formas.addAll(['Cartão Débito', 'Cartão Crédito', 'Dinheiro', 'Pix']);
+
+    final pessoas = pessoasBox.values.map((p) => p.nome).toList();
+    if (pessoas.isEmpty) pessoas.addAll(['Eu', 'Família']);
+
+    final rng = Random(42);
+    double v(double base) => double.parse((base * (0.85 + rng.nextDouble() * 0.3)).toStringAsFixed(2));
+
+    final agora = DateTime.now();
+
+    // Template de gastos: [descrição, categoria, valor-base, tipoGasto, esperado, evitável, forma-índice]
+    final templateGastos = [
+      ['Aluguel',          'Moradia',           1200.0, 'Fixo',    true,  false, 0],
+      ['Condomínio',       'Moradia',             350.0, 'Fixo',    true,  false, 2],
+      ['Internet',         'Assinaturas',         120.0, 'Fixo',    true,  false, 1],
+      ['Netflix',          'Assinaturas',          45.0, 'Fixo',    true,  false, 1],
+      ['Spotify',          'Assinaturas',          22.0, 'Fixo',    true,  false, 1],
+      ['Energia elétrica', 'Moradia',             220.0, 'Fixo',    true,  false, 2],
+      ['Supermercado',     'Mercado',             310.0, 'Variável',true,  false, 0],
+      ['Supermercado',     'Mercado',             280.0, 'Variável',true,  false, 2],
+      ['Feira',            'Mercado',             120.0, 'Variável',true,  false, 2],
+      ['Restaurante',      'Alimentação',          95.0, 'Variável',false, true,  1],
+      ['Lanche delivery',  'Alimentação',          55.0, 'Variável',false, true,  1],
+      ['Combustível',      'Transporte',          180.0, 'Variável',true,  false, 0],
+      ['Estacionamento',   'Transporte',           35.0, 'Variável',false, true,  2],
+      ['Farmácia',         'Saúde',                70.0, 'Variável',true,  false, 0],
+      ['Consulta médica',  'Saúde',               200.0, 'Variável',true,  false, 1],
+      ['Academia',         'Saúde',               110.0, 'Fixo',    true,  false, 0],
+      ['Cinema',           'Lazer',                80.0, 'Variável',false, true,  1],
+      ['Bar / saída',      'Lazer',                90.0, 'Variável',false, true,  2],
+      ['Roupas',           'Vestuário',           250.0, 'Variável',false, true,  1],
+      ['Produtos higiene', 'Cuidados Pessoais',    65.0, 'Variável',true,  false, 2],
+      ['Presente',         'Presentes',           120.0, 'Variável',false, false, 1],
+      ['Curso online',     'Educação',            197.0, 'Variável',true,  false, 1],
+      ['Outros gastos',    'Outros',               80.0, 'Variável',false, false, 2],
+    ];
+
+    // Template de receitas: [descrição, categoria, valor-base, tipo]
+    final templateReceitas = [
+      ['Salário',        'Salário',       5200.0, 'Fixo'],
+      ['Freelance',      'Freelance',     1100.0, 'Variável'],
+      ['Venda online',   'Outros',         350.0, 'Variável'],
+    ];
+
+    for (int mes = 2; mes >= 0; mes--) {
+      final mesAlvo = agora.month - mes;
+      final anoAlvo = mesAlvo <= 0 ? agora.year - 1 : agora.year;
+      final mesReal = mesAlvo <= 0 ? mesAlvo + 12 : mesAlvo;
+
+      // Distribui os gastos ao longo do mês (dias 1–28)
+      int diaGasto = 1;
+      for (final t in templateGastos) {
+        final desc   = t[0] as String;
+        final cat    = t[1] as String;
+        final base   = t[2] as double;
+        final tipo   = t[3] as String;
+        final esp    = t[4] as bool;
+        final evit   = t[5] as bool;
+        final fIdx   = t[6] as int;
+        final forma  = formas[fIdx % formas.length];
+        final pessoa = pessoas[rng.nextInt(pessoas.length)];
+        final data   = DateTime(anoAlvo, mesReal, diaGasto.clamp(1, 28));
+        diaGasto += rng.nextInt(2) + 1;
+
+        await gastosBox.add(Gasto(
+          id: '${DateTime.now().microsecondsSinceEpoch}_${rng.nextInt(9999)}',
+          descricao: desc,
+          valor: v(base),
+          categoria: cat,
+          data: data,
+          formaPagamento: forma,
+          pessoa: pessoa,
+          tipoGasto: tipo,
+          parcelado: false,
+          numeroParcelas: 1,
+          estabelecimento: '',
+          recorrente: tipo == 'Fixo',
+          gastoEsperado: esp,
+          gastoEvitavel: evit,
+          detalhado: true,
+        ));
+      }
+
+      // Receitas no dia 5 (salário) e dias variados
+      int diaReceita = 5;
+      for (final t in templateReceitas) {
+        final desc  = t[0] as String;
+        final cat   = t[1] as String;
+        final base  = t[2] as double;
+        final tipo  = t[3] as String;
+        final pessoa = pessoas.first;
+        final data  = DateTime(anoAlvo, mesReal, diaReceita.clamp(1, 28));
+        diaReceita += 8;
+
+        await receitasBox.add(Receita(
+          id: '${DateTime.now().microsecondsSinceEpoch}_r${rng.nextInt(9999)}',
+          descricao: desc,
+          valor: v(base),
+          categoria: cat,
+          data: data,
+          pessoa: pessoa,
+          recorrente: tipo == 'Fixo',
+          tipoReceita: tipo,
+          detalhado: true,
+        ));
+      }
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Massa de dados gerada: 3 meses de gastos e receitas.'),
+          backgroundColor: Colors.green,
         ),
       );
     }
@@ -271,6 +419,13 @@ class _ConfiguracoesSistemaScreenState
                 Navigator.push(context, FadeRoute(page: const BackupScreen()));
               }
             },
+          ),
+          ListTile(
+            leading: const Icon(Icons.science_outlined, color: Colors.teal),
+            title: const Text('Gerar massa de dados'),
+            subtitle: const Text('Insere gastos e receitas fictícios de 3 meses'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _gerarMassaDados,
           ),
           ListTile(
             leading: const Icon(Icons.delete_forever, color: Colors.red),

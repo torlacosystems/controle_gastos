@@ -23,9 +23,17 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
   late Box<FormaPagamento> _formasPagamentoBox;
   late Box<Pessoa> _pessoasBox;
   bool _filtroNaoDetalhado = false;
+  final TextEditingController _buscaController = TextEditingController();
+  String _termoBusca = '';
 
   final Set<String> _selecionados = {};
   bool _modoSelecao = false;
+
+  @override
+  void dispose() {
+    _buscaController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -52,6 +60,16 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
       final dataGasto = DateTime(g.data.year, g.data.month, g.data.day);
       if (dataGasto.isBefore(limite)) continue;
       if (_filtroNaoDetalhado && g.detalhado) continue;
+      if (_termoBusca.isNotEmpty) {
+        final t = _termoBusca;
+        if (!g.descricao.toLowerCase().contains(t) &&
+            !g.categoria.toLowerCase().contains(t) &&
+            !g.formaPagamento.toLowerCase().contains(t) &&
+            !g.pessoa.toLowerCase().contains(t) &&
+            !g.estabelecimento.toLowerCase().contains(t)) {
+          continue;
+        }
+      }
       lista.add({'item': g, 'index': i});
     }
     lista.sort((a, b) =>
@@ -155,7 +173,7 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
       });
     final nomesPessoas = pessoas.map((p) => p.nome).toList();
 
-    final fixasSemOutros = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas'];
+    final fixasSemOutros = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();
     final categorias = [...fixasSemOutros, ...custom, 'Outros'];
 
@@ -301,14 +319,21 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
         final g = item['item'] as Gasto;
         if (!_selecionados.contains(g.id)) continue;
         final idx = item['index'] as int;
+        final formaFinal = novaForma ?? g.formaPagamento;
+        final categoriaFinal = novaCategoria ?? g.categoria;
+        final pessoaFinal = novaPessoa ?? g.pessoa;
+        final novoDetalhado = g.detalhado ||
+            (formaFinal.isNotEmpty &&
+                pessoaFinal.isNotEmpty &&
+                g.descricao.trim().isNotEmpty);
         final atualizado = Gasto(
           id: g.id,
           descricao: g.descricao,
           valor: g.valor,
-          categoria: novaCategoria ?? g.categoria,
+          categoria: categoriaFinal,
           data: g.data,
-          formaPagamento: novaForma ?? g.formaPagamento,
-          pessoa: novaPessoa ?? g.pessoa,
+          formaPagamento: formaFinal,
+          pessoa: pessoaFinal,
           tipoGasto: novoTipo ?? g.tipoGasto,
           parcelado: g.parcelado,
           numeroParcelas: g.numeroParcelas,
@@ -318,7 +343,7 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
           grupoId: g.grupoId,
           numeroParcela: g.numeroParcela,
           gastoEvitavel: g.gastoEvitavel,
-          detalhado: g.detalhado,
+          detalhado: novoDetalhado,
         );
         await _gastosBox.putAt(idx, atualizado);
       }
@@ -388,52 +413,85 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
       body: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             color: Colors.grey[100],
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
-                  onTap: () =>
-                      setState(() => _filtroNaoDetalhado = !_filtroNaoDetalhado),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: _filtroNaoDetalhado ? Colors.orange : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _filtroNaoDetalhado
-                            ? Colors.orange
-                            : Colors.grey[300]!,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.pending_actions,
-                            size: 14,
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _filtroNaoDetalhado = !_filtroNaoDetalhado),
+                      child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: _filtroNaoDetalhado ? Colors.orange : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
                             color: _filtroNaoDetalhado
-                                ? Colors.white
-                                : Colors.grey[700]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Não Detalhados',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _filtroNaoDetalhado
-                                ? Colors.white
-                                : Colors.grey[700],
+                                ? Colors.orange
+                                : Colors.grey[300]!,
                           ),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.pending_actions,
+                                size: 14,
+                                color: _filtroNaoDetalhado
+                                    ? Colors.white
+                                    : Colors.grey[700]),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Não Detalhados',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: _filtroNaoDetalhado
+                                    ? Colors.white
+                                    : Colors.grey[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '${itens.length} registro(s) • últimos 3 dias',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _buscaController,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por descrição, categoria, forma, pessoa...',
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: _termoBusca.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _buscaController.clear();
+                              setState(() => _termoBusca = '');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '${itens.length} registro(s) • últimos 3 dias',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  onChanged: (v) =>
+                      setState(() => _termoBusca = v.trim().toLowerCase()),
                 ),
               ],
             ),

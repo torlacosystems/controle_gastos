@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'gasto.dart';
 import 'receita.dart';
 import 'forma_pagamento.dart';
+import 'currency_formatter.dart';
 import 'pessoa.dart';
 import 'categoria.dart';
 
@@ -33,12 +34,12 @@ class _RegistrosPorDatasScreenState extends State<RegistrosPorDatasScreen> {
   String _categoria = 'Alimentação';
   String _pessoa = '';
   String _tipo = 'Fixo';
-  bool _recorrente = false;
+  bool _recorrente = true;
   FormaPagamento? _formaPagamento;
 
   // Campos exclusivos de gasto
   final _estabelecimentoCtrl = TextEditingController();
-  bool _gastoEsperado = false;
+  bool _gastoEsperado = true;
   bool _gastoEvitavel = false;
 
   // Datas
@@ -87,7 +88,8 @@ class _RegistrosPorDatasScreenState extends State<RegistrosPorDatasScreen> {
 
   List<String> get _categoriasGasto {
     final fixas = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia',
-        'Educação', 'Mercado', 'Assinaturas'];
+        'Educação', 'Mercado', 'Assinaturas',
+        'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();
     return [...fixas, ...custom, 'Outros'];
   }
@@ -165,7 +167,7 @@ class _RegistrosPorDatasScreenState extends State<RegistrosPorDatasScreen> {
       return;
     }
 
-    final valorStr = _valorCtrl.text.trim().replaceAll(',', '.');
+    final valorStr = _valorCtrl.text.trim().replaceAll('.', '').replaceAll(',', '.');
     final valor = double.tryParse(valorStr);
     if (valor == null || valor <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -265,6 +267,7 @@ class _RegistrosPorDatasScreenState extends State<RegistrosPorDatasScreen> {
           TextField(
             controller: _valorCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [CurrencyInputFormatter()],
             decoration: const InputDecoration(
               labelText: 'Valor (R\$)',
               border: OutlineInputBorder(),

@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'gasto.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
+import 'currency_formatter.dart';
 import 'categoria.dart';
 
 class MultiplosGastosScreen extends StatefulWidget {
@@ -24,7 +25,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
   FormaPagamento? _formaPagamento;
   Pessoa? _pessoa;
   DateTime _data = DateTime.now();
-  bool _recorrente = false;
+  bool _recorrente = true;
   bool _gastoEsperado = true;
   bool _gastoEvitavel = false;
 
@@ -36,7 +37,8 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
 
   static const List<String> _categoriasFixas = [
     'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Lazer',
-    'Moradia', 'Educação', 'Assinaturas', 'Outros',
+    'Moradia', 'Educação', 'Assinaturas',
+    'Vestuário', 'Cuidados Pessoais', 'Presentes', 'Outros',
   ];
 
   List<String> get _categorias {
@@ -103,7 +105,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
 
   void _confirmarLinha(int i) {
     final desc = _linhas[i]['desc']!.text.trim();
-    final v = double.tryParse(_linhas[i]['valor']!.text.replaceAll(',', '.'));
+    final v = double.tryParse(_linhas[i]['valor']!.text.replaceAll('.', '').replaceAll(',', '.'));
     if (desc.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Informe a descrição')),
@@ -221,7 +223,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
     for (int li = 0; li < _linhas.length; li++) {
       if (!_confirmadas[li]) continue;
       final l = _linhas[li];
-      final v = double.tryParse(l['valor']!.text.replaceAll(',', '.'));
+      final v = double.tryParse(l['valor']!.text.replaceAll('.', '').replaceAll(',', '.'));
       if (v == null || v <= 0) continue;
       for (int m = 0; m < meses; m++) {
         final g = Gasto(
@@ -445,7 +447,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
                 if (confirmado) {
                   // ── Item confirmado: exibe como tile com swipe para excluir ──
                   final v = double.tryParse(
-                          l['valor']!.text.replaceAll(',', '.')) ??
+                          l['valor']!.text.replaceAll('.', '').replaceAll(',', '.')) ??
                       0;
                   return Dismissible(
                     key: Key('linha_$linhaId'),
@@ -535,6 +537,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
                           keyboardType:
                               const TextInputType.numberWithOptions(
                                   decimal: true),
+                          inputFormatters: [CurrencyInputFormatter()],
                           decoration: const InputDecoration(
                             hintText: '0,00',
                             prefixText: 'R\$ ',

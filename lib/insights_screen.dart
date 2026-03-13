@@ -5,6 +5,8 @@ import 'gasto.dart';
 import 'receita.dart';
 import 'forma_pagamento.dart';
 import 'app_settings.dart';
+import 'currency_formatter.dart';
+import 'regras_financeiras.dart';
 
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
@@ -39,19 +41,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
   ];
 
   final List<String> _diasSemana = [
-    'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo',
+    'Segunda',
+    'Terça',
+    'Quarta',
+    'Quinta',
+    'Sexta',
+    'Sábado',
+    'Domingo',
   ];
-
-  final Map<String, String> _dicasPorCategoria = {
-    'Alimentação': 'Tente cozinhar mais em casa. Pode economizar até 40% comparado a comer fora.',
-    'Transporte': 'Considere caronas compartilhadas ou transporte público para reduzir custos.',
-    'Lazer': 'Busque opções gratuitas de lazer como parques, eventos culturais e afins.',
-    'Saúde': 'Mantenha hábitos preventivos para evitar gastos maiores no futuro.',
-    'Moradia': 'Revise contratos de serviços como internet e energia para encontrar planos melhores.',
-    'Educação': 'Explore cursos gratuitos online como complemento aos pagos.',
-    'Assinaturas': 'Revise suas assinaturas ativas. Cancele as que não usa — pequenos valores mensais somam muito ao longo do ano.',
-    'Outros': 'Revise esses gastos — muitos podem ser evitados ou reduzidos.',
-  };
 
   @override
   void initState() {
@@ -126,7 +123,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
     if (valor != null && valor > 0) {
       setState(() {
         _metaEconomia = valor;
-        _metaController.text = valor.toStringAsFixed(2).replaceAll('.', ',');
+        _metaController.text = formatarValorParaCampo(valor);
       });
     }
   }
@@ -145,7 +142,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
   // ── Dados filtrados pelo período ─────────────────────────────────────────
 
   bool _noperiodo(DateTime data) {
-    if (data.isBefore(_dataInicio.subtract(const Duration(days: 1)))) return false;
+    if (data.isBefore(_dataInicio.subtract(const Duration(days: 1))))
+      return false;
     if (data.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
     return true;
   }
@@ -158,9 +156,16 @@ class _InsightsScreenState extends State<InsightsScreen> {
   // Nos demais: dias / 30 arredondado, mínimo 1.
   int get _mesesEfetivos {
     if (_periodoSelecionado == 'todos' && _gastosPeriodo.isNotEmpty) {
-      final primeiro = _gastosPeriodo.map((g) => g.data).reduce((a, b) => a.isBefore(b) ? a : b);
-      final ultimo  = _gastosPeriodo.map((g) => g.data).reduce((a, b) => a.isAfter(b)  ? a : b);
-      final m = (ultimo.year - primeiro.year) * 12 + (ultimo.month - primeiro.month) + 1;
+      final primeiro = _gastosPeriodo
+          .map((g) => g.data)
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+      final ultimo = _gastosPeriodo
+          .map((g) => g.data)
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+      final m =
+          (ultimo.year - primeiro.year) * 12 +
+          (ultimo.month - primeiro.month) +
+          1;
       return m < 1 ? 1 : m;
     }
     final dias = _dataFim.difference(_dataInicio).inDays + 1;
@@ -175,9 +180,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
     final antFim = _dataInicio.subtract(const Duration(days: 1));
     final antInicio = antFim.subtract(Duration(days: dias - 1));
     return _gastosBox.values
-        .where((g) =>
-            !g.data.isBefore(antInicio.subtract(const Duration(days: 1))) &&
-            !g.data.isAfter(antFim.add(const Duration(days: 1))))
+        .where(
+          (g) =>
+              !g.data.isBefore(antInicio.subtract(const Duration(days: 1))) &&
+              !g.data.isAfter(antFim.add(const Duration(days: 1))),
+        )
         .toList();
   }
 
@@ -186,17 +193,21 @@ class _InsightsScreenState extends State<InsightsScreen> {
   double get _totalPeriodoAnterior =>
       _gastosPeriodoAnterior.fold(0, (s, g) => s + g.valor);
 
-  double get _totalReceitas =>
-      _receitasBox.values.where((r) => _noperiodo(r.data)).fold(0, (s, r) => s + r.valor);
+  double get _totalReceitas => _receitasBox.values
+      .where((r) => _noperiodo(r.data))
+      .fold(0, (s, r) => s + r.valor);
 
-  double get _totalFixos =>
-      _gastosPeriodo.where((g) => g.tipoGasto == 'Fixo').fold(0, (s, g) => s + g.valor);
+  double get _totalFixos => _gastosPeriodo
+      .where((g) => g.tipoGasto == 'Fixo')
+      .fold(0, (s, g) => s + g.valor);
 
-  double get _totalInesperados =>
-      _gastosPeriodo.where((g) => !g.gastoEsperado).fold(0, (s, g) => s + g.valor);
+  double get _totalInesperados => _gastosPeriodo
+      .where((g) => !g.gastoEsperado)
+      .fold(0, (s, g) => s + g.valor);
 
-  double get _totalEvitaveis =>
-      _gastosPeriodo.where((g) => g.gastoEvitavel).fold(0, (s, g) => s + g.valor);
+  double get _totalEvitaveis => _gastosPeriodo
+      .where((g) => g.gastoEvitavel)
+      .fold(0, (s, g) => s + g.valor);
 
   Set<String> get _descricoesCredito {
     return _formasPagamentoBox.values
@@ -205,14 +216,16 @@ class _InsightsScreenState extends State<InsightsScreen> {
         .toSet();
   }
 
-  List<Gasto> get _gastosCartaoCredito =>
-      _gastosPeriodo.where((g) => _descricoesCredito.contains(g.formaPagamento)).toList();
+  List<Gasto> get _gastosCartaoCredito => _gastosPeriodo
+      .where((g) => _descricoesCredito.contains(g.formaPagamento))
+      .toList();
 
   double get _totalCartaoCredito =>
       _gastosCartaoCredito.fold(0, (s, g) => s + g.valor);
 
-  double get _totalEvitaveisCartao =>
-      _gastosCartaoCredito.where((g) => g.gastoEvitavel).fold(0, (s, g) => s + g.valor);
+  double get _totalEvitaveisCartao => _gastosCartaoCredito
+      .where((g) => g.gastoEvitavel)
+      .fold(0, (s, g) => s + g.valor);
 
   String get _categoriaMaisGasta {
     if (_gastosPeriodo.isEmpty) return 'Nenhum gasto';
@@ -239,13 +252,16 @@ class _InsightsScreenState extends State<InsightsScreen> {
       final dia = g.data.weekday;
       mapa[dia] = (mapa[dia] ?? 0) + g.valor;
     }
-    final diaMaior = mapa.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+    final diaMaior = mapa.entries
+        .reduce((a, b) => a.value > b.value ? a : b)
+        .key;
     return _diasSemana[diaMaior - 1];
   }
 
   // Quando "todos" ou período >= 30 dias: média mensal. Caso contrário: média diária.
   bool get _usarMediaMensal =>
-      _periodoSelecionado == 'todos' || _dataFim.difference(_dataInicio).inDays >= 30;
+      _periodoSelecionado == 'todos' ||
+      _dataFim.difference(_dataInicio).inDays >= 30;
 
   double get _mediaGastos {
     if (_gastosPeriodo.isEmpty) return 0;
@@ -259,7 +275,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   double get _percentualVariacao {
     if (_totalPeriodoAnterior == 0) return 0;
-    return ((_totalPeriodo - _totalPeriodoAnterior) / _totalPeriodoAnterior) * 100;
+    return ((_totalPeriodo - _totalPeriodoAnterior) / _totalPeriodoAnterior) *
+        100;
   }
 
   double get _economiaAtual => _totalReceitas - _totalPeriodo;
@@ -332,16 +349,28 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         labelText: 'Período',
                         labelStyle: TextStyle(fontSize: 12),
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                         isDense: true,
                       ),
-                      items: _periodos.map((p) => DropdownMenuItem(
-                        value: p['key']!,
-                        child: Text(p['label']!, style: const TextStyle(fontSize: 13)),
-                      )).toList(),
+                      items: _periodos
+                          .map(
+                            (p) => DropdownMenuItem(
+                              value: p['key']!,
+                              child: Text(
+                                p['label']!,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (v) {
-                        if (v == 'Personalizado') setState(() => _periodoSelecionado = 'Personalizado');
-                        else if (v != null) _aplicarPeriodo(v);
+                        if (v == 'Personalizado')
+                          setState(() => _periodoSelecionado = 'Personalizado');
+                        else if (v != null)
+                          _aplicarPeriodo(v);
                       },
                     ),
                     if (_periodoSelecionado == 'Personalizado') ...[
@@ -356,10 +385,16 @@ class _InsightsScreenState extends State<InsightsScreen> {
                                   labelText: 'De',
                                   labelStyle: TextStyle(fontSize: 12),
                                   border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
                                   isDense: true,
                                 ),
-                                child: Text(_formatarData(_dataInicio), style: const TextStyle(fontSize: 13)),
+                                child: Text(
+                                  _formatarData(_dataInicio),
+                                  style: const TextStyle(fontSize: 13),
+                                ),
                               ),
                             ),
                           ),
@@ -372,10 +407,16 @@ class _InsightsScreenState extends State<InsightsScreen> {
                                   labelText: 'Até',
                                   labelStyle: TextStyle(fontSize: 12),
                                   border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
                                   isDense: true,
                                 ),
-                                child: Text(_formatarData(_dataFim), style: const TextStyle(fontSize: 13)),
+                                child: Text(
+                                  _formatarData(_dataFim),
+                                  style: const TextStyle(fontSize: 13),
+                                ),
                               ),
                             ),
                           ),
@@ -405,7 +446,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
               child: Column(
                 children: [
                   Text(
-                    _periodoSelecionado == 'todos' ? 'Insights' : 'Insights — $_labelPeriodo',
+                    _periodoSelecionado == 'todos'
+                        ? 'Insights'
+                        : 'Insights — $_labelPeriodo',
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
@@ -486,35 +529,48 @@ class _InsightsScreenState extends State<InsightsScreen> {
             _cardAlerta(
               icone: Icons.warning_amber,
               cor: Colors.orange,
-              titulo: _usarMediaMensal ? 'Média mensal de gastos' : 'Média diária de gastos',
-              conteudo: 'Sua média ${_usarMediaMensal ? 'mensal' : 'diária'} no período é ${_formatarValor(_mediaGastos)}.',
+              titulo: _usarMediaMensal
+                  ? 'Média mensal de gastos'
+                  : 'Média diária de gastos',
+              conteudo:
+                  'Sua média ${_usarMediaMensal ? 'mensal' : 'diária'} no período é ${_formatarValor(_mediaGastos)}.',
               subtexto: _usarMediaMensal
-                  ? (_mediaGastos > 1500 ? 'Atenção: média acima de R\$ 1.500,00 por mês.' : 'Sua média mensal está controlada.')
-                  : (_mediaGastos > 50 ? 'Atenção: média acima de R\$ 50,00 por dia.' : 'Sua média diária está controlada.'),
-              destaque: _usarMediaMensal ? _mediaGastos > 1500 : _mediaGastos > 50,
+                  ? (_mediaGastos > 1500
+                        ? 'Atenção: média acima de R\$ 1.500,00 por mês.'
+                        : 'Sua média mensal está controlada.')
+                  : (_mediaGastos > 50
+                        ? 'Atenção: média acima de R\$ 50,00 por dia.'
+                        : 'Sua média diária está controlada.'),
+              destaque: _usarMediaMensal
+                  ? _mediaGastos > 1500
+                  : _mediaGastos > 50,
             ),
             if (_rendaMensal != null && _rendaMensal! > 0) ...[
               const SizedBox(height: 12),
-              Builder(builder: (context) {
-                final rendaDiaria = _rendaMensal! / 30;
-                final gastoDiario = _usarMediaMensal
-                    ? _mediaGastos / 30
-                    : _mediaGastos;
-                final pct = rendaDiaria > 0 ? (gastoDiario / rendaDiaria * 100) : 0.0;
-                final ok = gastoDiario <= rendaDiaria;
-                return _cardAlerta(
-                  icone: ok ? Icons.trending_down : Icons.trending_up,
-                  cor: ok ? Colors.green : Colors.red,
-                  titulo: 'Gasto diário vs renda diária',
-                  conteudo:
-                      'Gasto médio diário: R\$ ${_formatarValor(gastoDiario)}  •  '
-                      'Renda diária: R\$ ${_formatarValor(rendaDiaria)}',
-                  subtexto: ok
-                      ? 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária. Parabéns!'
-                      : 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária — acima do ideal.',
-                  destaque: !ok,
-                );
-              }),
+              Builder(
+                builder: (context) {
+                  final rendaDiaria = _rendaMensal! / 30;
+                  final gastoDiario = _usarMediaMensal
+                      ? _mediaGastos / 30
+                      : _mediaGastos;
+                  final pct = rendaDiaria > 0
+                      ? (gastoDiario / rendaDiaria * 100)
+                      : 0.0;
+                  final ok = gastoDiario <= rendaDiaria;
+                  return _cardAlerta(
+                    icone: ok ? Icons.trending_down : Icons.trending_up,
+                    cor: ok ? Colors.green : Colors.red,
+                    titulo: 'Gasto diário vs renda diária',
+                    conteudo:
+                        'Gasto médio diário: R\$ ${_formatarValor(gastoDiario)}  •  '
+                        'Renda diária: R\$ ${_formatarValor(rendaDiaria)}',
+                    subtexto: ok
+                        ? 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária. Parabéns!'
+                        : 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária — acima do ideal.',
+                    destaque: !ok,
+                  );
+                },
+              ),
             ],
             const SizedBox(height: 12),
 
@@ -532,65 +588,70 @@ class _InsightsScreenState extends State<InsightsScreen> {
             ),
             const SizedBox(height: 12),
 
-            _cardAlerta(
-              icone: Icons.block,
-              cor: Colors.deepOrange,
-              titulo: 'Gastos evitáveis',
-              conteudo: _totalEvitaveis == 0
-                  ? 'Nenhum gasto evitável registrado no período. Ótimo!'
-                  : 'Você teve ${_formatarValor(_totalEvitaveis)} em gastos que poderiam ter sido evitados.',
-              subtexto: _totalEvitaveis > 0 && _totalPeriodo > 0
-                  ? '${(_totalEvitaveis / _totalPeriodo * 100).toStringAsFixed(1)}% dos seus gastos eram evitáveis.'
-                  : '',
-              destaque: _totalEvitaveis > 0,
+            Builder(
+              builder: (context) {
+                final evitaveisCredito = _totalEvitaveisCartao;
+                final pctTotal = _totalEvitaveis > 0 && _totalPeriodo > 0
+                    ? (_totalEvitaveis / _totalPeriodo * 100)
+                    : 0.0;
+                final pctCredito = _totalCartaoCredito > 0
+                    ? (evitaveisCredito / _totalCartaoCredito * 100)
+                    : 0.0;
+                String subtexto = '';
+                if (_totalEvitaveis > 0 && _totalPeriodo > 0) {
+                  subtexto =
+                      '${pctTotal.toStringAsFixed(1)}% dos seus gastos eram evitáveis.';
+                  if (evitaveisCredito > 0) {
+                    subtexto +=
+                        ' Desses, ${_formatarValor(evitaveisCredito)} (${pctCredito.toStringAsFixed(1)}% do crédito) foram no cartão.';
+                  }
+                }
+                return _cardAlerta(
+                  icone: Icons.block,
+                  cor: Colors.deepOrange,
+                  titulo: 'Gastos evitáveis',
+                  conteudo: _totalEvitaveis == 0
+                      ? 'Nenhum gasto evitável registrado no período. Ótimo!'
+                      : 'Você teve ${_formatarValor(_totalEvitaveis)} em gastos que poderiam ter sido evitados.',
+                  subtexto: subtexto,
+                  destaque: _totalEvitaveis > 0,
+                );
+              },
             ),
-            const SizedBox(height: 20),
-
-            // ── CARTÃO DE CRÉDITO ─────────────────────────────────────────
-            _secaoTitulo('💳 Cartão de Crédito'),
             const SizedBox(height: 12),
 
-            Builder(builder: (context) {
-              final totalCredito = _totalCartaoCredito;
-              final pct = _totalPeriodo > 0 ? totalCredito / _totalPeriodo * 100 : 0.0;
-              final alerta = pct > 60;
-              return _cardInsightComBarra(
-                icone: Icons.credit_card,
-                cor: Colors.indigo,
-                titulo: 'Compras no cartão de crédito',
-                conteudo: _gastosCartaoCredito.isEmpty
-                    ? 'Nenhuma compra no crédito no período.'
-                    : '${_formatarValor(totalCredito)} (${pct.toStringAsFixed(1)}% do total gasto).',
-                percentual: pct.clamp(0, 100) / 100,
-                corBarra: alerta ? Colors.red : pct > 40 ? Colors.orange : Colors.indigo,
-              );
-            }),
-            const SizedBox(height: 12),
-
-            Builder(builder: (context) {
-              final evitaveisCredito = _totalEvitaveisCartao;
-              final totalCredito = _totalCartaoCredito;
-              final pct = totalCredito > 0 ? evitaveisCredito / totalCredito * 100 : 0.0;
-              return _cardAlerta(
-                icone: Icons.credit_card_off,
-                cor: Colors.red,
-                titulo: 'Gastos evitáveis no cartão',
-                conteudo: evitaveisCredito == 0
-                    ? 'Nenhum gasto evitável no crédito. Ótimo!'
-                    : '${_formatarValor(evitaveisCredito)} em gastos evitáveis foram cobrados no cartão de crédito.',
-                subtexto: evitaveisCredito > 0
-                    ? '${pct.toStringAsFixed(1)}% das compras no crédito eram evitáveis — considere pagar à vista ou evitar esses gastos.'
-                    : '',
-                destaque: evitaveisCredito > 0,
-              );
-            }),
+            Builder(
+              builder: (context) {
+                final totalCredito = _totalCartaoCredito;
+                final pct = _totalPeriodo > 0
+                    ? totalCredito / _totalPeriodo * 100
+                    : 0.0;
+                final alerta = pct > 60;
+                return _cardInsightComBarra(
+                  icone: Icons.credit_card,
+                  cor: Colors.indigo,
+                  titulo: 'Compras no cartão de crédito',
+                  conteudo: _gastosCartaoCredito.isEmpty
+                      ? 'Nenhuma compra no crédito no período.'
+                      : '${_formatarValor(totalCredito)} (${pct.toStringAsFixed(1)}% do total gasto).',
+                  percentual: pct.clamp(0, 100) / 100,
+                  corBarra: alerta
+                      ? Colors.red
+                      : pct > 40
+                      ? Colors.orange
+                      : Colors.indigo,
+                );
+              },
+            ),
             const SizedBox(height: 20),
 
             // ── META DE ECONOMIA ─────────────────────────────────────────
             _secaoTitulo('🎯 Meta de Economia'),
             const SizedBox(height: 12),
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -598,7 +659,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   children: [
                     const Text(
                       'Defina sua meta de economia para o período',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -606,7 +670,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         Expanded(
                           child: TextField(
                             controller: _metaController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [CurrencyInputFormatter()],
                             decoration: const InputDecoration(
                               hintText: 'Ex: 500,00',
                               prefixText: 'R\$ ',
@@ -618,8 +685,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         const SizedBox(width: 12),
                         ElevatedButton(
                           onPressed: () {
-                            final valor = double.tryParse(
-                              _metaController.text.replaceAll(',', '.'),
+                            final valor = parseCurrency(
+                              _metaController.text,
                             );
                             if (valor != null && valor > 0) {
                               setState(() => _metaEconomia = valor);
@@ -636,14 +703,18 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         'Economia atual: ${_formatarValor(_economiaAtual)}',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: _economiaAtual >= _metaEconomia ? Colors.green : Colors.red,
+                          color: _economiaAtual >= _metaEconomia
+                              ? Colors.green
+                              : Colors.red,
                         ),
                       ),
                       const SizedBox(height: 8),
                       LinearProgressIndicator(
                         value: (_economiaAtual / _metaEconomia).clamp(0, 1),
                         backgroundColor: Colors.grey[200],
-                        color: _economiaAtual >= _metaEconomia ? Colors.green : Colors.blue,
+                        color: _economiaAtual >= _metaEconomia
+                            ? Colors.green
+                            : Colors.blue,
                         minHeight: 8,
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -652,7 +723,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         _economiaAtual >= _metaEconomia
                             ? '🎉 Meta atingida! Você economizou ${_formatarValor(_economiaAtual)}.'
                             : 'Faltam ${_formatarValor(_metaEconomia - _economiaAtual)} para atingir sua meta.',
-                        style: const TextStyle(fontSize: 13, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ],
@@ -661,44 +735,61 @@ class _InsightsScreenState extends State<InsightsScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ── DICA ─────────────────────────────────────────────────────
-            _secaoTitulo('💡 Dica do Período'),
+            // ── REGRAS FINANCEIRAS ────────────────────────────────────
+            _secaoTitulo('📋 Regras Financeiras'),
             const SizedBox(height: 12),
-            Card(
-              color: Colors.blue[50],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.lightbulb, color: Colors.blue[700], size: 28),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+            Builder(builder: (context) {
+              final regras = calcularRegras(
+                gastos: _gastosPeriodo,
+                receitas: _receitasBox.values
+                    .where((r) => _noperiodo(r.data))
+                    .toList(),
+                gastosAnteriores: _gastosPeriodoAnterior,
+              );
+              if (regras.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
                         children: [
-                          Text(
-                            'Baseado em: $_categoriaMaisGasta',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue[700],
-                              fontSize: 13,
-                            ),
+                          CircleAvatar(
+                            backgroundColor:
+                                Colors.green.withValues(alpha: 0.15),
+                            child: const Icon(Icons.check_circle,
+                                color: Colors.green, size: 22),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _dicasPorCategoria[_categoriaMaisGasta] ??
-                                'Continue monitorando seus gastos para identificar oportunidades de economia.',
-                            style: const TextStyle(fontSize: 14),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Nenhum alerta para o período selecionado. Suas finanças estão equilibradas!',
+                              style:
+                                  TextStyle(fontSize: 13, color: Colors.grey),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
+                );
+              }
+              return Column(
+                children: regras.map((r) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _cardAlerta(
+                      icone: r.icone,
+                      cor: r.cor,
+                      titulo: r.titulo,
+                      conteudo: r.mensagem,
+                      subtexto: '',
+                      destaque: r.destaque,
+                    ),
+                  );
+                }).toList(),
+              );
+            }),
             const SizedBox(height: 24),
           ],
         ),
@@ -707,9 +798,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
   }
 
   Widget _secaoTitulo(String titulo) => Text(
-        titulo,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      );
+    titulo,
+    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  );
 
   Widget _cardInsight({
     required IconData icone,
@@ -733,11 +824,18 @@ class _InsightsScreenState extends State<InsightsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(titulo,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(
+                    titulo,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(conteudo,
-                      style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                  Text(
+                    conteudo,
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
@@ -774,11 +872,21 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(titulo,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        titulo,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text(conteudo,
-                          style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                      Text(
+                        conteudo,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -809,7 +917,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: destaque ? BorderSide(color: cor.withValues(alpha: 0.5), width: 1.5) : BorderSide.none,
+        side: destaque
+            ? BorderSide(color: cor.withValues(alpha: 0.5), width: 1.5)
+            : BorderSide.none,
       ),
       color: destaque ? cor.withValues(alpha: 0.05) : null,
       child: Padding(
@@ -826,11 +936,21 @@ class _InsightsScreenState extends State<InsightsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(titulo,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(
+                    titulo,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(conteudo,
-                      style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                  Text(
+                    conteudo,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: destaque ? Colors.black87 : Colors.grey,
+                    ),
+                  ),
                   if (subtexto.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -838,7 +958,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         color: destaque ? cor : Colors.grey,
-                        fontWeight: destaque ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: destaque
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
                   ],
