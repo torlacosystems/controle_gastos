@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'subscription_service.dart';
 import 'paywall_screen.dart';
 import 'gasto.dart';
@@ -11,6 +12,7 @@ import 'pessoa.dart';
 import 'orcamento.dart';
 import 'backup_screen.dart';
 import 'onboarding_screen.dart';
+import 'setup_wizard_screen.dart';
 import 'configuracoes_screen.dart';
 import 'fade_route.dart';
 import 'app_settings.dart';
@@ -107,13 +109,58 @@ class _ConfiguracoesSistemaScreenState
     final receitasBox = Hive.box<Receita>('receitas');
     final formasBox = Hive.box<FormaPagamento>('formas_pagamento');
     final pessoasBox = Hive.box<Pessoa>('pessoas');
+    final orcamentosBox = Hive.box<Orcamento>('orcamentos');
 
-    // Usa formas/pessoas existentes ou cria genéricas
+    // ── Formas de pagamento ───────────────────────────────────────────────
+    if (formasBox.isEmpty) {
+      final templateFormas = [
+        FormaPagamento(id: 'fp1', descricao: 'Cartão Débito',  tipo: 'Débito',  banco: 'Nubank'),
+        FormaPagamento(id: 'fp2', descricao: 'Cartão Crédito', tipo: 'Crédito', banco: 'Nubank'),
+        FormaPagamento(id: 'fp3', descricao: 'Dinheiro',       tipo: 'Dinheiro',banco: ''),
+        FormaPagamento(id: 'fp4', descricao: 'Pix',            tipo: 'Pix',     banco: 'Nubank'),
+      ];
+      for (final f in templateFormas) { await formasBox.add(f); }
+    }
+
+    // ── Pessoas ───────────────────────────────────────────────────────────
+    if (pessoasBox.isEmpty) {
+      final templatePessoas = [
+        Pessoa(id: 'ps1', nome: 'Eu',       parentesco: 'Eu mesmo'),
+        Pessoa(id: 'ps2', nome: 'Cônjuge',  parentesco: 'Cônjuge'),
+        Pessoa(id: 'ps3', nome: 'Filho(a)', parentesco: 'Filho(a)'),
+      ];
+      for (final p in templatePessoas) { await pessoasBox.add(p); }
+    }
+
+    // ── Orçamentos por categoria ──────────────────────────────────────────
+    if (orcamentosBox.isEmpty) {
+      final templateOrc = {
+        'Moradia':          1800.0,
+        'Mercado':           750.0,
+        'Alimentação':       300.0,
+        'Transporte':        250.0,
+        'Veículo':           400.0,
+        'Saúde':             400.0,
+        'Lazer':             200.0,
+        'Assinaturas':       200.0,
+        'Vestuário':         300.0,
+        'Cuidados Pessoais': 100.0,
+        'Educação':          250.0,
+        'Presentes':         150.0,
+        'Outros':            150.0,
+      };
+      for (final e in templateOrc.entries) {
+        await orcamentosBox.add(Orcamento(
+          id: 'orc_${e.key}',
+          categoria: e.key,
+          limite: e.value,
+        ));
+      }
+    }
+
+    // Usa formas/pessoas cadastradas
     final formas = formasBox.values.map((f) => f.descricao).toList();
-    if (formas.isEmpty) formas.addAll(['Cartão Débito', 'Cartão Crédito', 'Dinheiro', 'Pix']);
-
     final pessoas = pessoasBox.values.map((p) => p.nome).toList();
-    if (pessoas.isEmpty) pessoas.addAll(['Eu', 'Família']);
 
     final rng = Random(42);
     double v(double base) => double.parse((base * (0.85 + rng.nextDouble() * 0.3)).toStringAsFixed(2));
@@ -135,6 +182,9 @@ class _ConfiguracoesSistemaScreenState
       ['Lanche delivery',  'Alimentação',          55.0, 'Variável',false, true,  1],
       ['Combustível',      'Transporte',          180.0, 'Variável',true,  false, 0],
       ['Estacionamento',   'Transporte',           35.0, 'Variável',false, true,  2],
+      ['Revisão do carro', 'Veículo',             350.0, 'Variável',true,  false, 1],
+      ['IPVA',             'Veículo',             280.0, 'Fixo',    true,  false, 0],
+      ['Seguro auto',      'Veículo',             220.0, 'Fixo',    true,  false, 2],
       ['Farmácia',         'Saúde',                70.0, 'Variável',true,  false, 0],
       ['Consulta médica',  'Saúde',               200.0, 'Variável',true,  false, 1],
       ['Academia',         'Saúde',               110.0, 'Fixo',    true,  false, 0],
@@ -258,12 +308,33 @@ class _ConfiguracoesSistemaScreenState
     await Hive.box<Pessoa>('pessoas').clear();
     await Hive.box<Orcamento>('orcamentos').clear();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Todos os dados foram removidos.'),
-          backgroundColor: Colors.red,
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('onboarding_completo');
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 48),
+        title: const Text('Dados removidos'),
+        content: const Text(
+          'Todos os dados foram apagados com sucesso.\n\n'
+          'Você será direcionado ao cadastro inicial para configurar suas formas de pagamento, pessoas e orçamentos.',
         ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Ir para cadastro inicial'),
+          ),
+        ],
+      ),
+    );
+
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        FadeRoute(page: const SetupWizardScreen()),
+        (_) => false,
       );
     }
   }

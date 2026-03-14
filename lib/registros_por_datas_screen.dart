@@ -87,7 +87,7 @@ class _RegistrosPorDatasScreenState extends State<RegistrosPorDatasScreen> {
   }
 
   List<String> get _categoriasGasto {
-    final fixas = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia',
+    final fixas = ['Alimentação', 'Transporte', 'Veículo', 'Saúde', 'Lazer', 'Moradia',
         'Educação', 'Mercado', 'Assinaturas',
         'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();

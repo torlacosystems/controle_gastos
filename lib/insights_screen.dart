@@ -339,7 +339,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
           left: 16,
           right: 16,
           top: 16,
-          bottom: MediaQuery.of(context).padding.bottom + 16,
+          bottom: MediaQuery.of(context).padding.bottom + 80,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -535,25 +535,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
             _secaoTitulo('⚠️ Alertas'),
             const SizedBox(height: 12),
 
-            _cardAlerta(
-              icone: Icons.warning_amber,
-              cor: Colors.orange,
-              titulo: _usarMediaMensal
-                  ? 'Média mensal de gastos'
-                  : 'Média diária de gastos',
-              conteudo:
-                  'Sua média ${_usarMediaMensal ? 'mensal' : 'diária'} no período é ${_formatarValor(_mediaGastos)}.',
-              subtexto: _usarMediaMensal
-                  ? (_mediaGastos > 1500
-                        ? 'Atenção: média acima de R\$ 1.500,00 por mês.'
-                        : 'Sua média mensal está controlada.')
-                  : (_mediaGastos > 50
-                        ? 'Atenção: média acima de R\$ 50,00 por dia.'
-                        : 'Sua média diária está controlada.'),
-              destaque: _usarMediaMensal
-                  ? _mediaGastos > 1500
-                  : _mediaGastos > 50,
-            ),
             if (_rendaMensal != null && _rendaMensal! > 0) ...[
               const SizedBox(height: 12),
               Builder(
@@ -571,8 +552,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
                     cor: ok ? Colors.green : Colors.red,
                     titulo: 'Gasto diário vs renda diária',
                     conteudo:
-                        'Gasto médio diário: R\$ ${_formatarValor(gastoDiario)}  •  '
-                        'Renda diária: R\$ ${_formatarValor(rendaDiaria)}',
+                        'Gasto médio diário: ${_formatarValor(gastoDiario)}  •  '
+                        'Renda diária: ${_formatarValor(rendaDiaria)}',
                     subtexto: ok
                         ? 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária. Parabéns!'
                         : 'Você está gastando ${pct.toStringAsFixed(1)}% da sua renda diária — acima do ideal.',

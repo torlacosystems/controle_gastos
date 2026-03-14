@@ -47,7 +47,8 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
   final List<Map<String, dynamic>> _categoriasGasto = [
     {'nome': 'Alimentação', 'icone': Icons.restaurant},
     {'nome': 'Mercado', 'icone': Icons.shopping_cart},
-    {'nome': 'Transporte', 'icone': Icons.directions_car},
+    {'nome': 'Transporte', 'icone': Icons.directions_bus},
+    {'nome': 'Veículo', 'icone': Icons.directions_car},
     {'nome': 'Saúde', 'icone': Icons.health_and_safety},
     {'nome': 'Lazer', 'icone': Icons.movie},
     {'nome': 'Moradia', 'icone': Icons.home},

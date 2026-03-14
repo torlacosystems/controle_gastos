@@ -40,6 +40,19 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
   String _tipoFiltro = 'todos';
   bool _filtroParcelado = false;
 
+  // Filtros avançados - gastos
+  bool? _filtroEsperado;
+  bool? _filtroRecorrenteGasto;
+  bool? _filtroEvitavel;
+  String? _filtroCategoriaGasto;
+  String? _filtroTipoGasto;
+  String? _filtroPessoa;
+  String? _filtroForma;
+  // Filtros avançados - receitas
+  String? _filtroCategoriaReceita;
+  String? _filtroTipoReceita;
+  bool? _filtroRecorrenteReceita;
+
   final List<String> _nomesMeses = [
     'Janeiro',
     'Fevereiro',
@@ -89,6 +102,8 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
       case 'Alimentação':
         return Icons.restaurant;
       case 'Transporte':
+        return Icons.directions_bus;
+      case 'Veículo':
         return Icons.directions_car;
       case 'Saúde':
         return Icons.health_and_safety;
@@ -126,6 +141,33 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
         );
         return custom?.icone ?? Icons.category;
     }
+  }
+
+  bool get _filtrosAtivos =>
+      _filtroEsperado != null ||
+      _filtroRecorrenteGasto != null ||
+      _filtroEvitavel != null ||
+      _filtroCategoriaGasto != null ||
+      _filtroTipoGasto != null ||
+      _filtroPessoa != null ||
+      _filtroForma != null ||
+      _filtroCategoriaReceita != null ||
+      _filtroTipoReceita != null ||
+      _filtroRecorrenteReceita != null;
+
+  void _limparFiltros() {
+    setState(() {
+      _filtroEsperado = null;
+      _filtroRecorrenteGasto = null;
+      _filtroEvitavel = null;
+      _filtroCategoriaGasto = null;
+      _filtroTipoGasto = null;
+      _filtroPessoa = null;
+      _filtroForma = null;
+      _filtroCategoriaReceita = null;
+      _filtroTipoReceita = null;
+      _filtroRecorrenteReceita = null;
+    });
   }
 
   List<Map<String, int>> get _mesesDisponiveis {
@@ -187,7 +229,14 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             g.estabelecimento,
           );
           final parceladoBateu = !_filtroParcelado || g.parcelado;
-          if (mesBateu && buscaBateu && parceladoBateu) {
+          final esperadoBateu = _filtroEsperado == null || g.gastoEsperado == _filtroEsperado;
+          final recGastoBateu = _filtroRecorrenteGasto == null || g.recorrente == _filtroRecorrenteGasto;
+          final evitavelBateu = _filtroEvitavel == null || g.gastoEvitavel == _filtroEvitavel;
+          final catGastoBateu = _filtroCategoriaGasto == null || g.categoria == _filtroCategoriaGasto;
+          final tipoGastoBateu = _filtroTipoGasto == null || g.tipoGasto == _filtroTipoGasto;
+          final pessoaBateu = _filtroPessoa == null || g.pessoa == _filtroPessoa;
+          final formaBateu = _filtroForma == null || g.formaPagamento == _filtroForma;
+          if (mesBateu && buscaBateu && parceladoBateu && esperadoBateu && recGastoBateu && evitavelBateu && catGastoBateu && tipoGastoBateu && pessoaBateu && formaBateu) {
             itens.add({'tipo': 'gasto', 'item': g, 'index': i});
           }
         }
@@ -208,7 +257,10 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
             '',
             '',
           );
-          if (mesBateu && buscaBateu) {
+          final catReceitaBateu = _filtroCategoriaReceita == null || r.categoria == _filtroCategoriaReceita;
+          final tipoReceitaBateu = _filtroTipoReceita == null || r.tipoReceita == _filtroTipoReceita;
+          final recReceitaBateu = _filtroRecorrenteReceita == null || r.recorrente == _filtroRecorrenteReceita;
+          if (mesBateu && buscaBateu && catReceitaBateu && tipoReceitaBateu && recReceitaBateu) {
             itens.add({'tipo': 'receita', 'item': r, 'index': i});
           }
         }
@@ -351,7 +403,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     final categoriasReceita = ['Salário', 'Freelance', 'Investimento', 'Aluguel', 'Presente', 'Benefício', 'Outros'];
 
     // Gasto categories
-    final fixasSemOutros = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
+    final fixasSemOutros = ['Alimentação', 'Transporte', 'Veículo', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = categoriasBox.values.map((c) => c.nome).toList()..sort();
     final categoriasGasto = [...fixasSemOutros, ...custom, 'Outros'];
 
@@ -902,6 +954,150 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     });
   }
 
+  void _mostrarFiltrosAvancados() {
+    final formas = _formasPagamentoBox.values.map((f) => f.descricao).toList();
+    final pessoas = _pessoasBox.values.toList()
+      ..sort((a, b) {
+        if (a.parentesco == 'Eu Mesmo') return -1;
+        if (b.parentesco == 'Eu Mesmo') return 1;
+        return a.nome.compareTo(b.nome);
+      });
+    final nomesPessoas = pessoas.map((p) => p.nome).toList();
+
+    final fixasSemOutros = ['Alimentação', 'Transporte', 'Veículo', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
+    final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();
+    final catGastos = [...fixasSemOutros, ...custom, 'Outros'];
+    const catReceitas = ['Salário', 'Freelance', 'Investimento', 'Aluguel', 'Presente', 'Benefício', 'Outros'];
+
+    final mostrarGasto = _tipoFiltro != 'receita';
+    final mostrarReceita = _tipoFiltro != 'gasto';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          Widget dropdownStr(String label, String? value, List<String> options, void Function(String?) onChanged) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  value: value,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: '— todos —',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— todos —')),
+                    ...options.map((o) => DropdownMenuItem(value: o, child: Text(o))),
+                  ],
+                  onChanged: onChanged,
+                ),
+                const SizedBox(height: 12),
+              ],
+            );
+          }
+
+          Widget dropdownBool(String label, bool? value, String trueLabel, String falseLabel, void Function(bool?) onChanged) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                DropdownButtonFormField<bool>(
+                  isExpanded: true,
+                  value: value,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: '— todos —',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— todos —')),
+                    DropdownMenuItem(value: true, child: Text(trueLabel)),
+                    DropdownMenuItem(value: false, child: Text(falseLabel)),
+                  ],
+                  onChanged: onChanged,
+                ),
+                const SizedBox(height: 12),
+              ],
+            );
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20,
+              MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Filtros avançados',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setState(_limparFiltros);
+                          setSheet(() {});
+                        },
+                        child: const Text('Limpar tudo'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (mostrarGasto) ...[
+                    Text('Gastos', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[700])),
+                    const Divider(height: 16),
+                    dropdownStr('Categoria', _filtroCategoriaGasto, catGastos, (v) { setState(() => _filtroCategoriaGasto = v); setSheet(() {}); }),
+                    dropdownStr('Tipo de gasto', _filtroTipoGasto, ['Fixo', 'Variável'], (v) { setState(() => _filtroTipoGasto = v); setSheet(() {}); }),
+                    if (nomesPessoas.isNotEmpty)
+                      dropdownStr('Pessoa', _filtroPessoa, nomesPessoas, (v) { setState(() => _filtroPessoa = v); setSheet(() {}); }),
+                    if (formas.isNotEmpty)
+                      dropdownStr('Forma de pagamento', _filtroForma, formas, (v) { setState(() => _filtroForma = v); setSheet(() {}); }),
+                    dropdownBool('Esperado', _filtroEsperado, 'Esperado', 'Não esperado', (v) { setState(() => _filtroEsperado = v); setSheet(() {}); }),
+                    dropdownBool('Recorrente', _filtroRecorrenteGasto, 'Recorrente', 'Não recorrente', (v) { setState(() => _filtroRecorrenteGasto = v); setSheet(() {}); }),
+                    dropdownBool('Evitável', _filtroEvitavel, 'Evitável', 'Não evitável', (v) { setState(() => _filtroEvitavel = v); setSheet(() {}); }),
+                  ],
+
+                  if (mostrarReceita) ...[
+                    if (mostrarGasto) const SizedBox(height: 8),
+                    Text('Receitas', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green[700])),
+                    const Divider(height: 16),
+                    dropdownStr('Categoria', _filtroCategoriaReceita, catReceitas, (v) { setState(() => _filtroCategoriaReceita = v); setSheet(() {}); }),
+                    dropdownStr('Tipo de receita', _filtroTipoReceita, ['Fixo', 'Variável'], (v) { setState(() => _filtroTipoReceita = v); setSheet(() {}); }),
+                    dropdownBool('Recorrência', _filtroRecorrenteReceita, 'Recorrente', 'Não recorrente', (v) { setState(() => _filtroRecorrenteReceita = v); setSheet(() {}); }),
+                  ],
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Aplicar'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final itens = _todosItens;
@@ -930,7 +1126,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                     ),
                     onChanged: (v) => setState(() => _termoBusca = v),
                   )
-                : const Text('Todos os Registros'),
+                : const Text('Registros'),
         actions: [
           if (_modoSelecao) ...[
             if (_tipoSelecao != null)
@@ -1014,6 +1210,14 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
               tooltip: 'Filtrar por mês',
               onPressed: _mostrarFiltroMes,
             ),
+            IconButton(
+              icon: Icon(
+                Icons.tune,
+                color: _filtrosAtivos ? Colors.yellowAccent : Colors.white,
+              ),
+              tooltip: 'Filtros avançados',
+              onPressed: _mostrarFiltrosAvancados,
+            ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
               tooltip: 'Exportar CSV',
@@ -1056,19 +1260,14 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey[100],
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _chipTipo('Todos', 'todos', Colors.blueGrey),
-                  const SizedBox(width: 8),
-                  _chipTipo('Gastos', 'gasto', Colors.red),
-                  const SizedBox(width: 8),
-                  _chipTipo('Receitas', 'receita', Colors.green),
-                  const SizedBox(width: 8),
-                  _chipParcelado(),
-                ],
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _chipTipo('Todos', 'todos', Colors.blueGrey),
+                _chipTipo('Gastos', 'gasto', Colors.red),
+                _chipTipo('Receitas', 'receita', Colors.green),
+                _chipParcelado(),
+              ],
             ),
           ),
 
@@ -1127,6 +1326,29 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                       _anoFiltro = null;
                     }),
                     child: Icon(Icons.close, size: 16, color: primary),
+                  ),
+                ],
+              ),
+            ),
+
+          if (_filtrosAtivos)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.indigo.withValues(alpha: 0.08),
+              child: Row(
+                children: [
+                  const Icon(Icons.tune, size: 16, color: Colors.indigo),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Filtros ativos  •  ${itens.length} resultado(s)',
+                      style: const TextStyle(fontSize: 13, color: Colors.indigo, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _limparFiltros,
+                    child: const Icon(Icons.close, size: 16, color: Colors.indigo),
                   ),
                 ],
               ),

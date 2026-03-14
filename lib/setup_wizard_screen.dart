@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'forma_pagamento.dart';
 import 'pessoa.dart';
@@ -43,6 +44,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   final _gastoDescCtrl = TextEditingController();
   final _gastoValorCtrl = TextEditingController();
   String _gastoCategoria = 'Alimentação';
+  int _gastoDiaMes = 1;
+  int _mesesGastosFixos = 1;
   final List<Map<String, dynamic>> _gastosFixos = [];
 
   // Step 5 – receitas fixas mensais
@@ -50,6 +53,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   final _receitaDescCtrl = TextEditingController();
   final _receitaValorCtrl = TextEditingController();
   String _receitaCategoria = 'Salário';
+  int _receitaDiaMes = 1;
+  int _mesesReceitasFixas = 1;
   final List<Map<String, dynamic>> _receitasFixas = [];
 
   static const _categoriasReceita = [
@@ -69,7 +74,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   static const List<Map<String, dynamic>> _categorias = [
     {'nome': 'Alimentação',       'icone': Icons.restaurant},
     {'nome': 'Mercado',           'icone': Icons.shopping_cart},
-    {'nome': 'Transporte',        'icone': Icons.directions_car},
+    {'nome': 'Transporte',        'icone': Icons.directions_bus},
+    {'nome': 'Veículo',           'icone': Icons.directions_car},
     {'nome': 'Saúde',             'icone': Icons.health_and_safety},
     {'nome': 'Lazer',             'icone': Icons.movie},
     {'nome': 'Moradia',           'icone': Icons.home},
@@ -134,14 +140,148 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     _irPara(step);
   }
 
+  Future<int> _dialogReplicarMeses(String descricao) async {
+    int mesesTemp = 1;
+    final res = await showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSD) => AlertDialog(
+          title: const Text('Replicar lançamentos fixos'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Por quantos meses deseja criar os $descricao cadastrados?',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: mesesTemp > 1 ? () => setSD(() => mesesTemp--) : null,
+                  ),
+                  Column(
+                    children: [
+                      Text('$mesesTemp',
+                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                      const Text('meses', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: mesesTemp < 24 ? () => setSD(() => mesesTemp++) : null,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 1),
+              child: const Text('Só este mês'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, mesesTemp),
+              child: Text('Replicar $mesesTemp ${mesesTemp == 1 ? 'mês' : 'meses'}'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return res ?? 1;
+  }
+
+  Future<void> _avancarDeGastosFixos() async {
+    if (_gastoDescCtrl.text.trim().isNotEmpty) _adicionarGastoFixo();
+    if (_gastosFixos.isNotEmpty) {
+      _mesesGastosFixos = await _dialogReplicarMeses('gastos fixos');
+    }
+    if (mounted) _irPara(5);
+  }
+
+  Future<void> _avancarDeReceitasFixas() async {
+    if (_receitaDescCtrl.text.trim().isNotEmpty) _adicionarReceitaFixa();
+    if (_receitasFixas.isNotEmpty) {
+      _mesesReceitasFixas = await _dialogReplicarMeses('receitas fixas');
+    }
+    if (mounted) _irPara(6);
+  }
+
+  Future<void> _selecionarDiaMes({
+    required int diaAtual,
+    required void Function(int) onSelecionado,
+  }) async {
+    final cor = Theme.of(context).colorScheme.primary;
+    final selecionado = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dia do mês', textAlign: TextAlign.center),
+        contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        content: SizedBox(
+          width: 280,
+          child: GridView.builder(
+            shrinkWrap: true,
+            itemCount: 31,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+              childAspectRatio: 1,
+            ),
+            itemBuilder: (ctx, i) {
+              final dia = i + 1;
+              final isSelected = dia == diaAtual;
+              return InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => Navigator.pop(ctx, dia),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isSelected ? cor : cor.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$dia',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Colors.white : null,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (selecionado != null) onSelecionado(selecionado);
+  }
+
+  bool get _temOrcamentoDefinido => _categorias.any((cat) {
+        final texto = _limiteCtrl[cat['nome'] as String]?.text.trim() ?? '';
+        final valor = double.tryParse(texto.replaceAll('.', '').replaceAll(',', '.'));
+        return valor != null && valor > 0;
+      });
+
   void _adicionarGastoFixo() {
     final desc = _gastoDescCtrl.text.trim();
     final valor = parseCurrency(_gastoValorCtrl.text);
     if (desc.isEmpty || valor == null || valor <= 0) return;
     setState(() {
-      _gastosFixos.add({'descricao': desc, 'valor': valor, 'categoria': _gastoCategoria});
+      _gastosFixos.add({'descricao': desc, 'valor': valor, 'categoria': _gastoCategoria, 'dia': _gastoDiaMes});
       _gastoDescCtrl.clear();
       _gastoValorCtrl.clear();
+      _gastoDiaMes = 1;
     });
   }
 
@@ -150,9 +290,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     final valor = parseCurrency(_receitaValorCtrl.text);
     if (desc.isEmpty || valor == null || valor <= 0) return;
     setState(() {
-      _receitasFixas.add({'descricao': desc, 'valor': valor, 'categoria': _receitaCategoria});
+      _receitasFixas.add({'descricao': desc, 'valor': valor, 'categoria': _receitaCategoria, 'dia': _receitaDiaMes});
       _receitaDescCtrl.clear();
       _receitaValorCtrl.clear();
+      _receitaDiaMes = 1;
     });
   }
 
@@ -205,40 +346,47 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     }
 
     // Salva gastos fixos mensais
+    final now = DateTime.now();
     for (int i = 0; i < _gastosFixos.length; i++) {
       final item = _gastosFixos[i];
-      await _gastosBox.add(Gasto(
-        id: 'setup_gasto_${DateTime.now().millisecondsSinceEpoch}_$i',
-        descricao: item['descricao'] as String,
-        valor: item['valor'] as double,
-        categoria: item['categoria'] as String,
-        data: DateTime.now(),
-        formaPagamento: _formasAdicionadas.isNotEmpty ? _formasAdicionadas.first.descricao : '',
-        pessoa: nomeUsuario.isNotEmpty ? nomeUsuario : '',
-        tipoGasto: 'Fixo',
-        parcelado: false,
-        numeroParcelas: 1,
-        estabelecimento: '',
-        recorrente: true,
-        gastoEsperado: true,
-        detalhado: true,
-      ));
+      final dia = (item['dia'] as int?) ?? 1;
+      for (int m = 0; m < _mesesGastosFixos; m++) {
+        await _gastosBox.add(Gasto(
+          id: 'setup_gasto_${DateTime.now().millisecondsSinceEpoch}_${i}_$m',
+          descricao: item['descricao'] as String,
+          valor: item['valor'] as double,
+          categoria: item['categoria'] as String,
+          data: DateTime(now.year, now.month + m, dia),
+          formaPagamento: _formasAdicionadas.isNotEmpty ? _formasAdicionadas.first.descricao : '',
+          pessoa: nomeUsuario.isNotEmpty ? nomeUsuario : '',
+          tipoGasto: 'Fixo',
+          parcelado: false,
+          numeroParcelas: 1,
+          estabelecimento: '',
+          recorrente: true,
+          gastoEsperado: true,
+          detalhado: true,
+        ));
+      }
     }
 
     // Salva receitas fixas mensais
     for (int i = 0; i < _receitasFixas.length; i++) {
       final item = _receitasFixas[i];
-      await _receitasBox.add(Receita(
-        id: 'setup_receita_${DateTime.now().millisecondsSinceEpoch}_$i',
-        descricao: item['descricao'] as String,
-        valor: item['valor'] as double,
-        categoria: item['categoria'] as String,
-        data: DateTime.now(),
-        pessoa: nomeUsuario.isNotEmpty ? nomeUsuario : '',
-        recorrente: true,
-        tipoReceita: 'Fixo',
-        detalhado: true,
-      ));
+      final dia = (item['dia'] as int?) ?? 1;
+      for (int m = 0; m < _mesesReceitasFixas; m++) {
+        await _receitasBox.add(Receita(
+          id: 'setup_receita_${DateTime.now().millisecondsSinceEpoch}_${i}_$m',
+          descricao: item['descricao'] as String,
+          valor: item['valor'] as double,
+          categoria: item['categoria'] as String,
+          data: DateTime(now.year, now.month + m, dia),
+          pessoa: nomeUsuario.isNotEmpty ? nomeUsuario : '',
+          recorrente: true,
+          tipoReceita: 'Fixo',
+          detalhado: true,
+        ));
+      }
     }
 
     // Salva orçamentos por categoria
@@ -271,33 +419,52 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // ── Barra de progresso (steps 1, 2 e 3) ──
+            // ── Barra de progresso + voltar (steps 1–5) ──
             if (_step >= 1 && _step <= 5)
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      children: List.generate(5, (i) {
-                        final done = i < _step - 1;
-                        final active = i == _step - 1;
-                        return Expanded(
-                          child: Container(
-                            margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: done || active ? cor : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(3),
-                            ),
+                      children: [
+                        IconButton(
+                          onPressed: () => _irPara(_step - 1),
+                          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+                          color: Colors.grey[600],
+                          tooltip: 'Voltar',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: List.generate(5, (i) {
+                                  final done = i < _step - 1;
+                                  final active = i == _step - 1;
+                                  return Expanded(
+                                    child: Container(
+                                      margin: EdgeInsets.only(right: i < 4 ? 6 : 0),
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: done || active ? cor : Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Passo $_step de 5',
+                                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                              ),
+                            ],
                           ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Passo $_step de 5',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -373,6 +540,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             autofocus: true,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 20),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r"[a-zA-ZÀ-ÿ\s]")),
+            ],
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: 'Seu nome',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -384,15 +555,11 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 52,
             child: FilledButton(
-              onPressed: () => _irPara(1),
+              onPressed: _nomeUsuarioCtrl.text.trim().isNotEmpty
+                  ? () => _irPara(1)
+                  : null,
               child: const Text('Continuar', style: TextStyle(fontSize: 16)),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: _concluir,
-            child: Text('Configurar depois',
-                style: TextStyle(color: Colors.grey[500])),
           ),
           const SizedBox(height: 24),
         ],
@@ -455,10 +622,26 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                         style: const TextStyle(fontSize: 13)),
                     subtitle: Text('${e.value.tipo} • ${e.value.banco}',
                         style: const TextStyle(fontSize: 11)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () =>
-                          setState(() => _formasAdicionadas.removeAt(e.key)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: 'Editar',
+                          onPressed: () => setState(() {
+                            _descricaoCtrl.text = e.value.descricao;
+                            _tipoSelecionado = e.value.tipo;
+                            _bancoCtrl.text = e.value.banco;
+                            _formasAdicionadas.removeAt(e.key);
+                          }),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Remover',
+                          onPressed: () =>
+                              setState(() => _formasAdicionadas.removeAt(e.key)),
+                        ),
+                      ],
                     ),
                   ),
                 )),
@@ -546,9 +729,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => _irPara(2),
+              onPressed: _formasAdicionadas.isNotEmpty ? null : () => _irPara(2),
               child: Text('Pular esta etapa',
-                  style: TextStyle(color: Colors.grey[500])),
+                  style: TextStyle(color: _formasAdicionadas.isNotEmpty ? Colors.grey[300] : Colors.grey[500])),
             ),
           ),
         ],
@@ -634,6 +817,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                       controller: _limiteCtrl[nome],
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [CurrencyInputFormatter()],
+                      onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         labelText: nome,
                         hintText: 'Limite mensal',
@@ -660,9 +844,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => _irPara(3),
+              onPressed: _temOrcamentoDefinido ? null : () => _irPara(3),
               child: Text('Pular esta etapa',
-                  style: TextStyle(color: Colors.grey[500])),
+                  style: TextStyle(color: _temOrcamentoDefinido ? Colors.grey[300] : Colors.grey[500])),
             ),
           ),
         ],
@@ -741,10 +925,25 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                         style: const TextStyle(fontSize: 13)),
                     subtitle: Text(e.value.parentesco,
                         style: const TextStyle(fontSize: 11)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () =>
-                          setState(() => _pessoasAdicionadas.removeAt(e.key)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: 'Editar',
+                          onPressed: () => setState(() {
+                            _pessoaNomeCtrl.text = e.value.nome;
+                            _parentescoSelecionado = e.value.parentesco;
+                            _pessoasAdicionadas.removeAt(e.key);
+                          }),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Remover',
+                          onPressed: () =>
+                              setState(() => _pessoasAdicionadas.removeAt(e.key)),
+                        ),
+                      ],
                     ),
                   ),
                 )),
@@ -814,9 +1013,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => _irPara(4),
+              onPressed: _pessoasAdicionadas.isNotEmpty ? null : () => _irPara(4),
               child: Text('Pular esta etapa',
-                  style: TextStyle(color: Colors.grey[500])),
+                  style: TextStyle(color: _pessoasAdicionadas.isNotEmpty ? Colors.grey[300] : Colors.grey[500])),
             ),
           ),
         ],
@@ -894,12 +1093,30 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                     title: Text(e.value['descricao'] as String,
                         style: const TextStyle(fontSize: 13)),
                     subtitle: Text(
-                        '${e.value['categoria']} • R\$ ${formatarValorParaCampo(e.value['valor'] as double)}',
+                        '${e.value['categoria']} • R\$ ${formatarValorParaCampo(e.value['valor'] as double)} • dia ${e.value['dia'] ?? 1}',
                         style: const TextStyle(fontSize: 11)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () =>
-                          setState(() => _gastosFixos.removeAt(e.key)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: 'Editar',
+                          onPressed: () => setState(() {
+                            final item = _gastosFixos[e.key];
+                            _gastoDescCtrl.text = item['descricao'] as String;
+                            _gastoValorCtrl.text = formatarValorParaCampo(item['valor'] as double);
+                            _gastoCategoria = item['categoria'] as String;
+                            _gastoDiaMes = (item['dia'] as int?) ?? 1;
+                            _gastosFixos.removeAt(e.key);
+                          }),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Remover',
+                          onPressed: () =>
+                              setState(() => _gastosFixos.removeAt(e.key)),
+                        ),
+                      ],
                     ),
                   ),
                 )),
@@ -949,6 +1166,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                       const SizedBox(width: 10),
                       Expanded(
                         child: DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: _gastoCategoria,
                           decoration: const InputDecoration(
                             labelText: 'Categoria',
@@ -966,6 +1184,43 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 10),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _selecionarDiaMes(
+                      diaAtual: _gastoDiaMes,
+                      onSelecionado: (d) => setState(() => _gastoDiaMes = d),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.event_repeat, size: 16, color: Colors.grey),
+                          const SizedBox(width: 6),
+                          const Expanded(
+                            child: Text('Dia do mês:', style: TextStyle(fontSize: 13)),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Dia $_gastoDiaMes',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
@@ -986,7 +1241,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 50,
             child: FilledButton(
-              onPressed: () => _avancar(5),
+              onPressed: _avancarDeGastosFixos,
               child: const Text('Próximo: Receitas Mensais',
                   style: TextStyle(fontSize: 15)),
             ),
@@ -994,9 +1249,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => _irPara(5),
+              onPressed: _gastosFixos.isNotEmpty ? null : () => _irPara(5),
               child: Text('Pular esta etapa',
-                  style: TextStyle(color: Colors.grey[500])),
+                  style: TextStyle(color: _gastosFixos.isNotEmpty ? Colors.grey[300] : Colors.grey[500])),
             ),
           ),
         ],
@@ -1074,12 +1329,30 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                     title: Text(e.value['descricao'] as String,
                         style: const TextStyle(fontSize: 13)),
                     subtitle: Text(
-                        '${e.value['categoria']} • R\$ ${formatarValorParaCampo(e.value['valor'] as double)}',
+                        '${e.value['categoria']} • R\$ ${formatarValorParaCampo(e.value['valor'] as double)} • dia ${e.value['dia'] ?? 1}',
                         style: const TextStyle(fontSize: 11)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () =>
-                          setState(() => _receitasFixas.removeAt(e.key)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: 'Editar',
+                          onPressed: () => setState(() {
+                            final item = _receitasFixas[e.key];
+                            _receitaDescCtrl.text = item['descricao'] as String;
+                            _receitaValorCtrl.text = formatarValorParaCampo(item['valor'] as double);
+                            _receitaCategoria = item['categoria'] as String;
+                            _receitaDiaMes = (item['dia'] as int?) ?? 1;
+                            _receitasFixas.removeAt(e.key);
+                          }),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Remover',
+                          onPressed: () =>
+                              setState(() => _receitasFixas.removeAt(e.key)),
+                        ),
+                      ],
                     ),
                   ),
                 )),
@@ -1147,6 +1420,43 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                       ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _selecionarDiaMes(
+                      diaAtual: _receitaDiaMes,
+                      onSelecionado: (d) => setState(() => _receitaDiaMes = d),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.event_repeat, size: 16, color: Colors.grey),
+                          const SizedBox(width: 6),
+                          const Expanded(
+                            child: Text('Dia do mês:', style: TextStyle(fontSize: 13)),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Dia $_receitaDiaMes',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
@@ -1166,7 +1476,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
             width: double.infinity,
             height: 50,
             child: FilledButton(
-              onPressed: () => _avancar(6),
+              onPressed: _avancarDeReceitasFixas,
               child: const Text('Concluir configuração',
                   style: TextStyle(fontSize: 15)),
             ),
@@ -1174,9 +1484,9 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           const SizedBox(height: 12),
           Center(
             child: TextButton(
-              onPressed: () => _irPara(6),
+              onPressed: _receitasFixas.isNotEmpty ? null : () => _irPara(6),
               child: Text('Pular esta etapa',
-                  style: TextStyle(color: Colors.grey[500])),
+                  style: TextStyle(color: _receitasFixas.isNotEmpty ? Colors.grey[300] : Colors.grey[500])),
             ),
           ),
         ],

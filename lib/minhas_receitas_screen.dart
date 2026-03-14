@@ -5,7 +5,6 @@ import 'receita.dart';
 import 'main.dart';
 import 'fade_route.dart';
 import 'multiplas_receitas_screen.dart';
-import 'pessoa.dart';
 import 'registros_por_datas_screen.dart';
 
 class MinhasReceitasScreen extends StatefulWidget {
@@ -17,7 +16,7 @@ class MinhasReceitasScreen extends StatefulWidget {
 
 class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
   late Box<Receita> _receitasBox;
-  late Box<Pessoa> _pessoasBox;
+
   StreamSubscription? _receitasSubscription;
   bool _filtroNaoDetalhado = false;
   final TextEditingController _buscaController = TextEditingController();
@@ -37,7 +36,7 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
   void initState() {
     super.initState();
     _receitasBox = Hive.box<Receita>('receitas');
-    _pessoasBox = Hive.box<Pessoa>('pessoas');
+
     _receitasSubscription = _receitasBox.watch().listen((_) { if (mounted) setState(() {}); });
   }
 
@@ -155,19 +154,10 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
   }
 
   Future<void> _editarEmMassa() async {
-    final pessoas = _pessoasBox.values.toList()
-      ..sort((a, b) {
-        if (a.parentesco == 'Eu Mesmo') return -1;
-        if (b.parentesco == 'Eu Mesmo') return 1;
-        return a.nome.compareTo(b.nome);
-      });
-    final nomesPessoas = pessoas.map((p) => p.nome).toList();
-
     final categoriasReceita = ['Salário', 'Freelance', 'Investimento', 'Aluguel', 'Presente', 'Benefício', 'Outros'];
 
     String? novaCategoria;
     String? novoTipo;
-    String? novaPessoa;
     bool? novoRecorrente;
 
     await showModalBottomSheet(
@@ -198,27 +188,6 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 20),
-
-                  // Pessoa
-                  if (nomesPessoas.isNotEmpty) ...[
-                    const Text('Pessoa', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      key: const ValueKey('pessoa'),
-                      initialValue: novaPessoa,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: '— sem alteração —',
-                        isDense: true,
-                      ),
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('— sem alteração —')),
-                        ...nomesPessoas.map((p) => DropdownMenuItem(value: p, child: Text(p))),
-                      ],
-                      onChanged: (v) => setSheet(() => novaPessoa = v),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
 
                   // Categoria
                   const Text('Categoria', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -283,7 +252,7 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
                     width: double.infinity,
                     height: 48,
                     child: FilledButton(
-                      onPressed: (novaCategoria == null && novoTipo == null && novaPessoa == null && novoRecorrente == null)
+                      onPressed: (novaCategoria == null && novoTipo == null && novoRecorrente == null)
                           ? null
                           : () => Navigator.pop(ctx, true),
                       child: const Text('Aplicar alterações'),
@@ -303,7 +272,6 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
         final r = item['item'] as Receita;
         if (!_selecionados.contains(r.id)) continue;
         final idx = item['index'] as int;
-        final pessoaFinal = novaPessoa ?? r.pessoa;
         final categoriaFinal = novaCategoria ?? r.categoria;
         final novoDetalhado = r.detalhado ||
             r.descricao.trim().isNotEmpty;
@@ -313,7 +281,7 @@ class _MinhasReceitasScreenState extends State<MinhasReceitasScreen> {
           valor: r.valor,
           categoria: categoriaFinal,
           data: r.data,
-          pessoa: pessoaFinal,
+          pessoa: r.pessoa,
           recorrente: novoRecorrente ?? r.recorrente,
           tipoReceita: novoTipo ?? r.tipoReceita,
           detalhado: novoDetalhado,

@@ -180,7 +180,7 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
       });
     final nomesPessoas = pessoas.map((p) => p.nome).toList();
 
-    final fixasSemOutros = ['Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
+    final fixasSemOutros = ['Alimentação', 'Transporte', 'Veículo', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();
     final categorias = [...fixasSemOutros, ...custom, 'Outros'];
 
@@ -614,9 +614,12 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
                             ],
                           ),
                           subtitle: Text(
-                            g.categoria.isNotEmpty && g.categoria != 'Outros'
-                                ? '${_formatarData(g.data)} • ${g.categoria}'
-                                : _formatarData(g.data),
+                            [
+                              _formatarData(g.data),
+                              if (g.categoria.isNotEmpty && g.categoria != 'Outros') g.categoria,
+                              if (g.formaPagamento.isNotEmpty) g.formaPagamento,
+                              if (g.pessoa.isNotEmpty) g.pessoa,
+                            ].join(' • '),
                           ),
                           trailing: _modoSelecao
                               ? null

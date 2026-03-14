@@ -166,7 +166,6 @@ class _HomeScreenState extends State<HomeScreen> {
   late Box<Orcamento> _orcamentosBox;
   StreamSubscription? _gastosSubscription;
   StreamSubscription? _receitasSubscription;
-  double? _rendaMensal;
   final TextEditingController _buscaHomeController = TextEditingController();
 
   static final _widgetChannel = MethodChannel('com.example.controle_gastos/widget');
@@ -181,9 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
     _gastosSubscription = _gastosBox.watch().listen((_) { if (mounted) setState(() {}); });
     _receitasSubscription = _receitasBox.watch().listen((_) { if (mounted) setState(() {}); });
-    carregarRendaMensal().then((v) {
-      if (mounted && v != null) setState(() => _rendaMensal = v);
-    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final service = SubscriptionService.instance;
       if (!service.isTrialActive && !service.isSubscriptionActive) {
@@ -259,7 +256,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const Map<String, String> _dicasPorCategoria = {
     'Alimentação': 'Tente cozinhar mais em casa. Pode economizar até 40% comparado a comer fora.',
+    'Mercado': 'Faça listas de compras antes de ir ao mercado e evite compras por impulso.',
     'Transporte': 'Considere caronas compartilhadas ou transporte público para reduzir custos.',
+    'Veículo': 'Mantenha revisões em dia para evitar gastos maiores com manutenção. Compare preços de combustível na região.',
     'Lazer': 'Busque opções gratuitas de lazer como parques, eventos culturais e afins.',
     'Saúde': 'Mantenha hábitos preventivos para evitar gastos maiores no futuro.',
     'Moradia': 'Revise contratos de serviços como internet e energia para encontrar planos melhores.',
@@ -305,20 +304,30 @@ class _HomeScreenState extends State<HomeScreen> {
     return mapa.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
 
-  Widget _appBarAcao(IconData icone, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icone, color: Colors.white, size: 20),
-            const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(color: Colors.white, fontSize: 10)),
-          ],
+  Widget _appBarAcao(String label, Color cor, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: cor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.add, color: Colors.white, size: 16),
+              const SizedBox(width: 4),
+              Text(label,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
         ),
       ),
     );
@@ -747,8 +756,6 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       FadeRoute(page: const ConfiguracoesSistemaScreen()),
     );
-    final v = await carregarRendaMensal();
-    if (mounted) setState(() => _rendaMensal = v);
   }
 
   void _abrirMeusGastos() async {
@@ -988,8 +995,8 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
-          _appBarAcao(Icons.trending_down, 'Novo Gasto', _abrirQuickAddGasto),
-          _appBarAcao(Icons.trending_up, 'Nova Receita', _abrirQuickAddReceita),
+          _appBarAcao('Gasto', Colors.red, _abrirQuickAddGasto),
+          _appBarAcao('Receita', Colors.green, _abrirQuickAddReceita),
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white),
             tooltip: 'Configurações',
@@ -1086,7 +1093,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Builder(builder: (context) {
               final agora = DateTime.now();
               final diasNoMes = DateUtils.getDaysInMonth(agora.year, agora.month);
-              final metaDiaria = _rendaMensal != null ? _rendaMensal! / diasNoMes : null;
+              final metaDiaria = _totalReceitasMes > 0 ? _totalReceitasMes / diasNoMes : null;
               final hoje = DateTime(agora.year, agora.month, agora.day);
               final totalHoje = _gastosBox.values.where((g) {
                 final d = DateTime(g.data.year, g.data.month, g.data.day);
@@ -1504,7 +1511,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
   static const List<Map<String, dynamic>> _categoriasFixas = [
     {'nome': 'Alimentação', 'icone': Icons.restaurant},
     {'nome': 'Mercado', 'icone': Icons.shopping_cart},
-    {'nome': 'Transporte', 'icone': Icons.directions_car},
+    {'nome': 'Transporte', 'icone': Icons.directions_bus},
+    {'nome': 'Veículo', 'icone': Icons.directions_car},
     {'nome': 'Saúde', 'icone': Icons.health_and_safety},
     {'nome': 'Lazer', 'icone': Icons.movie},
     {'nome': 'Moradia', 'icone': Icons.home},
@@ -1801,6 +1809,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
 
     if (_tipoGasto == 'Fixo' && _recorrente && !isEdicao) {
       int mesesSelecionados = 1;
+      int diaSelecionado = _dataSelecionada.day;
       final confirmar = await showDialog<int>(
         context: context,
         builder: (context) => StatefulBuilder(
@@ -1813,7 +1822,11 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   'Este gasto é fixo e recorrente. Deseja criá-lo para os próximos meses?',
                   style: TextStyle(fontSize: 14),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Número de meses:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1827,15 +1840,9 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                       children: [
                         Text(
                           '$mesesSelecionados',
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                         ),
-                        const Text(
-                          'meses',
-                          style: TextStyle(color: Colors.grey),
-                        ),
+                        const Text('meses', style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                     IconButton(
@@ -1846,11 +1853,102 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                     ),
                   ],
                 ),
+                const Divider(),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Dia do mês para os lançamentos:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () async {
+                      final cor = Theme.of(context).colorScheme.primary;
+                      final d = await showDialog<int>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Dia do mês', textAlign: TextAlign.center),
+                          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          content: SizedBox(
+                            width: 280,
+                            child: GridView.builder(
+                              shrinkWrap: true,
+                              itemCount: 31,
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 7,
+                                mainAxisSpacing: 4,
+                                crossAxisSpacing: 4,
+                                childAspectRatio: 1,
+                              ),
+                              itemBuilder: (ctx, i) {
+                                final dia = i + 1;
+                                final isSel = dia == diaSelecionado;
+                                return InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () => Navigator.pop(ctx, dia),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: isSel ? cor : cor.withValues(alpha: 0.07),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text('$dia',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                        color: isSel ? Colors.white : null,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Cancelar'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (d != null) setStateDialog(() => diaSelecionado = d);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.event_repeat, size: 16, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Dia $diaSelecionado',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.arrow_drop_down, color: Theme.of(context).colorScheme.primary),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Center(
+                  child: Text('todo mês', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, 1),
+                onPressed: () => Navigator.pop(context, -1),
                 child: const Text('Só este mês'),
               ),
               ElevatedButton(
@@ -1864,7 +1962,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         ),
       );
 
-      if (confirmar != null && confirmar > 1) {
+      if (confirmar != null && confirmar > 0) {
         final List<Gasto> gastosMeses = [];
         for (int i = 0; i < confirmar; i++) {
           gastosMeses.add(
@@ -1876,7 +1974,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               data: DateTime(
                 _dataSelecionada.year,
                 _dataSelecionada.month + i,
-                _dataSelecionada.day,
+                diaSelecionado,
               ),
               formaPagamento: novoGasto.formaPagamento,
               pessoa: novoGasto.pessoa,
@@ -2377,25 +2475,16 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 onTap: _selecionarData,
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.calendar_today,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                      Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 12),
-                      Text(
-                        _formatarData(_dataSelecionada),
-                        style: const TextStyle(fontSize: 16),
-                      ),
+                      Text(_formatarData(_dataSelecionada), style: const TextStyle(fontSize: 16)),
                     ],
                   ),
                 ),
@@ -2568,6 +2657,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
 
     if (_tipoReceita == 'Fixo' && _recorrente && !isEdicao) {
       int mesesSelecionados = 1;
+      int diaSelecionado = _dataSelecionada.day;
       final confirmar = await showDialog<int>(
         context: context,
         builder: (context) => StatefulBuilder(
@@ -2580,7 +2670,11 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                   'Esta receita é fixa e recorrente. Deseja criá-la para os próximos meses?',
                   style: TextStyle(fontSize: 14),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Número de meses:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -2594,15 +2688,9 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                       children: [
                         Text(
                           '$mesesSelecionados',
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                         ),
-                        const Text(
-                          'meses',
-                          style: TextStyle(color: Colors.grey),
-                        ),
+                        const Text('meses', style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                     IconButton(
@@ -2613,11 +2701,102 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                     ),
                   ],
                 ),
+                const Divider(),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Dia do mês para os lançamentos:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () async {
+                      final cor = Theme.of(context).colorScheme.primary;
+                      final d = await showDialog<int>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Dia do mês', textAlign: TextAlign.center),
+                          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          content: SizedBox(
+                            width: 280,
+                            child: GridView.builder(
+                              shrinkWrap: true,
+                              itemCount: 31,
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 7,
+                                mainAxisSpacing: 4,
+                                crossAxisSpacing: 4,
+                                childAspectRatio: 1,
+                              ),
+                              itemBuilder: (ctx, i) {
+                                final dia = i + 1;
+                                final isSel = dia == diaSelecionado;
+                                return InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () => Navigator.pop(ctx, dia),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: isSel ? cor : cor.withValues(alpha: 0.07),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text('$dia',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                        color: isSel ? Colors.white : null,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Cancelar'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (d != null) setStateDialog(() => diaSelecionado = d);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.event_repeat, size: 16, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Dia $diaSelecionado',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.arrow_drop_down, color: Theme.of(context).colorScheme.primary),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Center(
+                  child: Text('todo mês', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, 1),
+                onPressed: () => Navigator.pop(context, -1),
                 child: const Text('Só este mês'),
               ),
               ElevatedButton(
@@ -2631,7 +2810,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
         ),
       );
 
-      if (confirmar != null && confirmar > 1) {
+      if (confirmar != null && confirmar > 0) {
         final List<Receita> receitasMeses = [];
         for (int i = 0; i < confirmar; i++) {
           receitasMeses.add(
@@ -2643,7 +2822,7 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
               data: DateTime(
                 _dataSelecionada.year,
                 _dataSelecionada.month + i,
-                _dataSelecionada.day,
+                diaSelecionado,
               ),
               pessoa: novaReceita.pessoa,
               recorrente: true,
@@ -2841,25 +3020,16 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 onTap: _selecionarData,
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.calendar_today,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                      Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 12),
-                      Text(
-                        _formatarData(_dataSelecionada),
-                        style: const TextStyle(fontSize: 16),
-                      ),
+                      Text(_formatarData(_dataSelecionada), style: const TextStyle(fontSize: 16)),
                     ],
                   ),
                 ),

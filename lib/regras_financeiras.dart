@@ -9,6 +9,8 @@ const Map<String, String> dicasPorCategoria = {
       'Faça listas de compras antes de ir ao mercado e evite compras por impulso.',
   'Transporte':
       'Considere caronas compartilhadas ou transporte público para reduzir custos.',
+  'Veículo':
+      'Mantenha revisões em dia para evitar gastos maiores com manutenção. Compare preços de combustível na região.',
   'Lazer':
       'Busque opções gratuitas de lazer como parques, eventos culturais e afins.',
   'Saúde':
