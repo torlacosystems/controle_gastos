@@ -58,6 +58,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     {'nome': 'Cuidados Pessoais', 'icone': Icons.spa},
     {'nome': 'Presentes', 'icone': Icons.card_giftcard},
     {'nome': 'Outros', 'icone': Icons.category},
+    {'nome': 'Juros e Multas', 'icone': Icons.percent},
   ];
 
   @override
@@ -102,7 +103,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     FormaPagamento forma,
   ) async {
     final gastosVinculados = _gastosBox.values
-        .where((g) => g.formaPagamento == forma.descricao)
+        .where((g) => g.formaPagamento == forma.id || g.formaPagamento == forma.descricao)
         .length;
 
     final confirmar = await showDialog<bool>(
@@ -155,7 +156,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
       if (excluirRegistros == true) {
         final keysParaExcluir = _gastosBox.keys.where((k) {
           final g = _gastosBox.get(k);
-          return g != null && g.formaPagamento == forma.descricao;
+          return g != null && (g.formaPagamento == forma.id || g.formaPagamento == forma.descricao);
         }).toList();
         for (final k in keysParaExcluir) {
           await _gastosBox.delete(k);
@@ -263,6 +264,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
     );
     final bancoController = TextEditingController(text: forma?.banco ?? '');
     String tipoSelecionado = forma?.tipo ?? 'Crédito';
+    int diaFechamento = forma?.diaFechamento ?? 10;
     final isEdicao = forma != null;
 
     showModalBottomSheet(
@@ -339,6 +341,103 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                   );
                 }).toList(),
               ),
+              if (tipoSelecionado == 'Crédito') ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text('Dia de fechamento da fatura:',
+                        style: TextStyle(fontSize: 13)),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () async {
+                        final cor = Theme.of(context).colorScheme.primary;
+                        final d = await showDialog<int>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Dia de fechamento',
+                                textAlign: TextAlign.center),
+                            contentPadding:
+                                const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            content: SizedBox(
+                              width: 280,
+                              child: GridView.builder(
+                                shrinkWrap: true,
+                                itemCount: 31,
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 7,
+                                  mainAxisSpacing: 4,
+                                  crossAxisSpacing: 4,
+                                  childAspectRatio: 1,
+                                ),
+                                itemBuilder: (ctx, i) {
+                                  final dia = i + 1;
+                                  final isSel = dia == diaFechamento;
+                                  return InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () => Navigator.pop(ctx, dia),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: isSel
+                                            ? cor
+                                            : cor.withValues(alpha: 0.07),
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text('$dia',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: isSel
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                            color: isSel ? Colors.white : null,
+                                          )),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Cancelar'))
+                            ],
+                          ),
+                        );
+                        if (d != null) setModalState(() => diaFechamento = d);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Dia $diaFechamento',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.arrow_drop_down,
+                                color:
+                                    Theme.of(context).colorScheme.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               TextField(
                 controller: bancoController,
@@ -395,12 +494,13 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                       return;
                     }
                     final novaForma = FormaPagamento(
-                      id:
-                          forma?.id ??
+                      id: forma?.id ??
                           DateTime.now().millisecondsSinceEpoch.toString(),
                       descricao: descricao,
                       tipo: tipoSelecionado,
                       banco: banco,
+                      diaFechamento:
+                          tipoSelecionado == 'Crédito' ? diaFechamento : null,
                     );
                     if (forma == null) {
                       await _formasPagamentoBox.add(novaForma);
@@ -1335,7 +1435,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                           forma.descricao,
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        subtitle: Text('${forma.tipo} • ${forma.banco}'),
+                        subtitle: Text(
+                          forma.tipo == 'Crédito' && forma.diaFechamento != null
+                              ? '${forma.tipo} • ${forma.banco} • fecha dia ${forma.diaFechamento}'
+                              : '${forma.tipo} • ${forma.banco}',
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.edit),
                           onPressed: () => _adicionarOuEditarFormaPagamento(
@@ -1452,22 +1556,24 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
               for (final orc in _orcamentosBox.values) {
                 limitePorCategoria[orc.categoria] = orc.limite;
               }
-              final fixasSemOutros = _categoriasGasto
-                  .where((c) => c['nome'] != 'Outros')
+              final fixasNormais = _categoriasGasto
+                  .where((c) => c['nome'] != 'Outros' && c['nome'] != 'Juros e Multas')
                   .toList();
               final outros = _categoriasGasto
                   .where((c) => c['nome'] == 'Outros')
                   .toList();
-              final todasCategorias = [
-                ...fixasSemOutros.map(
-                  (cat) => _CategoriaItem(
+              final juros = _categoriasGasto
+                  .where((c) => c['nome'] == 'Juros e Multas')
+                  .toList();
+              _CategoriaItem toItem(Map<String, dynamic> cat) => _CategoriaItem(
                     nome: cat['nome'] as String,
                     icone: cat['icone'] as IconData,
                     isPersonalizada: false,
                     catObj: null,
                     catIndex: -1,
-                  ),
-                ),
+                  );
+              final todasCategorias = [
+                ...fixasNormais.map(toItem),
                 ...categoriasPersonalizadas.asMap().entries.map(
                   (e) => _CategoriaItem(
                     nome: e.value.nome,
@@ -1477,15 +1583,8 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen>
                     catIndex: e.key,
                   ),
                 ),
-                ...outros.map(
-                  (cat) => _CategoriaItem(
-                    nome: cat['nome'] as String,
-                    icone: cat['icone'] as IconData,
-                    isPersonalizada: false,
-                    catObj: null,
-                    catIndex: -1,
-                  ),
-                ),
+                ...outros.map(toItem),
+                ...juros.map(toItem),
               ];
 
               Widget buildCard(_CategoriaItem item) {

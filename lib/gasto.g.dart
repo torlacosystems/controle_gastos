@@ -34,13 +34,14 @@ class GastoAdapter extends TypeAdapter<Gasto> {
       numeroParcela: fields[14] as int,
       gastoEvitavel: fields[15] == null ? false : fields[15] as bool,
       detalhado: fields[16] == null ? true : fields[16] as bool,
+      valorJuros: fields[17] == null ? 0.0 : (fields[17] as num).toDouble(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Gasto obj) {
     writer
-      ..writeByte(17)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -74,7 +75,9 @@ class GastoAdapter extends TypeAdapter<Gasto> {
       ..writeByte(15)
       ..write(obj.gastoEvitavel)
       ..writeByte(16)
-      ..write(obj.detalhado);
+      ..write(obj.detalhado)
+      ..writeByte(17)
+      ..write(obj.valorJuros);
   }
 
   @override

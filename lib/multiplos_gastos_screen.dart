@@ -38,14 +38,15 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
   static const List<String> _categoriasFixas = [
     'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Lazer',
     'Moradia', 'Educação', 'Assinaturas',
-    'Vestuário', 'Cuidados Pessoais', 'Presentes', 'Outros',
+    'Vestuário', 'Cuidados Pessoais', 'Presentes', 'Outros', 'Juros e Multas',
   ];
 
   List<String> get _categorias {
-    final fixasSemOutros =
-        _categoriasFixas.where((c) => c != 'Outros').toList();
+    final fixasNormais = _categoriasFixas
+        .where((c) => c != 'Outros' && c != 'Juros e Multas')
+        .toList();
     final custom = _categoriasBox.values.map((c) => c.nome).toList();
-    return [...fixasSemOutros, ...custom, 'Outros'];
+    return [...fixasNormais, ...custom, 'Outros', 'Juros e Multas'];
   }
 
   @override
@@ -235,7 +236,7 @@ class _MultiplosGastosScreenState extends State<MultiplosGastosScreen> {
           valor: v,
           categoria: _categoriaSelecionada,
           data: DateTime(_data.year, _data.month + m, _data.day),
-          formaPagamento: _formaPagamento?.descricao ?? '',
+          formaPagamento: _formaPagamento?.id ?? '',
           pessoa: _pessoa?.nome ?? '',
           tipoGasto: _tipoGasto,
           parcelado: false,

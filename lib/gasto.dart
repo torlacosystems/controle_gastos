@@ -55,6 +55,9 @@ class Gasto extends HiveObject {
   @HiveField(16)
   bool detalhado;
 
+  @HiveField(17)
+  double valorJuros;
+
   Gasto({
     required this.id,
     required this.descricao,
@@ -73,5 +76,6 @@ class Gasto extends HiveObject {
     this.numeroParcela = 0,
     this.gastoEvitavel = false,
     this.detalhado = true,
+    this.valorJuros = 0.0,
   });
 }

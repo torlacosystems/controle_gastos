@@ -182,7 +182,7 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
 
     final fixasSemOutros = ['Alimentação', 'Transporte', 'Veículo', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();
-    final categorias = [...fixasSemOutros, ...custom, 'Outros'];
+    final categorias = [...fixasSemOutros, ...custom, 'Outros', 'Juros e Multas'];
 
     String? novaForma;
     String? novaCategoria;
@@ -273,7 +273,7 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
                       items: [
                         const DropdownMenuItem(value: null, child: Text('— sem alteração —')),
                         ...formas.map((f) => DropdownMenuItem(
-                          value: f.descricao,
+                          value: f.id,
                           child: Text([f.descricao, f.tipo, if (f.banco.isNotEmpty) f.banco].join(' - ')),
                         )),
                       ],
@@ -617,7 +617,12 @@ class _MeusGastosScreenState extends State<MeusGastosScreen> {
                             [
                               _formatarData(g.data),
                               if (g.categoria.isNotEmpty && g.categoria != 'Outros') g.categoria,
-                              if (g.formaPagamento.isNotEmpty) g.formaPagamento,
+                              if (g.formaPagamento.isNotEmpty)
+                                () {
+                                  final box = Hive.box<FormaPagamento>('formas_pagamento');
+                                  try { return box.values.firstWhere((f) => f.id == g.formaPagamento).descricao; } catch (_) {}
+                                  return g.formaPagamento;
+                                }(),
                               if (g.pessoa.isNotEmpty) g.pessoa,
                             ].join(' • '),
                           ),

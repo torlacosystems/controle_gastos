@@ -204,7 +204,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 20),
+
+            // Banner de privacidade
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_outline, size: 16, color: Colors.green),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Valorizamos sua privacidade. Todos os seus dados ficam armazenados apenas no seu dispositivo — ninguém tem acesso a eles.',
+                        style: TextStyle(fontSize: 12, color: Colors.green, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
 
             // Botões — página do widget tem layout diferente
             if (_naPaginaWidget) ...[

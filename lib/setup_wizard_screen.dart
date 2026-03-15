@@ -32,6 +32,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   final _descricaoCtrl = TextEditingController();
   final _bancoCtrl = TextEditingController();
   String _tipoSelecionado = 'Débito';
+  int _diaFechamento = 10;
   final List<FormaPagamento> _formasAdicionadas = [];
 
   // Step 3 – orçamentos por categoria
@@ -46,6 +47,8 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
   String _gastoCategoria = 'Alimentação';
   int _gastoDiaMes = 1;
   int _mesesGastosFixos = 1;
+  String? _gastoFormaPagamento;
+  String? _gastoPessoa;
   final List<Map<String, dynamic>> _gastosFixos = [];
 
   // Step 5 – receitas fixas mensais
@@ -85,6 +88,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     {'nome': 'Cuidados Pessoais', 'icone': Icons.spa},
     {'nome': 'Presentes',         'icone': Icons.card_giftcard},
     {'nome': 'Outros',            'icone': Icons.category},
+    {'nome': 'Juros e Multas',     'icone': Icons.percent},
   ];
 
   @override
@@ -278,10 +282,19 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
     final valor = parseCurrency(_gastoValorCtrl.text);
     if (desc.isEmpty || valor == null || valor <= 0) return;
     setState(() {
-      _gastosFixos.add({'descricao': desc, 'valor': valor, 'categoria': _gastoCategoria, 'dia': _gastoDiaMes});
+      _gastosFixos.add({
+        'descricao': desc,
+        'valor': valor,
+        'categoria': _gastoCategoria,
+        'dia': _gastoDiaMes,
+        'formaPagamento': _gastoFormaPagamento ?? '',
+        'pessoa': _gastoPessoa ?? '',
+      });
       _gastoDescCtrl.clear();
       _gastoValorCtrl.clear();
       _gastoDiaMes = 1;
+      _gastoFormaPagamento = _formasAdicionadas.isNotEmpty ? null : null;
+      _gastoPessoa = null;
     });
   }
 
@@ -314,10 +327,12 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
       descricao: desc,
       tipo: _tipoSelecionado,
       banco: _bancoCtrl.text.trim(),
+      diaFechamento: _tipoSelecionado == 'Crédito' ? _diaFechamento : null,
     );
     _formasAdicionadas.add(forma);
     _descricaoCtrl.clear();
     _bancoCtrl.clear();
+    _diaFechamento = 10;
     setState(() {});
   }
 
@@ -357,8 +372,12 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           valor: item['valor'] as double,
           categoria: item['categoria'] as String,
           data: DateTime(now.year, now.month + m, dia),
-          formaPagamento: _formasAdicionadas.isNotEmpty ? _formasAdicionadas.first.descricao : '',
-          pessoa: nomeUsuario.isNotEmpty ? nomeUsuario : '',
+          formaPagamento: (item['formaPagamento'] as String?)?.isNotEmpty == true
+              ? item['formaPagamento'] as String
+              : (_formasAdicionadas.isNotEmpty ? _formasAdicionadas.first.id : ''),
+          pessoa: (item['pessoa'] as String?)?.isNotEmpty == true
+              ? item['pessoa'] as String
+              : (nomeUsuario.isNotEmpty ? nomeUsuario : ''),
           tipoGasto: 'Fixo',
           parcelado: false,
           numeroParcelas: 1,
@@ -620,7 +639,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                     ),
                     title: Text(e.value.descricao,
                         style: const TextStyle(fontSize: 13)),
-                    subtitle: Text('${e.value.tipo} • ${e.value.banco}',
+                    subtitle: Text(
+                        e.value.tipo == 'Crédito' && e.value.diaFechamento != null
+                            ? '${e.value.tipo} • ${e.value.banco} • fecha dia ${e.value.diaFechamento}'
+                            : '${e.value.tipo} • ${e.value.banco}',
                         style: const TextStyle(fontSize: 11)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -632,6 +654,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                             _descricaoCtrl.text = e.value.descricao;
                             _tipoSelecionado = e.value.tipo;
                             _bancoCtrl.text = e.value.banco;
+                            _diaFechamento = e.value.diaFechamento ?? 10;
                             _formasAdicionadas.removeAt(e.key);
                           }),
                         ),
@@ -665,43 +688,135 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                   TextField(
                     controller: _descricaoCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'Nome (ex: Nubank Crédito)',
+                      labelText: 'Nome do cartão / conta',
+                      hintText: 'ex: Visa Gold, Conta Corrente, Alimentação...',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _tipoSelecionado,
-                          decoration: const InputDecoration(
-                            labelText: 'Tipo',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          items: _tipos
-                              .map((t) => DropdownMenuItem(
-                                  value: t, child: Text(t)))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _tipoSelecionado = v!),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _bancoCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Banco (opcional)',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                    ],
+                  DropdownButtonFormField<String>(
+                    initialValue: _tipoSelecionado,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Tipo',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: _tipos
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _tipoSelecionado = v!),
                   ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _bancoCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome do banco',
+                      hintText: 'ex: Nubank, Itaú, Bradesco...',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  if (_tipoSelecionado == 'Crédito') ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Text('Dia de fechamento da fatura:',
+                            style: TextStyle(fontSize: 13)),
+                        const SizedBox(width: 12),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () async {
+                            final cor = Theme.of(context).colorScheme.primary;
+                            final d = await showDialog<int>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Dia de fechamento',
+                                    textAlign: TextAlign.center),
+                                contentPadding:
+                                    const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                                content: SizedBox(
+                                  width: 280,
+                                  child: GridView.builder(
+                                    shrinkWrap: true,
+                                    itemCount: 31,
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 7,
+                                      mainAxisSpacing: 4,
+                                      crossAxisSpacing: 4,
+                                      childAspectRatio: 1,
+                                    ),
+                                    itemBuilder: (ctx, i) {
+                                      final dia = i + 1;
+                                      final isSel = dia == _diaFechamento;
+                                      return InkWell(
+                                        borderRadius: BorderRadius.circular(8),
+                                        onTap: () => Navigator.pop(ctx, dia),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: isSel
+                                                ? cor
+                                                : cor.withValues(alpha: 0.07),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text('$dia',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: isSel
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                                color: isSel
+                                                    ? Colors.white
+                                                    : null,
+                                              )),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('Cancelar'))
+                                ],
+                              ),
+                            );
+                            if (d != null) setState(() => _diaFechamento = d);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Dia $_diaFechamento',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary)),
+                                const SizedBox(width: 4),
+                                Icon(Icons.arrow_drop_down,
+                                    color:
+                                        Theme.of(context).colorScheme.primary),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
@@ -798,6 +913,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
           ..._categorias.map((cat) {
             final nome = cat['nome'] as String;
             final icone = cat['icone'] as IconData;
+            _limiteCtrl.putIfAbsent(nome, () => TextEditingController());
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(
@@ -1093,7 +1209,17 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                     title: Text(e.value['descricao'] as String,
                         style: const TextStyle(fontSize: 13)),
                     subtitle: Text(
-                        '${e.value['categoria']} • R\$ ${formatarValorParaCampo(e.value['valor'] as double)} • dia ${e.value['dia'] ?? 1}',
+                        [
+                          '${e.value['categoria']}',
+                          'R\$ ${formatarValorParaCampo(e.value['valor'] as double)}',
+                          'dia ${e.value['dia'] ?? 1}',
+                          if ((e.value['formaPagamento'] as String?)?.isNotEmpty == true)
+                            _formasAdicionadas.where((f) => f.id == e.value['formaPagamento']).isNotEmpty
+                                ? _formasAdicionadas.firstWhere((f) => f.id == e.value['formaPagamento']).descricao
+                                : e.value['formaPagamento'] as String,
+                          if ((e.value['pessoa'] as String?)?.isNotEmpty == true)
+                            '${e.value['pessoa']}',
+                        ].join(' • '),
                         style: const TextStyle(fontSize: 11)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1107,6 +1233,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                             _gastoValorCtrl.text = formatarValorParaCampo(item['valor'] as double);
                             _gastoCategoria = item['categoria'] as String;
                             _gastoDiaMes = (item['dia'] as int?) ?? 1;
+                            _gastoFormaPagamento = item['formaPagamento'] as String?;
+                            _gastoPessoa = item['pessoa'] as String?;
+                            if (_gastoFormaPagamento != null && _gastoFormaPagamento!.isEmpty) _gastoFormaPagamento = null;
+                            if (_gastoPessoa != null && _gastoPessoa!.isEmpty) _gastoPessoa = null;
                             _gastosFixos.removeAt(e.key);
                           }),
                         ),
@@ -1222,6 +1352,64 @@ class _SetupWizardScreenState extends State<SetupWizardScreen>
                       ),
                     ),
                   ),
+                  if (_formasAdicionadas.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Builder(builder: (context) {
+                      final valorForma = _formasAdicionadas.any((f) => f.id == _gastoFormaPagamento)
+                          ? _gastoFormaPagamento
+                          : null;
+                      return DropdownButtonFormField<String?>(
+                      isExpanded: true,
+                      key: ValueKey(valorForma),
+                      initialValue: valorForma,
+                      decoration: const InputDecoration(
+                        labelText: 'Forma de pagamento',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                            value: null, child: Text('Não informar')),
+                        ..._formasAdicionadas.map((f) => DropdownMenuItem<String?>(
+                            value: f.id,
+                            child: Text(
+                              f.banco.isNotEmpty
+                                  ? '${f.descricao} • ${f.tipo} • ${f.banco}'
+                                  : '${f.descricao} • ${f.tipo}',
+                              overflow: TextOverflow.ellipsis,
+                            ))),
+                      ],
+                      onChanged: (v) =>
+                          setState(() => _gastoFormaPagamento = v),
+                    );
+                    }),
+                  ],
+                  Builder(builder: (context) {
+                    final pessoas = <String>[];
+                    final nome = _nomeUsuarioCtrl.text.trim();
+                    if (nome.isNotEmpty) pessoas.add(nome);
+                    pessoas.addAll(_pessoasAdicionadas.map((p) => p.nome));
+                    if (pessoas.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: _gastoPessoa,
+                        decoration: const InputDecoration(
+                          labelText: 'Pessoa',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('Não informar')),
+                          ...pessoas.map((p) =>
+                              DropdownMenuItem(value: p, child: Text(p))),
+                        ],
+                        onChanged: (v) => setState(() => _gastoPessoa = v),
+                      ),
+                    );
+                  }),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,

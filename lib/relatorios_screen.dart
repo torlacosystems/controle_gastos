@@ -211,28 +211,49 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     return lista.map((p) => p.nome).toList();
   }
 
-  String _tipoDeForma(String descricao) {
-    final forma = _formasPagamentoBox.values.firstWhere(
-      (f) => f.descricao == descricao,
-      orElse: () => FormaPagamento(id: '', descricao: '', tipo: '', banco: ''),
-    );
-    return forma.tipo;
+  /// Resolve formaPagamento (id novo ou descricao legado) para o objeto
+  FormaPagamento? _resolverForma(String valor) {
+    if (valor.isEmpty) return null;
+    try { return _formasPagamentoBox.values.firstWhere((f) => f.id == valor); } catch (_) {}
+    try { return _formasPagamentoBox.values.firstWhere((f) => f.descricao == valor); } catch (_) {}
+    return null;
+  }
+
+  String _tipoDeForma(String valor) => _resolverForma(valor)?.tipo ?? '';
+
+  /// Data efetiva para relatório: mês de fatura para crédito, data original para outros
+  DateTime _dataEfetiva(Gasto g) {
+    if (_tipoDeForma(g.formaPagamento) != 'Crédito') return g.data;
+    try {
+      final forma = _resolverForma(g.formaPagamento);
+      if (forma == null) return DateTime(g.data.year, g.data.month + 1);
+      final dia = forma.diaFechamento ?? 10;
+      if (g.data.day < dia) {
+        return DateTime(g.data.year, g.data.month + 1);
+      } else {
+        return DateTime(g.data.year, g.data.month + 2);
+      }
+    } catch (_) {
+      return DateTime(g.data.year, g.data.month + 1);
+    }
   }
 
   // ── Dados filtrados ───────────────────────────────────────────────────────
 
   List<Gasto> get _gastosFiltrados {
     return _gastosBox.values.where((g) {
-      if (g.data.isBefore(_dataInicio.subtract(const Duration(days: 1))))
+      final dataRef = _dataEfetiva(g);
+      if (dataRef.isBefore(_dataInicio.subtract(const Duration(days: 1))))
         return false;
-      if (g.data.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
+      if (dataRef.isAfter(_dataFim.add(const Duration(days: 1)))) return false;
       if (_pessoaSelecionada != null && g.pessoa != _pessoaSelecionada)
         return false;
       if (_tipoFormaPagamento != null &&
           _tipoDeForma(g.formaPagamento) != _tipoFormaPagamento)
         return false;
       if (_formaPagamentoSelecionada != null &&
-          g.formaPagamento != _formaPagamentoSelecionada)
+          g.formaPagamento != _formaPagamentoSelecionada &&
+          _resolverForma(g.formaPagamento)?.descricao != _formaPagamentoSelecionada)
         return false;
       if (_filtroEsperado != null && g.gastoEsperado != _filtroEsperado)
         return false;
@@ -330,7 +351,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
 
   double _gastosPorMes(DateTime mes) => _gastosBox.values
       .where((g) {
-        if (g.data.month != mes.month || g.data.year != mes.year) return false;
+        final dataRef = _dataEfetiva(g);
+        if (dataRef.month != mes.month || dataRef.year != mes.year) return false;
         if (_pessoaSelecionada != null && g.pessoa != _pessoaSelecionada)
           return false;
         if (_tipoFormaPagamento != null &&
@@ -399,6 +421,15 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
 
   double _gastosNoPeriodoPorCategoria(String categoria) =>
       _gastosFiltrados.where((g) => g.categoria == categoria).fold(0, (s, g) => s + g.valor);
+
+  int get _mesesNoPeriodo {
+    final datas = _gastosFiltrados.map((g) => g.data);
+    if (datas.isEmpty) return 1;
+    final minData = datas.reduce((a, b) => a.isBefore(b) ? a : b);
+    final maxData = datas.reduce((a, b) => a.isAfter(b) ? a : b);
+    final meses = (maxData.year - minData.year) * 12 + maxData.month - minData.month + 1;
+    return meses < 1 ? 1 : meses;
+  }
 
   // limite == null → categoria sem orçamento configurado
   Widget _orcRow(String categoria, double gasto, double? limite) {
@@ -926,6 +957,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
     final agora = DateTime.now();
     final orcamentos = _orcamentosBox.values.toList()
       ..sort((a, b) {
+        if (a.categoria == 'Juros e Multas') return 1;
+        if (b.categoria == 'Juros e Multas') return -1;
         if (a.categoria == 'Outros') return 1;
         if (b.categoria == 'Outros') return -1;
         return a.categoria.compareTo(b.categoria);
@@ -1865,10 +1898,17 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                   .where((c) => !orcamentos.any((o) => o.categoria == c))
                   .toList()
                 ..sort((a, b) {
+                    if (a == 'Juros e Multas') return 1;
+                    if (b == 'Juros e Multas') return -1;
                     if (a == 'Outros') return 1;
                     if (b == 'Outros') return -1;
                     return a.compareTo(b);
                   });
+              // Juros e Multas sempre aparece se não tiver orçamento configurado
+              if (!orcamentos.any((o) => o.categoria == 'Juros e Multas') &&
+                  !catsSemLimite.contains('Juros e Multas')) {
+                catsSemLimite.add('Juros e Multas');
+              }
               if (orcamentos.isEmpty && catsSemLimite.isEmpty) {
                 return const SizedBox.shrink();
               }
@@ -1902,7 +1942,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> with SingleTickerPr
                           ...orcamentos.map((orc) =>
                               _orcRow(orc.categoria,
                                   _gastosNoPeriodoPorCategoria(orc.categoria),
-                                  orc.limite)),
+                                  orc.limite * _mesesNoPeriodo)),
                           ...catsSemLimite.map((cat) =>
                               _orcRow(cat,
                                   _gastosNoPeriodoPorCategoria(cat),

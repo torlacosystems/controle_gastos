@@ -53,7 +53,9 @@ void main() async {
   // Detecta ação do widget antes do runApp para que LockScreen saiba pular a autenticação
   try {
     const widgetChannel = MethodChannel('com.example.controle_gastos/widget');
-    final acao = await widgetChannel.invokeMethod<String?>('get_pending_action');
+    final acao = await widgetChannel.invokeMethod<String?>(
+      'get_pending_action',
+    );
     if (acao != null) {
       widgetAcaoPendente = acao;
       AuthService.abertoPeloWidget = true;
@@ -104,6 +106,7 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
 // ── BOOT ROUTER ───────────────────────────────────────────────────────────────
 /// Tela inicial mínima: detecta ação do widget antes de qualquer UI visível.
 /// - Se aberto pelo widget → vai direto para HomeScreen (sem splash)
@@ -131,7 +134,9 @@ class _BootScreenState extends State<_BootScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => onboardingCompleto ? const HomeScreen() : const OnboardingScreen(),
+          builder: (_) => onboardingCompleto
+              ? const HomeScreen()
+              : const OnboardingScreen(),
         ),
       );
       return;
@@ -168,7 +173,9 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription? _receitasSubscription;
   final TextEditingController _buscaHomeController = TextEditingController();
 
-  static final _widgetChannel = MethodChannel('com.example.controle_gastos/widget');
+  static final _widgetChannel = MethodChannel(
+    'com.example.controle_gastos/widget',
+  );
 
   @override
   void initState() {
@@ -178,14 +185,21 @@ class _HomeScreenState extends State<HomeScreen> {
     _formasPagamentoBox = Hive.box<FormaPagamento>('formas_pagamento');
     _pessoasBox = Hive.box<Pessoa>('pessoas');
     _orcamentosBox = Hive.box<Orcamento>('orcamentos');
-    _gastosSubscription = _gastosBox.watch().listen((_) { if (mounted) setState(() {}); });
-    _receitasSubscription = _receitasBox.watch().listen((_) { if (mounted) setState(() {}); });
+    _gastosSubscription = _gastosBox.watch().listen((_) {
+      if (mounted) setState(() {});
+    });
+    _receitasSubscription = _receitasBox.watch().listen((_) {
+      if (mounted) setState(() {});
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final service = SubscriptionService.instance;
       if (!service.isTrialActive && !service.isSubscriptionActive) {
-        Navigator.push(context, FadeRoute(page: const PaywallScreen()))
-            .then((_) { if (mounted) setState(() {}); });
+        Navigator.push(context, FadeRoute(page: const PaywallScreen())).then((
+          _,
+        ) {
+          if (mounted) setState(() {});
+        });
       }
     });
     _widgetChannel.setMethodCallHandler((call) async {
@@ -197,7 +211,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widgetAcaoPendente != null) {
       final acao = widgetAcaoPendente!;
       widgetAcaoPendente = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _executarAcaoWidget(acao));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _executarAcaoWidget(acao),
+      );
     }
   }
 
@@ -210,9 +226,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!mounted) return;
     final isGasto = method == 'novo_gasto';
-    WidgetsBinding.instance.addPostFrameCallback((_) => isGasto
-        ? _abrirQuickAddGasto(fromWidget: true)
-        : _abrirQuickAddReceita(fromWidget: true));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => isGasto
+          ? _abrirQuickAddGasto(fromWidget: true)
+          : _abrirQuickAddReceita(fromWidget: true),
+    );
   }
 
   @override
@@ -223,11 +241,53 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Retorna true se a forma de pagamento é crédito
+  /// Resolve formaPagamento (id ou descricao legacy) para o objeto FormaPagamento
+  FormaPagamento? _resolverForma(String valor) {
+    if (valor.isEmpty) return null;
+    try {
+      return _formasPagamentoBox.values.firstWhere((f) => f.id == valor);
+    } catch (_) {}
+    try {
+      return _formasPagamentoBox.values.firstWhere((f) => f.descricao == valor);
+    } catch (_) {}
+    return null;
+  }
+
+  /// Retorna o nome de exibição da forma de pagamento
+  String _nomeForma(String valor) => _resolverForma(valor)?.descricao ?? valor;
+
+  bool _isCredito(String formaValor) =>
+      _resolverForma(formaValor)?.tipo == 'Crédito';
+
+  /// Mês em que a fatura de crédito será cobrada
+  DateTime _mesFatura(Gasto g) {
+    try {
+      final forma = _resolverForma(g.formaPagamento);
+      if (forma == null) return DateTime(g.data.year, g.data.month + 1);
+      final dia = forma.diaFechamento ?? 10;
+      if (g.data.day < dia) {
+        return DateTime(g.data.year, g.data.month + 1);
+      } else {
+        return DateTime(g.data.year, g.data.month + 2);
+      }
+    } catch (_) {
+      return DateTime(g.data.year, g.data.month + 1);
+    }
+  }
+
   double get _totalGastosMes {
     final agora = DateTime.now();
     return _gastosBox.values
         .where((g) => g.data.month == agora.month && g.data.year == agora.year)
-        .fold(0, (soma, g) => soma + g.valor);
+        .fold(0.0, (soma, g) {
+          if (_isCredito(g.formaPagamento) && g.parcelado) {
+            // Parcelado crédito: conta só parcela 1 com valor cheio
+            if (g.numeroParcela == 1) return soma + g.valor * g.numeroParcelas;
+            return soma; // parcelas 2+ já contadas no mês da compra
+          }
+          return soma + g.valor;
+        });
   }
 
   double get _totalReceitasMes {
@@ -237,7 +297,48 @@ class _HomeScreenState extends State<HomeScreen> {
         .fold(0, (soma, r) => soma + r.valor);
   }
 
-  double get _saldo => _totalReceitasMes - _totalGastosMes;
+  /// Saldo = receitas − gastos débito − parcelas crédito com fatura no mês atual
+  double get _saldo {
+    final agora = DateTime.now();
+    final mesAtual = DateTime(agora.year, agora.month);
+
+    final gastosDebito = _gastosBox.values
+        .where((g) => g.data.month == agora.month && g.data.year == agora.year)
+        .where(
+          (g) =>
+              !_isCredito(g.formaPagamento) || g.categoria == 'Juros e Multas',
+        )
+        .fold(0.0, (s, g) => s + g.valor);
+
+    final creditoFaturaAtual = _gastosBox.values
+        .where(
+          (g) =>
+              _isCredito(g.formaPagamento) && g.categoria != 'Juros e Multas',
+        )
+        .where((g) {
+          final f = _mesFatura(g);
+          return f.year == mesAtual.year && f.month == mesAtual.month;
+        })
+        .fold(0.0, (s, g) => s + g.valor);
+
+    return _totalReceitasMes - gastosDebito - creditoFaturaAtual;
+  }
+
+  /// Total de gastos de crédito com fatura em meses futuros
+  double get _totalCreditoFuturo {
+    final agora = DateTime.now();
+    final mesAtual = DateTime(agora.year, agora.month);
+    return _gastosBox.values
+        .where(
+          (g) =>
+              _isCredito(g.formaPagamento) && g.categoria != 'Juros e Multas',
+        )
+        .where((g) {
+          final f = _mesFatura(g);
+          return f.isAfter(mesAtual);
+        })
+        .fold(0.0, (s, g) => s + g.valor);
+  }
 
   String _formatarValor(double valor) {
     final p = valor.toStringAsFixed(2).split('.');
@@ -247,26 +348,41 @@ class _HomeScreenState extends State<HomeScreen> {
   double _gastosMesPorCategoria(String categoria) {
     final agora = DateTime.now();
     return _gastosBox.values
-        .where((g) =>
-            g.categoria == categoria &&
-            g.data.month == agora.month &&
-            g.data.year == agora.year)
+        .where(
+          (g) =>
+              g.categoria == categoria &&
+              g.data.month == agora.month &&
+              g.data.year == agora.year,
+        )
         .fold(0, (s, g) => s + g.valor);
   }
 
   static const Map<String, String> _dicasPorCategoria = {
-    'Alimentação': 'Tente cozinhar mais em casa. Pode economizar até 40% comparado a comer fora.',
-    'Mercado': 'Faça listas de compras antes de ir ao mercado e evite compras por impulso.',
-    'Transporte': 'Considere caronas compartilhadas ou transporte público para reduzir custos.',
-    'Veículo': 'Mantenha revisões em dia para evitar gastos maiores com manutenção. Compare preços de combustível na região.',
-    'Lazer': 'Busque opções gratuitas de lazer como parques, eventos culturais e afins.',
-    'Saúde': 'Mantenha hábitos preventivos para evitar gastos maiores no futuro.',
-    'Moradia': 'Revise contratos de serviços como internet e energia para encontrar planos melhores.',
+    'Alimentação':
+        'Tente cozinhar mais em casa. Pode economizar até 40% comparado a comer fora.',
+    'Mercado':
+        'Faça listas de compras antes de ir ao mercado e evite compras por impulso.',
+    'Transporte':
+        'Considere caronas compartilhadas ou transporte público para reduzir custos.',
+    'Veículo':
+        'Mantenha revisões em dia para evitar gastos maiores com manutenção. Compare preços de combustível na região.',
+    'Lazer':
+        'Busque opções gratuitas de lazer como parques, eventos culturais e afins.',
+    'Saúde':
+        'Mantenha hábitos preventivos para evitar gastos maiores no futuro.',
+    'Moradia':
+        'Revise contratos de serviços como internet e energia para encontrar planos melhores.',
     'Educação': 'Explore cursos gratuitos online como complemento aos pagos.',
-    'Assinaturas': 'Revise suas assinaturas ativas. Cancele as que não usa — pequenos valores mensais somam muito ao longo do ano.',
-    'Vestuário': 'Prefira comprar roupas fora de temporada ou em promoções. Evite compras por impulso.',
-    'Cuidados Pessoais': 'Compare preços de produtos de higiene e beleza. Versões genéricas costumam ter a mesma qualidade.',
-    'Presentes': 'Planeje presentes com antecedência para evitar gastos de última hora e aproveitar promoções.',
+    'Assinaturas':
+        'Revise suas assinaturas ativas. Cancele as que não usa — pequenos valores mensais somam muito ao longo do ano.',
+    'Vestuário':
+        'Prefira comprar roupas fora de temporada ou em promoções. Evite compras por impulso.',
+    'Cuidados Pessoais':
+        'Compare preços de produtos de higiene e beleza. Versões genéricas costumam ter a mesma qualidade.',
+    'Presentes':
+        'Planeje presentes com antecedência para evitar gastos de última hora e aproveitar promoções.',
+    'Juros e Multas':
+        'Juros e multas reduzem seu poder de compra. Quite dívidas em dia para evitar esses custos.',
     'Outros': 'Revise esses gastos — muitos podem ser evitados ou reduzidos.',
   };
 
@@ -312,6 +428,8 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          constraints: const BoxConstraints(minWidth: 80),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: cor,
             borderRadius: BorderRadius.circular(8),
@@ -321,11 +439,14 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Icon(Icons.add, color: Colors.white, size: 16),
               const SizedBox(width: 4),
-              Text(label,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ),
@@ -341,10 +462,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final corPct = semLimite
         ? Colors.blueGrey
         : ultrapassou
-            ? Colors.red
-            : percentual! >= 0.75
-                ? Colors.orange
-                : Colors.green;
+        ? Colors.red
+        : percentual! >= 0.75
+        ? Colors.orange
+        : Colors.green;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -357,7 +478,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Text(
                   categoria,
                   style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
@@ -387,8 +510,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               height: 18,
                               child: Row(
                                 children: [
-                                  Container(width: limiteW, color: Colors.green[600]),
-                                  Container(width: excedenteW, color: Colors.red[600]),
+                                  Container(
+                                    width: limiteW,
+                                    color: Colors.green[600],
+                                  ),
+                                  Container(
+                                    width: excedenteW,
+                                    color: Colors.red[600],
+                                  ),
                                 ],
                               ),
                             ),
@@ -410,8 +539,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         height: 18,
                         child: Row(
                           children: [
-                            if (gastoW > 0) Container(width: gastoW, color: corPct),
-                            if (restoW > 0) Container(width: restoW, color: Colors.grey.shade200),
+                            if (gastoW > 0)
+                              Container(width: gastoW, color: corPct),
+                            if (restoW > 0)
+                              Container(
+                                width: restoW,
+                                color: Colors.grey.shade200,
+                              ),
                           ],
                         ),
                       ),
@@ -427,9 +561,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? '—'
                       : '${(percentual! * 100).toStringAsFixed(0)}%',
                   style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: corPct),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: corPct,
+                  ),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -442,12 +577,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   'R\$ ${_formatarValor(gasto)}',
                   style: TextStyle(
-                      fontSize: 10,
-                      color: corPct,
-                      fontWeight: FontWeight.w600),
+                    fontSize: 10,
+                    color: corPct,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const Text(' / ',
-                    style: TextStyle(fontSize: 10, color: Colors.grey)),
+                const Text(
+                  ' / ',
+                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                ),
                 Text(
                   semLimite ? 'sem limite' : 'R\$ ${_formatarValor(limite!)}',
                   style: const TextStyle(fontSize: 10, color: Colors.grey),
@@ -459,9 +597,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     'Limite excedido',
                     style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.red[700],
-                        fontWeight: FontWeight.w600),
+                      fontSize: 10,
+                      color: Colors.red[700],
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ],
@@ -500,15 +639,20 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(icone, size: 14, color: cor),
               const SizedBox(width: 4),
-              Text(titulo,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(
+                titulo,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             'R\$ ${_formatarValor(valor)}',
             style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold, color: cor),
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: cor,
+            ),
           ),
           if (meta != null)
             Text(
@@ -542,7 +686,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) {
         return Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom +
+            bottom:
+                MediaQuery.of(ctx).viewInsets.bottom +
                 MediaQuery.of(ctx).padding.bottom +
                 16,
             top: 24,
@@ -563,7 +708,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextFormField(
                   controller: valorCtrl,
                   autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [CurrencyInputFormatter()],
                   decoration: const InputDecoration(
                     labelText: 'Valor R\$',
@@ -599,8 +746,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!formKey.currentState!.validate()) return;
                           final valor = parseCurrency(valorCtrl.text)!;
                           final g = Gasto(
-                            id: DateTime.now()
-                                .millisecondsSinceEpoch
+                            id: DateTime.now().millisecondsSinceEpoch
                                 .toString(),
                             descricao: descCtrl.text,
                             valor: valor,
@@ -641,8 +787,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!formKey.currentState!.validate()) return;
                           final valor = parseCurrency(valorCtrl.text)!;
                           final gTemp = Gasto(
-                            id: DateTime.now()
-                                .millisecondsSinceEpoch
+                            id: DateTime.now().millisecondsSinceEpoch
                                 .toString(),
                             descricao: descCtrl.text,
                             valor: valor,
@@ -663,7 +808,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!ctx.mounted) return;
                           Navigator.pop(ctx);
                           await _abrirAdicionarGasto(
-                              gasto: gTemp, index: boxIndex);
+                            gasto: gTemp,
+                            index: boxIndex,
+                          );
                         },
                         child: const Text(
                           'Detalhar Agora',
@@ -765,7 +912,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _abrirMinhasReceitas() async {
     await Navigator.push(
-        context, FadeRoute(page: const MinhasReceitasScreen()));
+      context,
+      FadeRoute(page: const MinhasReceitasScreen()),
+    );
     setState(() {});
   }
 
@@ -783,7 +932,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) {
         return Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom +
+            bottom:
+                MediaQuery.of(ctx).viewInsets.bottom +
                 MediaQuery.of(ctx).padding.bottom +
                 16,
             top: 24,
@@ -804,8 +954,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextFormField(
                   controller: valorCtrl,
                   autofocus: true,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [CurrencyInputFormatter()],
                   decoration: const InputDecoration(
                     labelText: 'Valor R\$',
@@ -835,15 +986,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[700],
                           foregroundColor: Colors.white,
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
                         onPressed: () {
                           if (!formKey.currentState!.validate()) return;
                           final valor = parseCurrency(valorCtrl.text)!;
                           final r = Receita(
-                            id: DateTime.now()
-                                .millisecondsSinceEpoch
+                            id: DateTime.now().millisecondsSinceEpoch
                                 .toString(),
                             descricao: descCtrl.text,
                             valor: valor,
@@ -873,15 +1022,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green[700],
                           foregroundColor: Colors.white,
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
                         onPressed: () async {
                           if (!formKey.currentState!.validate()) return;
                           final valor = parseCurrency(valorCtrl.text)!;
                           final rTemp = Receita(
-                            id: DateTime.now()
-                                .millisecondsSinceEpoch
+                            id: DateTime.now().millisecondsSinceEpoch
                                 .toString(),
                             descricao: descCtrl.text,
                             valor: valor,
@@ -897,7 +1044,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!ctx.mounted) return;
                           Navigator.pop(ctx);
                           await _abrirAdicionarReceita(
-                              receita: rTemp, index: boxIndex);
+                            receita: rTemp,
+                            index: boxIndex,
+                          );
                         },
                         child: const Text(
                           'Detalhar Agora',
@@ -942,7 +1091,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     await Navigator.push(context, FadeRoute(page: const InsightsScreen()));
   }
-
 
   Map<String, double> get _graficoData {
     final agora = DateTime.now();
@@ -1029,9 +1177,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: Column(
-            children: [
-              Container(
-                width: double.infinity,
+        children: [
+          Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(24),
             color: Theme.of(context).colorScheme.primary,
             child: Column(
@@ -1085,45 +1233,78 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
+                if (_totalCreditoFuturo > 0) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.credit_card,
+                        size: 13,
+                        color: Colors.amberAccent,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Crédito a pagar: R\$ ${_formatarValor(_totalCreditoFuturo)}',
+                        style: const TextStyle(
+                          color: Colors.amberAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Builder(builder: (context) {
-              final agora = DateTime.now();
-              final diasNoMes = DateUtils.getDaysInMonth(agora.year, agora.month);
-              final metaDiaria = _totalReceitasMes > 0 ? _totalReceitasMes / diasNoMes : null;
-              final hoje = DateTime(agora.year, agora.month, agora.day);
-              final totalHoje = _gastosBox.values.where((g) {
-                final d = DateTime(g.data.year, g.data.month, g.data.day);
-                return d == hoje;
-              }).fold(0.0, (s, g) => s + g.valor);
-              final mediaDiaria = agora.day > 0 ? _totalGastosMes / agora.day : 0.0;
-              return Row(
-                children: [
-                  // Card 1: Gasto do dia
-                  Expanded(
-                    child: _metaCard(
-                      titulo: 'Gasto hoje',
-                      valor: totalHoje,
-                      meta: metaDiaria,
-                      icone: Icons.today,
+            child: Builder(
+              builder: (context) {
+                final agora = DateTime.now();
+                final diasNoMes = DateUtils.getDaysInMonth(
+                  agora.year,
+                  agora.month,
+                );
+                final metaDiaria = _totalReceitasMes > 0
+                    ? _totalReceitasMes / diasNoMes
+                    : null;
+                final hoje = DateTime(agora.year, agora.month, agora.day);
+                final totalHoje = _gastosBox.values
+                    .where((g) {
+                      final d = DateTime(g.data.year, g.data.month, g.data.day);
+                      return d == hoje;
+                    })
+                    .fold(0.0, (s, g) => s + g.valor);
+                final mediaDiaria = agora.day > 0
+                    ? _totalGastosMes / agora.day
+                    : 0.0;
+                return Row(
+                  children: [
+                    // Card 1: Gasto do dia
+                    Expanded(
+                      child: _metaCard(
+                        titulo: 'Gasto hoje',
+                        valor: totalHoje,
+                        meta: metaDiaria,
+                        icone: Icons.today,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Card 2: Média diária acumulada
-                  Expanded(
-                    child: _metaCard(
-                      titulo: 'Média diária',
-                      valor: mediaDiaria,
-                      meta: metaDiaria,
-                      icone: Icons.show_chart,
+                    const SizedBox(width: 10),
+                    // Card 2: Média diária acumulada
+                    Expanded(
+                      child: _metaCard(
+                        titulo: 'Média diária',
+                        valor: mediaDiaria,
+                        meta: metaDiaria,
+                        icone: Icons.show_chart,
+                      ),
                     ),
-                  ),
-                ],
-              );
-            }),
+                  ],
+                );
+              },
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -1265,30 +1446,33 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
 
                   // ── ALERTAS FINANCEIROS ───────────────────────────────
-                  Builder(builder: (context) {
-                    final regras = calcularRegras(
-                      gastos: _gastosMesAtualLista,
-                      receitas: _receitasMesAtual,
-                      gastosAnteriores: _gastosUltimoMes,
-                    );
-                    final destaques = regras.where((r) => r.destaque).toList();
-                    if (destaques.isEmpty) return const SizedBox.shrink();
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Text(
-                            'Alertas Financeiros',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
+                  Builder(
+                    builder: (context) {
+                      final regras = calcularRegras(
+                        gastos: _gastosMesAtualLista,
+                        receitas: _receitasMesAtual,
+                        gastosAnteriores: _gastosUltimoMes,
+                      );
+                      final destaques = regras
+                          .where((r) => r.destaque)
+                          .toList();
+                      if (destaques.isEmpty) return const SizedBox.shrink();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                            child: Text(
+                              'Alertas Financeiros',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
-                        ...destaques.map((r) => Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          ...destaques.map(
+                            (r) => Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                               child: Card(
                                 elevation: 0,
                                 shadowColor: Colors.transparent,
@@ -1308,10 +1492,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                     children: [
                                       CircleAvatar(
                                         radius: 18,
-                                        backgroundColor:
-                                            r.cor.withValues(alpha: 0.15),
-                                        child: Icon(r.icone,
-                                            color: r.cor, size: 18),
+                                        backgroundColor: r.cor.withValues(
+                                          alpha: 0.15,
+                                        ),
+                                        child: Icon(
+                                          r.icone,
+                                          color: r.cor,
+                                          size: 18,
+                                        ),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
@@ -1331,8 +1519,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                             Text(
                                               r.mensagem,
                                               style: const TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.black87),
+                                                fontSize: 12,
+                                                color: Colors.black87,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -1341,57 +1530,65 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-                            )),
-                      ],
-                    );
-                  }),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
 
                   // ── DICA DE CATEGORIA ─────────────────────────────────
-                  Builder(builder: (context) {
-                    final catTop = _categoriaMaisGastaMes;
-                    if (catTop.isEmpty) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Card(
-                        color: Colors.blue[50],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.lightbulb,
-                                  color: Colors.blue[700], size: 24),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '💡 Dica — $catTop',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue[700],
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      _dicasPorCategoria[catTop] ??
-                                          'Continue monitorando seus gastos para identificar oportunidades de economia.',
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ],
+                  Builder(
+                    builder: (context) {
+                      final catTop = _categoriaMaisGastaMes;
+                      if (catTop.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: Card(
+                          color: Colors.blue[50],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.lightbulb,
+                                  color: Colors.blue[700],
+                                  size: 24,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '💡 Dica — $catTop',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue[700],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        _dicasPorCategoria[catTop] ??
+                                            'Continue monitorando seus gastos para identificar oportunidades de economia.',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }),
+                      );
+                    },
+                  ),
 
                   // ── ORÇAMENTO POR CATEGORIA ───────────────────────────
                   Padding(
@@ -1415,60 +1612,83 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    child: Builder(builder: (ctx) {
-                      final agora = DateTime.now();
-                      final orcamentos = _orcamentosBox.values.toList()
-                        ..sort((a, b) {
+                    child: Builder(
+                      builder: (ctx) {
+                        final agora = DateTime.now();
+                        final orcamentos = _orcamentosBox.values.toList()
+                          ..sort((a, b) {
+                            if (a.categoria == 'Juros e Multas') return 1;
+                            if (b.categoria == 'Juros e Multas') return -1;
                             if (a.categoria == 'Outros') return 1;
                             if (b.categoria == 'Outros') return -1;
                             return a.categoria.compareTo(b.categoria);
                           });
-                      final catsSemLimite = _gastosBox.values
-                          .where((g) =>
-                              g.data.month == agora.month &&
-                              g.data.year == agora.year)
-                          .map((g) => g.categoria)
-                          .toSet()
-                          .where((c) => !orcamentos.any((o) => o.categoria == c))
-                          .toList()
-                        ..sort((a, b) {
-                            if (a == 'Outros') return 1;
-                            if (b == 'Outros') return -1;
-                            return a.compareTo(b);
-                          });
-                      if (orcamentos.isEmpty && catsSemLimite.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: Text(
-                              'Nenhum gasto ou orçamento este mês.',
-                              style: TextStyle(color: Colors.grey),
+                        final catsSemLimite =
+                            _gastosBox.values
+                                .where(
+                                  (g) =>
+                                      g.data.month == agora.month &&
+                                      g.data.year == agora.year,
+                                )
+                                .map((g) => g.categoria)
+                                .toSet()
+                                .where(
+                                  (c) =>
+                                      !orcamentos.any((o) => o.categoria == c),
+                                )
+                                .toList()
+                              ..sort((a, b) {
+                                if (a == 'Juros e Multas') return 1;
+                                if (b == 'Juros e Multas') return -1;
+                                if (a == 'Outros') return 1;
+                                if (b == 'Outros') return -1;
+                                return a.compareTo(b);
+                              });
+                        // Juros e Multas sempre aparece se não tiver orçamento configurado
+                        if (!orcamentos.any(
+                              (o) => o.categoria == 'Juros e Multas',
+                            ) &&
+                            !catsSemLimite.contains('Juros e Multas')) {
+                          catsSemLimite.add('Juros e Multas');
+                        }
+                        if (orcamentos.isEmpty && catsSemLimite.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: Text(
+                                'Nenhum gasto ou orçamento este mês.',
+                                style: TextStyle(color: Colors.grey),
+                              ),
                             ),
-                          ),
-                        );
-                      }
-                      return Column(
-                        children: [
-                          ...orcamentos.map((orc) => _orcBarRow(
+                          );
+                        }
+                        return Column(
+                          children: [
+                            ...orcamentos.map(
+                              (orc) => _orcBarRow(
                                 orc.categoria,
                                 _gastosMesPorCategoria(orc.categoria),
                                 orc.limite,
-                              )),
-                          ...catsSemLimite.map((cat) => _orcBarRow(
+                              ),
+                            ),
+                            ...catsSemLimite.map(
+                              (cat) => _orcBarRow(
                                 cat,
                                 _gastosMesPorCategoria(cat),
                                 null,
-                              )),
-                        ],
-                      );
-                    }),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-            ],
-          ),
+        ],
+      ),
     );
   }
 }
@@ -1522,16 +1742,21 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     {'nome': 'Cuidados Pessoais', 'icone': Icons.spa},
     {'nome': 'Presentes', 'icone': Icons.card_giftcard},
     {'nome': 'Outros', 'icone': Icons.category},
+    {'nome': 'Juros e Multas', 'icone': Icons.percent},
   ];
 
   List<Map<String, dynamic>> get _categorias {
-    final fixasSemOutros =
-        _categoriasFixas.where((c) => c['nome'] != 'Outros').toList();
+    final fixasNormais = _categoriasFixas
+        .where((c) => c['nome'] != 'Outros' && c['nome'] != 'Juros e Multas')
+        .toList();
+    final juros = _categoriasFixas.firstWhere(
+      (c) => c['nome'] == 'Juros e Multas',
+    );
     final outros = _categoriasFixas.firstWhere((c) => c['nome'] == 'Outros');
     final custom = _categoriasBox.values
         .map((c) => {'nome': c.nome, 'icone': c.icone})
         .toList();
-    return [...fixasSemOutros, ...custom, outros];
+    return [...fixasNormais, ...custom, outros, juros];
   }
 
   @override
@@ -1558,14 +1783,22 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     _recorrente = g?.recorrente ?? true;
     _gastoEsperado = g?.gastoEsperado ?? true;
     _gastoEvitavel = g?.gastoEvitavel ?? false;
-
     final formas = _formasPagamentoBox.values.toList();
     if (g != null && g.formaPagamento.isNotEmpty) {
-      final existe = formas.any((f) => f.descricao == g.formaPagamento);
-      if (existe) {
-        _formaPagamentoSelecionada = formas.firstWhere(
-          (f) => f.descricao == g.formaPagamento,
-        );
+      // Tenta por id (novo formato) depois por descricao (registros legados)
+      FormaPagamento? encontrada;
+      try {
+        encontrada = formas.firstWhere((f) => f.id == g.formaPagamento);
+      } catch (_) {}
+      if (encontrada == null) {
+        try {
+          encontrada = formas.firstWhere(
+            (f) => f.descricao == g.formaPagamento,
+          );
+        } catch (_) {}
+      }
+      if (encontrada != null) {
+        _formaPagamentoSelecionada = encontrada;
       } else {
         _formaPagamentoSelecionada = null;
         _formaPagamentoOrfa = true;
@@ -1642,6 +1875,14 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
     return resultado;
   }
 
+  @override
+  void dispose() {
+    _valorController.dispose();
+    _descricaoController.dispose();
+    _estabelecimentoController.dispose();
+    super.dispose();
+  }
+
   Future<void> _salvarGasto() async {
     final valor = parseCurrency(_valorController.text);
 
@@ -1671,7 +1912,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               _dataSelecionada.month + i,
               _dataSelecionada.day,
             ),
-            formaPagamento: _formaPagamentoSelecionada!.descricao,
+            formaPagamento: _formaPagamentoSelecionada!.id,
             pessoa: _pessoaSelecionada!.nome,
             tipoGasto: _tipoGasto,
             parcelado: true,
@@ -1680,6 +1921,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             recorrente: _recorrente,
             gastoEsperado: _gastoEsperado,
             gastoEvitavel: _gastoEvitavel,
+            valorJuros: 0.0,
             grupoId: grupoId,
             numeroParcela: i + 1,
           ),
@@ -1706,7 +1948,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         valor: valor,
         categoria: _categoriaSelecionada,
         data: _dataSelecionada,
-        formaPagamento: _formaPagamentoSelecionada!.descricao,
+        formaPagamento: _formaPagamentoSelecionada!.id,
         pessoa: _pessoaSelecionada!.nome,
         tipoGasto: _tipoGasto,
         parcelado: true,
@@ -1715,6 +1957,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         recorrente: _recorrente,
         gastoEsperado: _gastoEsperado,
         gastoEvitavel: _gastoEvitavel,
+        valorJuros: 0.0,
         grupoId: gastoOriginal.grupoId,
         numeroParcela: gastoOriginal.numeroParcela,
       );
@@ -1756,7 +1999,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   valor: valor,
                   categoria: _categoriaSelecionada,
                   data: p.data,
-                  formaPagamento: _formaPagamentoSelecionada!.descricao,
+                  formaPagamento: _formaPagamentoSelecionada!.id,
                   pessoa: _pessoaSelecionada!.nome,
                   tipoGasto: _tipoGasto,
                   parcelado: true,
@@ -1765,6 +2008,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                   recorrente: _recorrente,
                   gastoEsperado: _gastoEsperado,
                   gastoEvitavel: _gastoEvitavel,
+                  valorJuros: 0.0,
                   grupoId: p.grupoId,
                   numeroParcela: p.numeroParcela,
                 ),
@@ -1796,7 +2040,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       valor: valor,
       categoria: _categoriaSelecionada,
       data: _dataSelecionada,
-      formaPagamento: _formaPagamentoSelecionada!.descricao,
+      formaPagamento: _formaPagamentoSelecionada!.id,
       pessoa: _pessoaSelecionada!.nome,
       tipoGasto: _tipoGasto,
       parcelado: false,
@@ -1805,6 +2049,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
       recorrente: _recorrente,
       gastoEsperado: _gastoEsperado,
       gastoEvitavel: _gastoEvitavel,
+      valorJuros: 0.0,
     );
 
     if (_tipoGasto == 'Fixo' && _recorrente && !isEdicao) {
@@ -1825,7 +2070,10 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 const SizedBox(height: 16),
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Número de meses:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  child: Text(
+                    'Número de meses:',
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1840,9 +2088,15 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                       children: [
                         Text(
                           '$mesesSelecionados',
-                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        const Text('meses', style: TextStyle(color: Colors.grey)),
+                        const Text(
+                          'meses',
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ],
                     ),
                     IconButton(
@@ -1856,7 +2110,10 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 const Divider(),
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Dia do mês para os lançamentos:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  child: Text(
+                    'Dia do mês para os lançamentos:',
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Center(
@@ -1867,19 +2124,28 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                       final d = await showDialog<int>(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          title: const Text('Dia do mês', textAlign: TextAlign.center),
-                          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          title: const Text(
+                            'Dia do mês',
+                            textAlign: TextAlign.center,
+                          ),
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            12,
+                            16,
+                            0,
+                          ),
                           content: SizedBox(
                             width: 280,
                             child: GridView.builder(
                               shrinkWrap: true,
                               itemCount: 31,
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 7,
-                                mainAxisSpacing: 4,
-                                crossAxisSpacing: 4,
-                                childAspectRatio: 1,
-                              ),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 7,
+                                    mainAxisSpacing: 4,
+                                    crossAxisSpacing: 4,
+                                    childAspectRatio: 1,
+                                  ),
                               itemBuilder: (ctx, i) {
                                 final dia = i + 1;
                                 final isSel = dia == diaSelecionado;
@@ -1888,14 +2154,19 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                                   onTap: () => Navigator.pop(ctx, dia),
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: isSel ? cor : cor.withValues(alpha: 0.07),
+                                      color: isSel
+                                          ? cor
+                                          : cor.withValues(alpha: 0.07),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     alignment: Alignment.center,
-                                    child: Text('$dia',
+                                    child: Text(
+                                      '$dia',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                        fontWeight: isSel
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
                                         color: isSel ? Colors.white : null,
                                       ),
                                     ),
@@ -1915,15 +2186,24 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                       if (d != null) setStateDialog(() => diaSelecionado = d);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.event_repeat, size: 16, color: Theme.of(context).colorScheme.primary),
+                          Icon(
+                            Icons.event_repeat,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Dia $diaSelecionado',
@@ -1934,7 +2214,10 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          Icon(Icons.arrow_drop_down, color: Theme.of(context).colorScheme.primary),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ],
                       ),
                     ),
@@ -1942,7 +2225,10 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Center(
-                  child: Text('todo mês', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  child: Text(
+                    'todo mês',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -1984,6 +2270,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
               estabelecimento: novoGasto.estabelecimento,
               recorrente: true,
               gastoEsperado: novoGasto.gastoEsperado,
+              valorJuros: novoGasto.valorJuros,
             ),
           );
         }
@@ -2057,7 +2344,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
         if (b.parentesco == 'Eu Mesmo') return 1;
         return a.nome.compareTo(b.nome);
       });
-    final podeSalvar = _formaPagamentoSelecionada != null &&
+    final podeSalvar =
+        _formaPagamentoSelecionada != null &&
         _pessoaSelecionada != null &&
         _descricaoController.text.trim().isNotEmpty;
 
@@ -2077,7 +2365,8 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom +
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
                 MediaQuery.of(context).padding.bottom +
                 24,
           ),
@@ -2107,6 +2396,7 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 autofocus: true,
                 onChanged: (_) => setState(() {}),
               ),
+              const SizedBox(height: 12),
               const SizedBox(height: 24),
 
               const Text(
@@ -2475,16 +2765,25 @@ class _AdicionarGastoScreenState extends State<AdicionarGastoScreen> {
                 onTap: _selecionarData,
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
+                      Icon(
+                        Icons.calendar_today,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       const SizedBox(width: 12),
-                      Text(_formatarData(_dataSelecionada), style: const TextStyle(fontSize: 16)),
+                      Text(
+                        _formatarData(_dataSelecionada),
+                        style: const TextStyle(fontSize: 16),
+                      ),
                     ],
                   ),
                 ),
@@ -2673,7 +2972,10 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 const SizedBox(height: 16),
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Número de meses:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  child: Text(
+                    'Número de meses:',
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2688,9 +2990,15 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                       children: [
                         Text(
                           '$mesesSelecionados',
-                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        const Text('meses', style: TextStyle(color: Colors.grey)),
+                        const Text(
+                          'meses',
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ],
                     ),
                     IconButton(
@@ -2704,7 +3012,10 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 const Divider(),
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Dia do mês para os lançamentos:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  child: Text(
+                    'Dia do mês para os lançamentos:',
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Center(
@@ -2715,19 +3026,28 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                       final d = await showDialog<int>(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          title: const Text('Dia do mês', textAlign: TextAlign.center),
-                          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          title: const Text(
+                            'Dia do mês',
+                            textAlign: TextAlign.center,
+                          ),
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            12,
+                            16,
+                            0,
+                          ),
                           content: SizedBox(
                             width: 280,
                             child: GridView.builder(
                               shrinkWrap: true,
                               itemCount: 31,
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 7,
-                                mainAxisSpacing: 4,
-                                crossAxisSpacing: 4,
-                                childAspectRatio: 1,
-                              ),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 7,
+                                    mainAxisSpacing: 4,
+                                    crossAxisSpacing: 4,
+                                    childAspectRatio: 1,
+                                  ),
                               itemBuilder: (ctx, i) {
                                 final dia = i + 1;
                                 final isSel = dia == diaSelecionado;
@@ -2736,14 +3056,19 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                                   onTap: () => Navigator.pop(ctx, dia),
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: isSel ? cor : cor.withValues(alpha: 0.07),
+                                      color: isSel
+                                          ? cor
+                                          : cor.withValues(alpha: 0.07),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     alignment: Alignment.center,
-                                    child: Text('$dia',
+                                    child: Text(
+                                      '$dia',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                        fontWeight: isSel
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
                                         color: isSel ? Colors.white : null,
                                       ),
                                     ),
@@ -2763,15 +3088,24 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                       if (d != null) setStateDialog(() => diaSelecionado = d);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.event_repeat, size: 16, color: Theme.of(context).colorScheme.primary),
+                          Icon(
+                            Icons.event_repeat,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Dia $diaSelecionado',
@@ -2782,7 +3116,10 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          Icon(Icons.arrow_drop_down, color: Theme.of(context).colorScheme.primary),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ],
                       ),
                     ),
@@ -2790,7 +3127,10 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Center(
-                  child: Text('todo mês', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  child: Text(
+                    'todo mês',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -2865,7 +3205,8 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
             left: 24,
             right: 24,
             top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom +
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
                 MediaQuery.of(context).padding.bottom +
                 24,
           ),
@@ -3020,16 +3361,25 @@ class _AdicionarReceitaScreenState extends State<AdicionarReceitaScreen> {
                 onTap: _selecionarData,
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
+                      Icon(
+                        Icons.calendar_today,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       const SizedBox(width: 12),
-                      Text(_formatarData(_dataSelecionada), style: const TextStyle(fontSize: 16)),
+                      Text(
+                        _formatarData(_dataSelecionada),
+                        style: const TextStyle(fontSize: 16),
+                      ),
                     ],
                   ),
                 ),

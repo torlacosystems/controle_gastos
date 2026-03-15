@@ -235,7 +235,10 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
           final catGastoBateu = _filtroCategoriaGasto == null || g.categoria == _filtroCategoriaGasto;
           final tipoGastoBateu = _filtroTipoGasto == null || g.tipoGasto == _filtroTipoGasto;
           final pessoaBateu = _filtroPessoa == null || g.pessoa == _filtroPessoa;
-          final formaBateu = _filtroForma == null || g.formaPagamento == _filtroForma;
+          final formaBateu = _filtroForma == null ||
+              g.formaPagamento == _filtroForma ||
+              (_formasPagamentoBox.values.where((f) => f.id == g.formaPagamento).isNotEmpty &&
+                  _formasPagamentoBox.values.firstWhere((f) => f.id == g.formaPagamento).descricao == _filtroForma);
           if (mesBateu && buscaBateu && parceladoBateu && esperadoBateu && recGastoBateu && evitavelBateu && catGastoBateu && tipoGastoBateu && pessoaBateu && formaBateu) {
             itens.add({'tipo': 'gasto', 'item': g, 'index': i});
           }
@@ -405,7 +408,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
     // Gasto categories
     final fixasSemOutros = ['Alimentação', 'Transporte', 'Veículo', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = categoriasBox.values.map((c) => c.nome).toList()..sort();
-    final categoriasGasto = [...fixasSemOutros, ...custom, 'Outros'];
+    final categoriasGasto = [...fixasSemOutros, ...custom, 'Outros', 'Juros e Multas'];
 
     final categorias = tipo == 'gasto' ? categoriasGasto : categoriasReceita;
 
@@ -966,7 +969,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
 
     final fixasSemOutros = ['Alimentação', 'Transporte', 'Veículo', 'Saúde', 'Lazer', 'Moradia', 'Educação', 'Mercado', 'Assinaturas', 'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();
-    final catGastos = [...fixasSemOutros, ...custom, 'Outros'];
+    final catGastos = [...fixasSemOutros, ...custom, 'Outros', 'Juros e Multas'];
     const catReceitas = ['Salário', 'Freelance', 'Investimento', 'Aluguel', 'Presente', 'Benefício', 'Outros'];
 
     final mostrarGasto = _tipoFiltro != 'receita';
@@ -1480,7 +1483,7 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  categoria,
+                                  descricao.isNotEmpty ? descricao : categoria,
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -1506,14 +1509,18 @@ class _TodosRegistrosScreenState extends State<TodosRegistrosScreen> {
                           ),
                           subtitle: Text(
                             () {
-                              final base = '${isGasto ? 'Gasto' : 'Receita'} • ${_formatarData(data)}${descricao.isNotEmpty ? ' • $descricao' : ''}';
+                              final parts = <String>[
+                                isGasto ? 'Gasto' : 'Receita',
+                                _formatarData(data),
+                                if (categoria.isNotEmpty) categoria,
+                              ];
                               if (isGasto) {
                                 final g = item['item'] as Gasto;
                                 if (g.parcelado) {
-                                  return '$base • Parcela ${g.numeroParcela}/${g.numeroParcelas}';
+                                  parts.add('Parcela ${g.numeroParcela}/${g.numeroParcelas}');
                                 }
                               }
-                              return base;
+                              return parts.join(' • ');
                             }(),
                           ),
                           trailing: _modoSelecao

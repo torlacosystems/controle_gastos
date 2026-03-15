@@ -12,8 +12,17 @@ class CurrencyInputFormatter extends TextInputFormatter {
   ) {
     String text = newValue.text;
 
-    // Converte ponto para vírgula (teclados numéricos que usam ponto)
-    text = text.replaceAll('.', ',');
+    // Remove pontos de milhar adicionados pelo formatter anteriormente.
+    // Se o usuário digitou '.' intencionalmente (teclado numérico), trata como vírgula
+    // apenas se não havia ponto de milhar na posição (detectado pela ausência de vírgula no oldValue).
+    final oldHadComma = oldValue.text.contains(',');
+    final newDotCount = text.split('.').length - 1;
+    final oldDotCount = oldValue.text.split('.').length - 1;
+    if (!oldHadComma && newDotCount > oldDotCount) {
+      // Usuário digitou um '.': trata como vírgula decimal
+      text = text.replaceFirst('.', ',');
+    }
+    text = text.replaceAll('.', ''); // remove separadores de milhar
 
     // Mantém apenas dígitos e no máximo uma vírgula (máx 2 casas decimais)
     final buffer = StringBuffer();

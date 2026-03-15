@@ -197,6 +197,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   double get _totalPeriodo => _gastosPeriodo.fold(0, (s, g) => s + g.valor);
 
+  double get _totalJuros =>
+      _gastosPeriodo.where((g) => g.categoria == 'Juros e Multas').fold(0.0, (s, g) => s + g.valor);
+
   double get _totalPeriodoAnterior =>
       _gastosPeriodoAnterior.fold(0, (s, g) => s + g.valor);
 
@@ -216,15 +219,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
       .where((g) => g.gastoEvitavel)
       .fold(0, (s, g) => s + g.valor);
 
-  Set<String> get _descricoesCredito {
-    return _formasPagamentoBox.values
-        .where((f) => f.tipo == 'Crédito')
-        .map((f) => f.descricao)
-        .toSet();
+  /// Set com ids E descricaos dos cartões de crédito (cobre registros novos e legados)
+  Set<String> get _creditoSet {
+    final formasCredito = _formasPagamentoBox.values.where((f) => f.tipo == 'Crédito');
+    return {for (final f in formasCredito) ...{f.id, f.descricao}};
   }
 
   List<Gasto> get _gastosCartaoCredito => _gastosPeriodo
-      .where((g) => _descricoesCredito.contains(g.formaPagamento))
+      .where((g) => _creditoSet.contains(g.formaPagamento) && g.categoria != 'Juros e Multas')
       .toList();
 
   double get _totalCartaoCredito =>
@@ -575,6 +577,20 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   ? '${(_totalInesperados / _totalPeriodo * 100).toStringAsFixed(1)}% dos seus gastos não estavam previstos.'
                   : '',
               destaque: _totalInesperados > 0,
+            ),
+            const SizedBox(height: 12),
+
+            _cardAlerta(
+              icone: Icons.percent,
+              cor: _totalJuros > 0 ? Colors.orange : Colors.green,
+              titulo: 'Juros e multas pagos',
+              conteudo: _totalJuros == 0
+                  ? 'Nenhum juro ou multa no período. Ótimo!'
+                  : 'Você pagou ${_formatarValor(_totalJuros)} em juros e multas.',
+              subtexto: _totalJuros > 0 && _totalPeriodo > 0
+                  ? '${(_totalJuros / _totalPeriodo * 100).toStringAsFixed(1)}% dos seus gastos foram encargos financeiros.'
+                  : '',
+              destaque: _totalJuros > 0,
             ),
             const SizedBox(height: 12),
 

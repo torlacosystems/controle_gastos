@@ -91,7 +91,7 @@ class _RegistrosPorDatasScreenState extends State<RegistrosPorDatasScreen> {
         'Educação', 'Mercado', 'Assinaturas',
         'Vestuário', 'Cuidados Pessoais', 'Presentes'];
     final custom = _categoriasBox.values.map((c) => c.nome).toList()..sort();
-    return [...fixas, ...custom, 'Outros'];
+    return [...fixas, ...custom, 'Outros', 'Juros e Multas'];
   }
 
   List<String> get _categoriasReceita =>
@@ -195,7 +195,7 @@ class _RegistrosPorDatasScreenState extends State<RegistrosPorDatasScreen> {
           valor: valor,
           categoria: _categoria,
           data: datas[i],
-          formaPagamento: _formaPagamento?.descricao ?? '',
+          formaPagamento: _formaPagamento?.id ?? '',
           pessoa: _pessoa,
           tipoGasto: _tipo,
           parcelado: false,

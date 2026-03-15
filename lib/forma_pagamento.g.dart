@@ -21,13 +21,14 @@ class FormaPagamentoAdapter extends TypeAdapter<FormaPagamento> {
       descricao: fields[1] as String,
       tipo: fields[2] as String,
       banco: fields[3] as String,
+      diaFechamento: fields[4] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, FormaPagamento obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class FormaPagamentoAdapter extends TypeAdapter<FormaPagamento> {
       ..writeByte(2)
       ..write(obj.tipo)
       ..writeByte(3)
-      ..write(obj.banco);
+      ..write(obj.banco)
+      ..writeByte(4)
+      ..write(obj.diaFechamento);
   }
 
   @override

@@ -16,10 +16,14 @@ class FormaPagamento extends HiveObject {
   @HiveField(3)
   final String banco;
 
+  @HiveField(4)
+  final int? diaFechamento;
+
   FormaPagamento({
     required this.id,
     required this.descricao,
     required this.tipo,
     required this.banco,
+    this.diaFechamento,
   });
 }
